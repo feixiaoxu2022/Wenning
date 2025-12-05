@@ -1,0 +1,37 @@
+# HTTP Requests
+requests>=2.31.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Data Processing
+pandas>=2.0.0
+openpyxl>=3.1.0  # Excel操作
+
+# Image Processing (LLM代码生成场景)
+Pillow>=10.0.0
+matplotlib>=3.8.0
+playwright>=1.40.0  # HTML转图片
+
+# Media (optional but recommended for video/audio synthesis)
+moviepy>=1.0.3
+imageio>=2.34.0
+imageio-ffmpeg>=0.4.8
+pyttsx3>=2.90  # 非macOS离线TTS(可选)
+google-cloud-texttospeech>=2.15.0
+azure-cognitiveservices-speech>=1.37.0
+
+# Tokenization for context usage
+tiktoken>=0.7.0
+
+# Auth
+passlib[bcrypt]>=1.7.4
+itsdangerous>=2.1.2
+
+# Code Quality
+black>=23.0.0
+flake8>=6.0.0
+pytest>=7.4.0
+
+# Logging
+loguru>=0.7.0

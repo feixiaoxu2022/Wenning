@@ -1,0 +1,772 @@
+"""LLM客户端模块
+
+提供统一的LLM调用接口，支持多种模型切换。
+"""
+
+import requests
+import time
+import random
+from typing import List, Dict, Optional, Any
+from src.utils.config import Config
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class LLMClient:
+    """统一LLM客户端
+
+    支持通过model_name参数切换不同的LLM模型。
+    """
+
+    def __init__(self, config: Config, model_name: str = "ernie-5.0-thinking-preview"):
+        """初始化LLM客户端
+
+        Args:
+            config: 配置对象
+            model_name: 模型名称，默认为EB5
+        """
+        self.config = config
+        self.model_name = model_name
+        self.model_config = config.get_model_config(model_name)
+        # 简单的重试策略：最多5次，指数退避基础间隔0.5s
+        self.max_retries = 5
+        self.retry_base_delay = 0.5
+
+        logger.info(f"初始化LLMClient: model={model_name}, base_url={self.model_config['base_url']}")
+
+    # ===== Claude native helpers =====
+    def _is_claude(self) -> bool:
+        return str(self.model_name).lower().startswith("claude")
+
+    def _build_claude_native_url(self) -> str:
+        """构造Claude原生messages端点。
+        优先使用配置CLAUDE_API_BASE_URL，否则从统一网关base_url替换成/v1/messages。
+        """
+        import urllib.parse
+        base = self.model_config.get("base_url") or ""
+        if getattr(self.config, 'claude_api_base_url', None):
+            return self.config.claude_api_base_url
+        try:
+            u = urllib.parse.urlparse(base)
+            return f"{u.scheme}://{u.netloc}/v1/messages"
+        except Exception:
+            return base
+
+    def _convert_tools_to_anthropic(self, tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
+        if not tools:
+            return None
+        out = []
+        for t in tools:
+            fn = (t or {}).get("function") or {}
+            out.append({
+                "name": fn.get("name", ""),
+                "description": fn.get("description", ""),
+                "input_schema": fn.get("parameters", {"type": "object"})
+            })
+        return out
+
+    def _build_anthropic_messages_payload(self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]], temperature: float, max_tokens: Optional[int]) -> Dict[str, Any]:
+        import json as _json
+        system_parts: List[str] = []
+        anth_msgs: List[Dict[str, Any]] = []
+
+        for m in messages:
+            role = (m.get("role") or "user").lower()
+            content = m.get("content")
+            if role == "system":
+                if isinstance(content, str):
+                    system_parts.append(content)
+                else:
+                    system_parts.append(str(content))
+                continue
+
+            if role == "tool":
+                # 工具结果 → user消息中的tool_result块
+                tool_use_id = m.get("tool_call_id") or m.get("id") or ""
+                result_text = str(m.get("content") or "")
+                anth_msgs.append({
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": [{"type": "text", "text": result_text or "(empty)"}]
+                        }
+                    ]
+                })
+                continue
+
+            if role == "assistant":
+                blocks: List[Dict[str, Any]] = []
+                if isinstance(content, str) and content.strip() and content != "(tool call)":
+                    blocks.append({"type": "text", "text": content})
+                tcs = m.get("tool_calls") or []
+                for i, tc in enumerate(tcs):
+                    fn = (tc or {}).get("function") or {}
+                    name = fn.get("name", "")
+                    args = fn.get("arguments")
+                    try:
+                        args_obj = _json.loads(args) if isinstance(args, str) else (args or {})
+                    except Exception:
+                        args_obj = {}
+                    tid = (tc or {}).get("id") or f"tu_{int(time.time()*1000)}_{i}"
+                    blocks.append({
+                        "type": "tool_use",
+                        "id": tid,
+                        "name": name,
+                        "input": args_obj,
+                    })
+                if not blocks:
+                    blocks = [{"type": "text", "text": content or "…"}]
+                anth_msgs.append({"role": "assistant", "content": blocks})
+                continue
+
+            # 默认按user处理
+            text = content if isinstance(content, str) and content.strip() else "…"
+            anth_msgs.append({"role": "user", "content": [{"type": "text", "text": text}]})
+
+        payload = {
+            "model": self.model_config["model"],
+            "messages": anth_msgs,
+            "temperature": temperature,
+            "max_tokens": int(max_tokens or 2048),
+        }
+        if system_parts:
+            payload["system"] = "\n\n".join(system_parts)
+        ant_tools = self._convert_tools_to_anthropic(tools)
+        if ant_tools:
+            payload["tools"] = ant_tools
+            payload["tool_choice"] = {"type": "auto"}
+        return payload
+
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        stream: bool = False,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None
+    ):
+        """发送聊天请求
+
+        Args:
+            messages: 消息列表，格式为 [{"role": "user", "content": "..."}]
+            temperature: 温度参数（0-1）
+            max_tokens: 最大token数
+            stream: 是否流式输出
+            tools: Function Calling工具列表
+            tool_choice: 工具选择策略 ("auto", "none", 或指定工具名)
+
+        Returns:
+            如果stream=True，返回生成器；否则返回响应字典
+
+        Raises:
+            requests.exceptions.RequestException: 请求失败
+        """
+        if stream:
+            return self._chat_stream(messages, temperature, max_tokens, tools, tool_choice)
+        else:
+            return self._chat_non_stream(messages, temperature, max_tokens, tools, tool_choice)
+
+    def _chat_non_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """非流式聊天请求
+
+        Returns:
+            响应字典，包含content、usage、tool_calls等信息
+        """
+        # 构建请求体
+        # Claude(Bedrock)适配：不允许空content；最小化兼容（仍使用OAI样式，由网关转换）
+        def _sanitize_msgs_for_claude(msgs: List[Dict[str, Any]]):
+            out = []
+            for m in msgs:
+                c = m.get("content")
+                if isinstance(c, str) and (c.strip() == "" or c is None):
+                    m = dict(m)
+                    m["content"] = "…"
+                out.append(m)
+            return out
+
+        used_messages = messages
+        used_tools = tools
+        if str(self.model_name).lower().startswith("claude"):
+            used_messages = _sanitize_msgs_for_claude(messages)
+            # 保持工具透传给网关（若网关支持OAI→Anthropic映射）；不在此处强制移除
+
+        payload = {
+            "model": self.model_config["model"],
+            "messages": used_messages,
+            "temperature": temperature,
+            "stream": False
+        }
+
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+
+        # Function Calling参数
+        if used_tools:
+            payload["tools"] = used_tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
+
+        # 构建headers
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.model_config['api_key']}"
+        }
+        if str(self.model_name).lower().startswith("claude"):
+            headers["anthropic-version"] = headers.get("anthropic-version", "2023-06-01")
+
+        # 记录请求日志（脱敏）
+        if self.config.agent_enable_request_logging:
+            try:
+                msg_preview = [
+                    {"role": m.get("role"), "len": len(m.get("content", ""))}
+                    for m in (messages or [])
+                ]
+                logger.debug(
+                    f"LLM请求: model={self.model_name}, stream=False, messages={msg_preview}, tools={len(tools) if tools else 0}, tool_choice={tool_choice}"
+                )
+            except Exception:
+                pass
+
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                response = requests.post(
+                    self.model_config["base_url"],
+                    headers=headers,
+                    json=payload,
+                    timeout=self.model_config["timeout"]
+                )
+                if response.status_code >= 400:
+                    detail = None
+                    try:
+                        detail = response.text[:500]
+                    except Exception:
+                        detail = None
+                    logger.error(
+                        f"LLM非流式请求失败: status={response.status_code}, detail={detail}"
+                    )
+                    # 4xx(非429)不再重试，直接抛出
+                    if 400 <= response.status_code < 500 and response.status_code != 429:
+                        response.raise_for_status()
+                response.raise_for_status()
+
+                result = response.json()
+                if "choices" in result and len(result["choices"]) > 0:
+                    message = result["choices"][0]["message"]
+                    response_dict = {
+                        "content": message.get("content"),
+                        "model": self.model_name,
+                        "usage": result.get("usage", {}),
+                        "raw_response": result
+                    }
+                    if "tool_calls" in message:
+                        response_dict["tool_calls"] = message["tool_calls"]
+                    return response_dict
+                else:
+                    raise ValueError(f"无效的LLM响应格式: {result}")
+
+            except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
+                last_error = e
+                # 若是4xx且非429，不重试
+                try:
+                    status = getattr(e.response, "status_code", None)
+                except Exception:
+                    status = None
+                if status is not None and 400 <= status < 500 and status != 429:
+                    logger.error(f"LLM请求失败(4xx,不重试): {e}")
+                    raise
+                if attempt >= self.max_retries:
+                    logger.error(f"LLM请求失败且重试耗尽({attempt}/{self.max_retries}): {e}")
+                    raise
+
+                # 针对429速率限制使用更激进的退避策略
+                if status == 429:
+                    # 429错误：使用更长的指数退避，从2秒开始
+                    delay = 2.0 * (2 ** (attempt - 1))  # 2s, 4s, 8s, 16s, 32s
+                    delay += random.uniform(0, 1.0)  # 添加抖动避免雷鸣群效应
+                    logger.warning(f"遇到速率限制(429)，使用长退避策略，重试第{attempt}/{self.max_retries}次，等待{delay:.2f}s: {e}")
+                else:
+                    # 其他错误：使用标准指数退避
+                    delay = self.retry_base_delay * (2 ** (attempt - 1))
+                    delay += random.uniform(0, self.retry_base_delay)
+                    logger.warning(f"LLM请求失败，重试第{attempt}/{self.max_retries}次后重试，等待{delay:.2f}s: {e}")
+
+                time.sleep(delay)
+
+    def generate_code(
+        self,
+        task_description: str,
+        context: Optional[str] = None,
+        language: str = "python"
+    ) -> str:
+        """生成代码
+
+        Args:
+            task_description: 任务描述
+            context: 上下文信息（如数据示例）
+            language: 编程语言
+
+        Returns:
+            生成的代码字符串
+        """
+        system_prompt = f"""你是一个专业的{language}程序员。
+根据用户的需求，生成简洁、可执行的代码。
+
+要求：
+1. 代码必须完整可执行
+2. 包含必要的错误处理
+3. 只输出代码，不要任何解释
+4. 代码用```{language}包裹"""
+
+        user_prompt = f"任务：{task_description}"
+        if context:
+            user_prompt += f"\n\n上下文：\n{context}"
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        response = self.chat(messages, temperature=0.2)  # 代码生成用低温度
+        content = response["content"]
+
+        # 提取代码块
+        code = self._extract_code_block(content, language)
+
+        logger.info(f"代码生成成功: {len(code)} characters")
+        return code
+
+    def analyze_text(
+        self,
+        text: str,
+        analysis_type: str,
+        instructions: Optional[str] = None
+    ) -> str:
+        """文本分析（情感、主题、摘要等）
+
+        Args:
+            text: 待分析文本
+            analysis_type: 分析类型（sentiment/topic/summary）
+            instructions: 额外指令
+
+        Returns:
+            分析结果
+        """
+        analysis_prompts = {
+            "sentiment": "分析以下文本的情感倾向（正面/负面/中性），并给出理由。",
+            "topic": "提取以下文本的核心主题和关键词。",
+            "summary": "对以下文本进行简洁的摘要。"
+        }
+
+        system_prompt = analysis_prompts.get(analysis_type, "分析以下文本。")
+        if instructions:
+            system_prompt += f"\n\n额外要求：{instructions}"
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text}
+        ]
+
+        response = self.chat(messages, temperature=0.3)
+        return response["content"]
+
+    def _extract_code_block(self, content: str, language: str) -> str:
+        """从LLM响应中提取代码块
+
+        Args:
+            content: LLM响应内容
+            language: 编程语言
+
+        Returns:
+            提取的代码
+        """
+        # 尝试提取```language code ```格式
+        import re
+
+        pattern = f"```{language}\\s*\\n(.*?)\\n```"
+        match = re.search(pattern, content, re.DOTALL)
+
+        if match:
+            return match.group(1).strip()
+
+        # 尝试提取```code```格式
+        pattern = "```\\s*\\n(.*?)\\n```"
+        match = re.search(pattern, content, re.DOTALL)
+
+        if match:
+            return match.group(1).strip()
+
+        # 如果没有代码块标记，返回全部内容
+        logger.warning("LLM响应中未找到代码块标记，返回全部内容")
+        return content.strip()
+
+    def switch_model(self, model_name: str):
+        """切换模型
+
+        Args:
+            model_name: 新模型名称
+        """
+        self.model_name = model_name
+        self.model_config = self.config.get_model_config(model_name)
+        logger.info(f"切换模型: {model_name}")
+
+    def _chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None
+    ):
+        """流式聊天请求（生成器）
+
+        Yields:
+            流式响应块，包含delta内容
+        """
+        import json
+
+        # 构建请求体
+        # Claude(Bedrock)适配：不允许空content；最小化兼容（仍使用OAI样式，由网关转换）
+        def _sanitize_msgs_for_claude(msgs: List[Dict[str, Any]]):
+            out = []
+            for m in msgs:
+                c = m.get("content")
+                if isinstance(c, str) and (c.strip() == "" or c is None):
+                    m = dict(m)
+                    m["content"] = "…"
+                out.append(m)
+            return out
+
+        used_messages = messages
+        used_tools = tools
+        is_claude = self._is_claude()
+        if is_claude:
+            used_messages = _sanitize_msgs_for_claude(messages)
+
+        # 优先尝试Claude原生messages协议
+        if is_claude and getattr(self.config, 'claude_force_native', True):
+            native_url = self._build_claude_native_url()
+            headers_native = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.model_config['api_key']}",
+                "anthropic-version": "2023-06-01"
+            }
+            payload_native = self._build_anthropic_messages_payload(messages, tools, temperature, max_tokens)
+            payload_native["stream"] = True
+
+            try:
+                response = requests.post(
+                    native_url,
+                    headers=headers_native,
+                    json=payload_native,
+                    timeout=self.model_config["timeout"],
+                    stream=True
+                )
+                if response.status_code < 400:
+                    # 解析Anthropic流式
+                    full_content = ""
+                    tool_uses: Dict[str, Dict[str, Any]] = {}
+                    last_tool_id: Optional[str] = None
+                    for raw in response.iter_lines():
+                        if not raw:
+                            continue
+                        line = raw.decode('utf-8', errors='ignore')
+                        if not line.startswith('data: '):
+                            continue
+                        data_str = line[6:]
+                        if not data_str.strip() or data_str.strip() == "[DONE]":
+                            continue
+                        try:
+                            evt = json.loads(data_str)
+                        except Exception:
+                            continue
+
+                        et = evt.get("type")
+                        # 关键调试：打印所有事件
+                        logger.info(f"[Claude流式事件] type={et}, event={json.dumps(evt, ensure_ascii=False)[:300]}")
+
+                        if et == "content_block_start":
+                            block = evt.get("content_block", {})
+                            if block.get("type") == "tool_use":
+                                tid = block.get("id") or f"tu_{int(time.time()*1000)}"
+                                tool_uses[tid] = {"name": block.get("name", ""), "input_str": "", "input": block.get("input")}
+                                last_tool_id = tid
+                                logger.debug(f"流式tool_use开始: id={tid}, name={block.get('name')}, input={block.get('input')}")
+                        elif et == "content_block_delta":
+                            delta = evt.get("delta", {})
+                            delta_type = delta.get("type")
+                            logger.debug(f"流式delta: type={delta_type}, keys={list(delta.keys())}")
+                            if delta_type == "text_delta":
+                                text = delta.get("text", "")
+                                if text:
+                                    full_content += text
+                                    yield {"type": "content", "delta": text, "full_content": full_content}
+                            elif delta_type == "input_json_delta":
+                                # Claude流式tool_use的正确类型是input_json_delta，不是其他
+                                partial = delta.get("partial_json")
+                                if partial and last_tool_id and last_tool_id in tool_uses:
+                                    tool_uses[last_tool_id]["input_str"] += partial
+                                    logger.debug(f"累积tool input: {len(tool_uses[last_tool_id]['input_str'])} 字符")
+                            else:
+                                # 旧逻辑兼容：如果不是text_delta，尝试提取partial_json
+                                partial = delta.get("partial_json")
+                                if partial and last_tool_id and last_tool_id in tool_uses:
+                                    tool_uses[last_tool_id]["input_str"] += partial
+                                    logger.debug(f"累积tool input(fallback): {len(tool_uses[last_tool_id]['input_str'])} 字符")
+                        elif et == "content_block_stop":
+                            if last_tool_id and last_tool_id in tool_uses:
+                                info = tool_uses[last_tool_id]
+                                if info.get("input") is None and info.get("input_str"):
+                                    try:
+                                        info["input"] = json.loads(info["input_str"]) or {}
+                                    except Exception:
+                                        info["input"] = {}
+                            last_tool_id = None
+                        elif et == "message_stop":
+                            break
+                        else:
+                            # 其它事件忽略（message_start, ping, ...）
+                            pass
+
+                    final_response = {
+                        "content": full_content or None,
+                        "model": self.model_name,
+                        "usage": {},
+                        "raw_response": {}
+                    }
+                    tool_calls = []
+                    for tid, info in tool_uses.items():
+                        name = info.get("name") or ""
+                        args_obj = info.get("input")
+                        input_str = info.get("input_str") or ""
+
+                        logger.info(f"流式tool_use完成: id={tid}, name={name}, input={args_obj}, input_str_len={len(input_str)}")
+
+                        # 修复：如果input为空或None，尝试从input_str解析
+                        if not args_obj or args_obj is None:
+                            s = input_str
+                            try:
+                                args_obj = json.loads(s) if s else {}
+                                logger.info(f"从input_str解析参数成功: {len(str(args_obj))} 字符")
+                            except Exception as e:
+                                logger.error(f"从input_str解析参数失败: {e}, input_str={s[:200]}")
+                                args_obj = {}
+                        tool_calls.append({
+                            "id": tid,
+                            "type": "function",
+                            "function": {"name": name, "arguments": json.dumps(args_obj, ensure_ascii=False)}
+                        })
+                    if tool_calls:
+                        final_response["tool_calls"] = tool_calls
+                    yield {"type": "done", "response": final_response}
+                    return
+                else:
+                    logger.warning(f"Claude原生messages返回非200，fallback到OAI: status={response.status_code}")
+            except Exception as e:
+                logger.warning(f"Claude原生messages请求失败，fallback到OAI: {e}")
+
+        # —— OAI ChatCompletions 常规流式 ——
+        payload = {
+            "model": self.model_config["model"],
+            "messages": used_messages,
+            "temperature": temperature,
+            "stream": True
+        }
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+        if used_tools:
+            payload["tools"] = used_tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.model_config['api_key']}"
+        }
+        if is_claude:
+            headers["anthropic-version"] = headers.get("anthropic-version", "2023-06-01")
+
+        # 记录请求日志（脱敏）
+        if self.config.agent_enable_request_logging:
+            try:
+                msg_preview = [
+                    {"role": m.get("role"), "len": len(m.get("content", ""))}
+                    for m in (messages or [])
+                ]
+                logger.debug(
+                    f"LLM流式请求: model={self.model_name}, stream=True, messages={msg_preview}, tools={len(tools) if tools else 0}, tool_choice={tool_choice}"
+                )
+            except Exception:
+                pass
+
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                # 发送流式请求
+                response = requests.post(
+                    self.model_config["base_url"],
+                    headers=headers,
+                    json=payload,
+                    timeout=self.model_config["timeout"],
+                    stream=True
+                )
+                if response.status_code >= 400:
+                    detail = None
+                    try:
+                        detail = response.text[:500]
+                    except Exception:
+                        detail = None
+                    logger.error(
+                        f"LLM流式请求失败: status={response.status_code}, detail={detail}"
+                    )
+                    if 400 <= response.status_code < 500 and response.status_code != 429:
+                        response.raise_for_status()
+                response.raise_for_status()
+
+                # 累积完整响应用于最终返回
+                full_content = ""
+                full_reasoning = ""
+                full_tool_calls = []
+                current_tool_call = None
+
+                # 逐块处理SSE流
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+
+                    line = line.decode('utf-8')
+
+                    # SSE格式：data: {...}
+                    if line.startswith('data: '):
+                        data_str = line[6:]  # 移除 "data: " 前缀
+
+                        # 检查是否为流结束标记
+                        if data_str.strip() == '[DONE]':
+                            break
+
+                        try:
+                            chunk = json.loads(data_str)
+
+                            # 记录原始chunk用于调试
+                            logger.debug(f"原始chunk: {json.dumps(chunk, ensure_ascii=False)[:500]}")
+
+                            if "choices" in chunk and len(chunk["choices"]) > 0:
+                                delta = chunk["choices"][0].get("delta", {})
+
+                                # 处理reasoning字段（思考过程）
+                                if "reasoning" in delta and delta["reasoning"]:
+                                    reasoning_delta = delta["reasoning"]
+                                    full_reasoning += reasoning_delta
+
+                                    # yield思考过程增量
+                                    yield {
+                                        "type": "reasoning",
+                                        "delta": reasoning_delta,
+                                        "full_reasoning": full_reasoning
+                                    }
+
+                                # 处理内容增量
+                                if "content" in delta and delta["content"]:
+                                    content_delta = delta["content"]
+                                    full_content += content_delta
+
+                                    # yield内容增量
+                                    yield {
+                                        "type": "content",
+                                        "delta": content_delta,
+                                        "full_content": full_content
+                                    }
+
+                                # 处理tool_calls增量
+                                if "tool_calls" in delta:
+                                    for tc_delta in delta["tool_calls"]:
+                                        index = tc_delta.get("index", 0)
+
+                                        # 确保有足够的tool_call槽位
+                                        while len(full_tool_calls) <= index:
+                                            full_tool_calls.append({
+                                                "id": "",
+                                                "type": "function",
+                                                "function": {"name": "", "arguments": ""}
+                                            })
+
+                                        # 更新tool_call
+                                        if "id" in tc_delta:
+                                            full_tool_calls[index]["id"] = tc_delta["id"]
+                                        if "function" in tc_delta:
+                                            if "name" in tc_delta["function"]:
+                                                full_tool_calls[index]["function"]["name"] = tc_delta["function"]["name"]
+                                            if "arguments" in tc_delta["function"]:
+                                                full_tool_calls[index]["function"]["arguments"] += tc_delta["function"]["arguments"]
+
+                        except json.JSONDecodeError:
+                            logger.warning(f"无法解析流式响应块: {data_str}")
+                            continue
+
+                # 流结束后返回完整响应
+                final_response = {
+                    "content": full_content if full_content else None,
+                    "model": self.model_name,
+                    "usage": {},
+                    "raw_response": {}
+                }
+                if full_tool_calls:
+                    final_response["tool_calls"] = full_tool_calls
+                yield {"type": "done", "response": final_response}
+                return
+
+            except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
+                last_error = e
+                try:
+                    status = getattr(e.response, "status_code", None)
+                except Exception:
+                    status = None
+                # 可读的失败原因（不暴露敏感信息）
+                reason = "请求失败"
+                if isinstance(e, requests.exceptions.Timeout):
+                    reason = "超时"
+                elif status == 429:
+                    reason = "速率限制"
+                elif status is not None and status >= 500:
+                    reason = "服务异常"
+                elif status is not None and 400 <= status < 500:
+                    reason = "客户端错误"
+                else:
+                    reason = "网络异常"
+
+                # 4xx(非429)不重试：上抛，但先yield一次错误提示（供上层展示）
+                if status is not None and 400 <= status < 500 and status != 429:
+                    logger.error(f"LLM流式请求失败(4xx,不重试): {e}")
+                    yield {"type": "error", "message": f"LLM请求失败({reason})", "status_code": status}
+                    raise
+
+                if attempt >= self.max_retries:
+                    logger.error(f"LLM流式请求失败且重试耗尽({attempt}/{self.max_retries}): {e}")
+                    yield {"type": "retry_exhausted", "attempt": attempt, "max_retries": self.max_retries, "reason": reason}
+                    raise
+
+                # 针对429速率限制使用更激进的退避策略
+                if status == 429:
+                    # 429错误：使用更长的指数退避，从2秒开始
+                    delay = 2.0 * (2 ** (attempt - 1))  # 2s, 4s, 8s, 16s, 32s
+                    delay += random.uniform(0, 1.0)  # 添加抖动避免雷鸣群效应
+                    logger.warning(f"遇到速率限制(429)，使用长退避策略，重试第{attempt}/{self.max_retries}次，等待{delay:.2f}s: {e}")
+                else:
+                    # 其他错误：使用标准指数退避
+                    delay = self.retry_base_delay * (2 ** (attempt - 1))
+                    delay += random.uniform(0, self.retry_base_delay)
+                    logger.warning(f"LLM流式请求失败，重试第{attempt}/{self.max_retries}次后重连，等待{delay:.2f}s: {e}")
+
+                # 将重试计划告知上层（供前端展示），不包含URL等敏感信息
+                yield {"type": "retry", "attempt": attempt, "max_retries": self.max_retries, "delay": round(delay, 2), "reason": reason}
+                time.sleep(delay)

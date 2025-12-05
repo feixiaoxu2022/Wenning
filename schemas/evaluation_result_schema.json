@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://creativeflow.ai/schemas/evaluation-result.json",
+  "title": "Evaluation Result",
+  "description": "评测结果格式，包含自动评测结果和人工标注（可选）",
+  "type": "object",
+  "required": ["sample_id", "evaluated_at", "executions", "check_results"],
+  "properties": {
+    "sample_id": {
+      "type": "string",
+      "description": "对应的样本ID",
+      "pattern": "^EVAL_[A-Z0-9_]+$"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "评测开始时间"
+    },
+    "executions": {
+      "type": "object",
+      "description": "两个模型的执行信息",
+      "required": ["model_a", "model_b"],
+      "properties": {
+        "model_a": {
+          "$ref": "#/definitions/ExecutionSummary"
+        },
+        "model_b": {
+          "$ref": "#/definitions/ExecutionSummary"
+        }
+      }
+    },
+    "check_results": {
+      "type": "object",
+      "description": "自动评测结果（Rule-based + LLM Judge）",
+      "required": ["model_a", "model_b"],
+      "properties": {
+        "model_a": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CheckResult"
+          }
+        },
+        "model_b": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CheckResult"
+          }
+        }
+      }
+    },
+    "human_annotation": {
+      "$ref": "#/definitions/HumanAnnotation",
+      "description": "人工标注结果（可选，标注前为空）"
+    },
+    "final_scores": {
+      "type": "object",
+      "description": "最终得分（可选，需要human_annotation才能计算）",
+      "properties": {
+        "model_a": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "model_b": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "winner": {
+      "type": "string",
+      "enum": ["model_a", "model_b", "tie"],
+      "description": "获胜者（可选，需要human_annotation才能判断）"
+    }
+  },
+  "definitions": {
+    "ExecutionSummary": {
+      "type": "object",
+      "description": "单个模型的执行摘要",
+      "required": ["model_name", "status"],
+      "properties": {
+        "model_name": {
+          "type": "string",
+          "description": "模型名称"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed", "timeout", "partial"],
+          "description": "执行状态"
+        },
+        "file_count": {
+          "type": "integer",
+          "description": "生成的文件数量",
+          "minimum": 0
+        },
+        "execution_file": {
+          "type": "string",
+          "description": "执行结果文件路径（agent_execution_result.json）"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "错误信息（如果失败）"
+        }
+      }
+    },
+    "CheckResult": {
+      "type": "object",
+      "description": "单个检查项的结果",
+      "required": ["check_type", "score", "passed"],
+      "properties": {
+        "check_type": {
+          "type": "string",
+          "description": "检查类型",
+          "examples": ["file_count_range", "llm_judge", "file_format_check"]
+        },
+        "description": {
+          "type": "string",
+          "description": "检查项描述"
+        },
+        "score": {
+          "type": "number",
+          "description": "得分（0-1之间）",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "passed": {
+          "type": "boolean",
+          "description": "是否通过"
+        },
+        "details": {
+          "type": "string",
+          "description": "详细说明"
+        },
+        "weight": {
+          "type": "number",
+          "description": "权重（来自样本定义）",
+          "minimum": 0
+        },
+        "raw_data": {
+          "type": "object",
+          "description": "原始数据（如LLM的完整响应）",
+          "additionalProperties": true
+        }
+      }
+    },
+    "HumanAnnotation": {
+      "type": "object",
+      "description": "人工标注结果",
+      "properties": {
+        "preference": {
+          "type": "string",
+          "enum": ["model_a", "model_b", "both_bad", "tie"],
+          "description": "偏好选择"
+        },
+        "dimensions": {
+          "type": "object",
+          "description": "多维度对比（可选）",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["model_a", "model_b", "tie"]
+          }
+        },
+        "reason": {
+          "type": "string",
+          "description": "选择理由"
+        },
+        "annotated_by": {
+          "type": "string",
+          "description": "标注人"
+        },
+        "annotated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "标注时间"
+        }
+      }
+    }
+  }
+}

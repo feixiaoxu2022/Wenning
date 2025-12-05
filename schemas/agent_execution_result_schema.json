@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://creativeflow.ai/schemas/agent-execution-result.json",
+  "title": "Agent Execution Result",
+  "description": "Agent执行结果格式，包含初始状态、最终状态、完整对话轨迹",
+  "type": "object",
+  "required": ["sample_id", "model_name", "status", "evaluated_at", "initial_state", "final_state", "conversation_history"],
+  "properties": {
+    "sample_id": {
+      "type": "string",
+      "description": "对应的评测样本ID",
+      "pattern": "^EVAL_[A-Z0-9_]+$"
+    },
+    "model_name": {
+      "type": "string",
+      "description": "执行的模型名称",
+      "examples": ["gpt-4", "claude-3.5-sonnet", "gemini-pro"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "failed", "timeout", "partial"],
+      "description": "执行状态"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "评测时间"
+    },
+    "initial_state": {
+      "$ref": "#/definitions/EnvironmentState",
+      "description": "初始环境状态（通常为空）"
+    },
+    "final_state": {
+      "$ref": "#/definitions/EnvironmentState",
+      "description": "最终环境状态（包含生成的所有文件）"
+    },
+    "conversation_history": {
+      "type": "array",
+      "description": "完整对话轨迹（包含工具调用和返回）",
+      "items": {
+        "$ref": "#/definitions/Message"
+      }
+    }
+  },
+  "definitions": {
+    "EnvironmentState": {
+      "type": "object",
+      "description": "环境状态（文件系统快照）",
+      "required": ["files"],
+      "properties": {
+        "files": {
+          "type": "array",
+          "description": "文件列表",
+          "items": {
+            "$ref": "#/definitions/FileInfo"
+          }
+        }
+      }
+    },
+    "FileInfo": {
+      "type": "object",
+      "description": "文件信息",
+      "required": ["path", "size", "type"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "文件路径（相对路径）"
+        },
+        "size": {
+          "type": "integer",
+          "description": "文件大小（字节）",
+          "minimum": 0
+        },
+        "type": {
+          "type": "string",
+          "description": "文件类型/扩展名",
+          "examples": ["png", "jpg", "xlsx", "html", "txt", "md"]
+        },
+        "metadata": {
+          "type": "object",
+          "description": "文件元数据（可选，针对特定类型）",
+          "properties": {
+            "dimensions": {
+              "type": "object",
+              "description": "图片尺寸（仅图片）",
+              "properties": {
+                "width": {"type": "integer"},
+                "height": {"type": "integer"}
+              }
+            },
+            "sheets": {
+              "type": "array",
+              "description": "工作表列表（仅Excel）",
+              "items": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "Message": {
+      "type": "object",
+      "description": "对话消息",
+      "required": ["role", "content", "timestamp"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant", "tool"],
+          "description": "消息角色"
+        },
+        "content": {
+          "type": "string",
+          "description": "消息内容"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "消息时间"
+        },
+        "tool_calls": {
+          "type": "array",
+          "description": "工具调用（仅assistant消息）",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "parameters"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "工具调用ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "工具名称",
+                "examples": ["web_search", "image_generator", "file_writer"]
+              },
+              "parameters": {
+                "type": "object",
+                "description": "工具参数",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "tool_call_id": {
+          "type": "string",
+          "description": "对应的工具调用ID（仅tool消息）"
+        }
+      }
+    }
+  }
+}

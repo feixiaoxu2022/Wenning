@@ -1,0 +1,529 @@
+/* 优化中文字体显示 - 参考现代化设计 */
+
+/* 本地苹方映射，确保权重匹配（不会走网络） */
+@font-face {
+    font-family: "PingFang SC";
+    src: local("PingFang SC"), local("PingFangSC"), local("PingFangSC-Regular"), local("苹方-简");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: "PingFang SC";
+    src: local("PingFangSC-Medium"), local("PingFang SC Medium");
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+}
+@font-face {
+    font-family: "PingFang SC";
+    src: local("PingFangSC-Semibold"), local("PingFang SC Semibold"), local("PingFangSC-Bold"), local("PingFang SC Bold");
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+
+/* 主字体设置 - 使用苹方/思源黑体/微软雅黑等中文优化字体 */
+* {
+    /* 优先使用苹方中文字体 */
+    font-family: "PingFang SC", "Hiragino Sans GB",
+                 -apple-system, BlinkMacSystemFont,
+                 "Microsoft YaHei", "微软雅黑",
+                 "Noto Sans SC", "Noto Sans CJK SC",
+                 "Source Han Sans SC", "思源黑体",
+                 "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif,
+                 "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+}
+
+/* 根节点与页面整体强制苹方（非代码元素） */
+html, body {
+    font-family: "PingFang SC", "Hiragino Sans GB",
+                 -apple-system, BlinkMacSystemFont,
+                 "Noto Sans SC", "Noto Sans CJK SC",
+                 "Source Han Sans SC", "思源黑体",
+                 "Microsoft YaHei", "微软雅黑",
+                 "Helvetica Neue", Arial, sans-serif !important;
+}
+body *:not(code):not(pre):not(.code-block):not(.MuiTypography-code) {
+    font-family: "PingFang SC", "Hiragino Sans GB",
+                 -apple-system, BlinkMacSystemFont,
+                 "Noto Sans SC", "Noto Sans CJK SC",
+                 "Source Han Sans SC", "思源黑体",
+                 "Microsoft YaHei", "微软雅黑",
+                 "Helvetica Neue", Arial, sans-serif !important;
+}
+
+body,
+.MuiTypography-root,
+.message-content,
+input,
+textarea,
+button,
+div,
+p,
+span,
+h1, h2, h3, h4, h5, h6 {
+    /* 全局文本优先苹方 */
+    font-family: "PingFang SC", "Hiragino Sans GB",
+                 -apple-system, BlinkMacSystemFont,
+                 "Microsoft YaHei", "微软雅黑",
+                 "Noto Sans SC", "Noto Sans CJK SC",
+                 "Source Han Sans SC", "思源黑体",
+                 "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif,
+                 "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+}
+
+/* 全局圆角和阴影优化 */
+* {
+    box-sizing: border-box;
+}
+
+/* 消息卡片阴影效果 */
+.step,
+.message {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    border-radius: 12px !important;
+    transition: box-shadow 0.2s ease;
+}
+
+.step:hover,
+.message:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* 标题字体优化 - 更大胆的字重 */
+h1, h2, h3, h4, h5, h6,
+.MuiTypography-h1,
+.MuiTypography-h2,
+.MuiTypography-h3,
+.MuiTypography-h4,
+.MuiTypography-h5,
+.MuiTypography-h6 {
+    font-family: "PingFang SC", "Hiragino Sans GB",
+                 -apple-system, BlinkMacSystemFont,
+                 "Microsoft YaHei", "微软雅黑",
+                 "Source Han Sans SC", "思源黑体",
+                 sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #1a1a1a;
+}
+
+/* 覆盖常见MUI文字类组件（防止注入的样式覆盖） */
+.MuiTypography-root,
+.MuiTypography-body1,
+.MuiTypography-body2,
+.MuiTypography-caption,
+.MuiListItemText-root,
+.MuiTableCell-root,
+.MuiButton-root,
+.MuiChip-root,
+.MuiInputBase-input {
+    font-family: "PingFang SC", "Hiragino Sans GB",
+                 -apple-system, BlinkMacSystemFont,
+                 "Noto Sans SC", "Noto Sans CJK SC",
+                 "Source Han Sans SC", "思源黑体",
+                 "Microsoft YaHei", "微软雅黑",
+                 "Helvetica Neue", Arial, sans-serif !important;
+}
+
+/* H1特别优化 - 欢迎标题 */
+h1 {
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    margin-bottom: 0 !important;
+    color: #1a1a1a !important;
+}
+
+/* 欢迎消息卡片样式 */
+.message-content h1 + p strong {
+    font-size: 13px;
+    color: #666;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 20px;
+    display: block;
+}
+
+/* 功能卡片样式 */
+.message-content p strong {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+/* 功能描述文字 */
+.message-content p:not(:has(strong)) {
+    color: #666;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-left: 28px;
+    margin-bottom: 16px;
+}
+
+/* 分割线优化 */
+hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #e0e0e0, transparent);
+    margin: 24px 0 !important;
+}
+
+/* 代码字体 - 等宽字体 */
+code, pre,
+.code-block,
+.MuiTypography-code {
+    font-family: "SF Mono", "Monaco", "Cascadia Code",
+                 "Consolas", "Courier New", monospace;
+    font-weight: 400;
+}
+
+/* 消息内容区域优化 */
+.message-content p {
+    line-height: 1.8;
+    margin: 0.5em 0;
+}
+
+/* 列表优化 */
+.message-content ul,
+.message-content ol {
+    line-height: 1.7;
+    padding-left: 1.5em;
+}
+
+/* 强调文本 */
+.message-content strong,
+.message-content b {
+    font-weight: 600;
+}
+
+/* Markdown渲染优化 */
+.markdown-body {
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+/* 输入框字体大小 */
+.MuiInputBase-input {
+    font-size: 15px;
+}
+
+/* 按钮优化 - 圆角、阴影、hover效果 */
+.MuiButton-root,
+button {
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.MuiButton-root:hover,
+button:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+.MuiButton-contained {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.MuiButton-outlined {
+    border: 1.5px solid #e0e0e0 !important;
+}
+
+/* 侧边栏历史记录字体 */
+.sidebar-item,
+.thread-item {
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* 时间戳文字 */
+.timestamp,
+.MuiTypography-caption {
+    font-size: 12px;
+    letter-spacing: 0.01em;
+}
+
+/* 输入框优化 - 圆角和边框 */
+.MuiInputBase-root,
+input[type="text"],
+textarea {
+    border-radius: 10px !important;
+    border: 1.5px solid #e8e8e8 !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.MuiInputBase-root:focus-within,
+input[type="text"]:focus,
+textarea:focus {
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+    outline: none;
+}
+
+/* 文件预览区域优化 - 增强阴影和圆角 */
+.file-preview-container {
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 16px 0;
+    background: #fafafa;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.2s ease;
+}
+
+.file-preview-container:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.file-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.file-preview-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+}
+
+.file-preview-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.file-preview-content {
+    max-height: 500px;
+    overflow: auto;
+    background: white;
+    border-radius: 4px;
+    padding: 12px;
+}
+
+/* Excel表格样式优化 - 现代化设计 */
+.excel-preview {
+    overflow-x: auto;
+    border-radius: 8px;
+}
+
+.excel-preview table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.excel-preview th {
+    background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+    font-weight: 600;
+    padding: 12px 16px;
+    border: none;
+    border-bottom: 2px solid #dee2e6;
+    text-align: left;
+    color: #495057;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.excel-preview td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    color: #333;
+}
+
+.excel-preview tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.excel-preview tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.excel-preview tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* 编辑器区域样式 */
+.editor-container {
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    margin: 12px 0;
+    background: white;
+}
+
+.editor-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #d0d0d0;
+    border-radius: 8px 8px 0 0;
+}
+
+.editor-content {
+    min-height: 200px;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* 标签/徽章样式 - 类似YouTube的标签 */
+.MuiChip-root,
+.tag,
+.badge {
+    border-radius: 6px !important;
+    font-weight: 500;
+    font-size: 12px;
+    padding: 4px 12px;
+    transition: all 0.2s ease;
+}
+
+.MuiChip-root:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 思考过程步骤美化 */
+.step-container {
+    background: #f8f9fa;
+    border-left: 3px solid #667eea;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 8px 0;
+    transition: all 0.2s ease;
+}
+
+.step-container:hover {
+    background: #f1f3f5;
+    border-left-width: 4px;
+}
+
+/* 加载动画优化 */
+.loading-indicator,
+.spinner {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* 图标大小统一 */
+.MuiSvgIcon-root,
+svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* 头像圆角优化 */
+.MuiAvatar-root,
+.avatar {
+    border-radius: 50% !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px;
+    }
+
+    .markdown-body {
+        font-size: 14px;
+    }
+
+    .file-preview-container {
+        padding: 12px;
+    }
+
+    .excel-preview th,
+    .excel-preview td {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+}
+
+/* 深色模式适配 */
+@media (prefers-color-scheme: dark) {
+    .file-preview-container {
+        background: #2a2a2a;
+        border-color: #404040;
+    }
+
+    .file-preview-header {
+        border-bottom-color: #404040;
+    }
+
+    .file-preview-title {
+        color: #e0e0e0;
+    }
+
+    .file-preview-content {
+        background: #1e1e1e;
+    }
+
+    .excel-preview th {
+        background: #333;
+        border-color: #444;
+    }
+
+    .excel-preview td {
+        border-color: #444;
+    }
+
+    .excel-preview tr:hover {
+        background: #2a2a2a;
+    }
+
+    .editor-container {
+        border-color: #404040;
+    }
+
+    .editor-toolbar {
+        background: #2a2a2a;
+        border-bottom-color: #404040;
+    }
+}

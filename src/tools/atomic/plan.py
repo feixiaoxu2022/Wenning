@@ -1,0 +1,186 @@
+"""任务规划工具
+
+用于复杂多步骤任务的规划、跟踪和管理。
+"""
+
+from typing import Dict, Any, List
+from src.tools.base import BaseAtomicTool
+from src.tools.result import ToolResult
+from src.utils.logger import get_logger
+import json
+
+logger = get_logger(__name__)
+
+
+class PlanTool(BaseAtomicTool):
+    """任务规划工具
+
+    帮助LLM规划和跟踪复杂任务的执行步骤。
+    """
+
+    name = "create_plan"
+    description = "创建或更新任务计划。用于需要多个步骤的复杂任务,帮助跟踪进度。参数: task_description(任务描述), steps(步骤列表)"
+    required_params = ["task_description", "steps"]
+    parameters_schema = {
+        "type": "object",
+        "properties": {
+            "task_description": {
+                "type": "string",
+                "description": "任务的总体描述,说明要完成什么目标"
+            },
+            "steps": {
+                "type": "array",
+                "description": "任务的具体步骤列表",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "step": {
+                            "type": "integer",
+                            "description": "步骤编号(从1开始)"
+                        },
+                        "action": {
+                            "type": "string",
+                            "description": "该步骤要执行的动作描述"
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["pending", "in_progress", "completed", "failed"],
+                            "description": "步骤状态: pending(待执行), in_progress(进行中), completed(已完成), failed(失败)"
+                        },
+                        "result": {
+                            "type": "string",
+                            "description": "步骤的执行结果或备注(可选)"
+                        }
+                    },
+                    "required": ["step", "action", "status"]
+                }
+            }
+        },
+        "required": ["task_description", "steps"]
+    }
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.current_plan = None
+
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        """执行任务规划
+
+        Args:
+            task_description: 任务总体描述
+            steps: 步骤列表,每个步骤包含:
+                - step: 步骤编号
+                - action: 动作描述
+                - status: 状态 (pending/in_progress/completed/failed)
+                - result: 结果(可选)
+
+        Returns:
+            ToolResult
+        """
+        try:
+            task_description = kwargs.get("task_description", "")
+            steps = kwargs.get("steps", [])
+
+            if not task_description:
+                raise ValueError("缺少task_description参数")
+
+            if not isinstance(steps, list):
+                raise ValueError("steps必须是列表类型")
+
+            # 验证步骤格式
+            for i, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    raise ValueError(f"步骤{i+1}必须是字典类型")
+
+                required_fields = ["step", "action", "status"]
+                for field in required_fields:
+                    if field not in step:
+                        raise ValueError(f"步骤{i+1}缺少必需字段: {field}")
+
+                # 验证状态值
+                valid_statuses = ["pending", "in_progress", "completed", "failed"]
+                if step["status"] not in valid_statuses:
+                    raise ValueError(f"步骤{i+1}的状态必须是: {', '.join(valid_statuses)}")
+
+            # 保存计划
+            self.current_plan = {
+                "task_description": task_description,
+                "steps": steps,
+                "total_steps": len(steps),
+                "completed_steps": len([s for s in steps if s["status"] == "completed"]),
+                "in_progress_steps": len([s for s in steps if s["status"] == "in_progress"]),
+                "pending_steps": len([s for s in steps if s["status"] == "pending"]),
+                "failed_steps": len([s for s in steps if s["status"] == "failed"])
+            }
+
+            # 生成可读的计划摘要
+            summary = self._format_plan_summary(self.current_plan)
+
+            logger.info(f"任务计划已创建/更新: {task_description}")
+            logger.info(f"总步骤: {len(steps)}, 已完成: {self.current_plan['completed_steps']}")
+
+            return {
+                "summary": summary,
+                "plan": self.current_plan
+            }
+
+        except Exception as e:
+            logger.error(f"创建计划失败: {str(e)}")
+            raise RuntimeError(f"创建计划失败: {str(e)}")
+
+    def _format_plan_summary(self, plan: Dict) -> str:
+        """格式化计划摘要
+
+        Args:
+            plan: 计划字典
+
+        Returns:
+            格式化的摘要文本
+        """
+        summary_lines = [
+            f"📋 任务计划: {plan['task_description']}",
+            f"",
+            f"进度: {plan['completed_steps']}/{plan['total_steps']} 已完成",
+            f""
+        ]
+
+        # 按状态分组显示步骤
+        completed = [s for s in plan['steps'] if s['status'] == 'completed']
+        in_progress = [s for s in plan['steps'] if s['status'] == 'in_progress']
+        pending = [s for s in plan['steps'] if s['status'] == 'pending']
+        failed = [s for s in plan['steps'] if s['status'] == 'failed']
+
+        if completed:
+            summary_lines.append("✅ 已完成:")
+            for step in completed:
+                result_info = f" - {step.get('result', '')}" if step.get('result') else ""
+                summary_lines.append(f"  {step['step']}. {step['action']}{result_info}")
+            summary_lines.append("")
+
+        if in_progress:
+            summary_lines.append("🔄 进行中:")
+            for step in in_progress:
+                summary_lines.append(f"  {step['step']}. {step['action']}")
+            summary_lines.append("")
+
+        if pending:
+            summary_lines.append("⏳ 待执行:")
+            for step in pending:
+                summary_lines.append(f"  {step['step']}. {step['action']}")
+            summary_lines.append("")
+
+        if failed:
+            summary_lines.append("❌ 失败:")
+            for step in failed:
+                error_info = f" - {step.get('result', '')}" if step.get('result') else ""
+                summary_lines.append(f"  {step['step']}. {step['action']}{error_info}")
+
+        return "\n".join(summary_lines)
+
+    def get_current_plan(self) -> Dict:
+        """获取当前计划
+
+        Returns:
+            当前计划字典,如果没有则返回None
+        """
+        return self.current_plan

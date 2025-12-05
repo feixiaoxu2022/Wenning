@@ -1,0 +1,369 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://creativeflow.ai/schemas/evaluation-sample.json",
+  "title": "CreativeFlow Evaluation Sample",
+  "description": "评测样本格式规范",
+  "type": "object",
+  "required": ["data_id", "task_name", "query", "models", "check_list"],
+  "properties": {
+    "data_id": {
+      "type": "string",
+      "description": "样本唯一标识符",
+      "pattern": "^EVAL_[A-Z0-9_]+$",
+      "examples": ["EVAL_ASYNC_IMG_001", "EVAL_ANALYSIS_001"]
+    },
+    "task_name": {
+      "type": "string",
+      "description": "任务名称",
+      "minLength": 1,
+      "maxLength": 200,
+      "examples": ["技术文章配图生成", "AI竞品分析报告"]
+    },
+    "query": {
+      "type": "string",
+      "description": "发送给Agent的任务描述（prompt）",
+      "minLength": 10,
+      "examples": ["为一篇关于Python异步编程的技术博客生成5张配图..."]
+    },
+    "models": {
+      "type": "object",
+      "description": "对比的两个模型",
+      "required": ["model_a", "model_b"],
+      "properties": {
+        "model_a": {
+          "type": "string",
+          "description": "模型A的标识符",
+          "examples": ["gpt-4", "claude-3.5-sonnet", "gemini-pro"]
+        },
+        "model_b": {
+          "type": "string",
+          "description": "模型B的标识符",
+          "examples": ["gpt-4", "claude-3.5-sonnet", "gemini-pro"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "expected_outputs": {
+      "type": "array",
+      "description": "预期生成的文件列表（可选，用于基础文件检查）",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9_\\-\\.]+$"
+      },
+      "examples": [
+        ["async_concept.png", "async_flow.png"],
+        ["report.xlsx", "dashboard.html"]
+      ]
+    },
+    "timeout": {
+      "type": "integer",
+      "description": "任务执行超时时间（秒）",
+      "minimum": 30,
+      "maximum": 600,
+      "default": 150
+    },
+    "check_list": {
+      "type": "array",
+      "description": "评测检查项列表",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/CheckItem"
+      }
+    },
+    "meta": {
+      "type": "object",
+      "description": "元数据",
+      "properties": {
+        "difficulty": {
+          "type": "integer",
+          "description": "任务难度（1-5）",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "tags": {
+          "type": "array",
+          "description": "任务标签",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["image_generation", "technical"], ["data_analysis", "excel"]]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "创建时间（ISO 8601格式）"
+        },
+        "created_by": {
+          "type": "string",
+          "description": "创建者"
+        },
+        "eval_config": {
+          "$ref": "#/definitions/EvalConfig"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "CheckItem": {
+      "type": "object",
+      "required": ["check_type", "params", "weight", "description"],
+      "properties": {
+        "check_type": {
+          "type": "string",
+          "enum": [
+            "file_count_equals",
+            "file_count_range",
+            "file_format_check",
+            "image_size_check",
+            "excel_sheets_check",
+            "file_size_check",
+            "file_match_check",
+            "llm_judge",
+            "human_annotation"
+          ],
+          "description": "检查类型"
+        },
+        "params": {
+          "type": "object",
+          "description": "检查参数（根据check_type不同而不同）"
+        },
+        "weight": {
+          "type": "number",
+          "description": "权重（用于计算最终得分）",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "description": {
+          "type": "string",
+          "description": "检查项说明",
+          "minLength": 1
+        },
+        "is_required": {
+          "type": "boolean",
+          "description": "是否为必需项（不通过则整个评测失败，通常用于Rule-based门槛检查）",
+          "default": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "check_type": {"const": "file_count_equals"}
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["expected"],
+                "properties": {
+                  "expected": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "check_type": {"const": "file_count_range"}
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["min", "max"],
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "最小文件数量"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "最大文件数量"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "check_type": {"const": "file_format_check"}
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["expected_formats"],
+                "properties": {
+                  "expected_formats": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "check_type": {"const": "image_size_check"}
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["width", "height"],
+                "properties": {
+                  "width": {"type": "integer", "minimum": 1},
+                  "height": {"type": "integer", "minimum": 1},
+                  "tolerance": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.1},
+                  "apply_to": {"type": "string", "enum": ["all", "expected_outputs"]}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "check_type": {"const": "excel_sheets_check"}
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["expected_sheets"],
+                "properties": {
+                  "target_file": {"type": "string"},
+                  "expected_sheets": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "check_type": {"const": "llm_judge"}
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["judge_model", "prompt", "score_range"],
+                "properties": {
+                  "judge_model": {
+                    "type": "string",
+                    "description": "评测使用的LLM模型"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "评测prompt",
+                    "minLength": 10
+                  },
+                  "score_range": {
+                    "type": "array",
+                    "description": "评分范围 [min, max]",
+                    "items": {"type": "integer"},
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "description": "LLM温度参数",
+                    "minimum": 0,
+                    "maximum": 2,
+                    "default": 0.3
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "check_type": {"const": "human_annotation"}
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["options"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "description": "标注问题描述"
+                  },
+                  "dimensions": {
+                    "type": "array",
+                    "description": "评估维度列表（可选，用于多维度对比）",
+                    "items": {"type": "string"},
+                    "minItems": 1
+                  },
+                  "options": {
+                    "type": "array",
+                    "description": "标注选项",
+                    "items": {"type": "string"},
+                    "minItems": 2,
+                    "examples": [
+                      ["model_a", "model_b", "tie"],
+                      ["model_a", "model_b", "both_bad"],
+                      ["model_a", "model_b", "no_preference"]
+                    ]
+                  },
+                  "require_reason": {
+                    "type": "boolean",
+                    "description": "是否要求填写理由",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "EvalConfig": {
+      "type": "object",
+      "description": "评测控制配置",
+      "properties": {
+        "enable_position_randomization": {
+          "type": "boolean",
+          "description": "是否启用位置随机化（避免LLM Judge位置偏见）",
+          "default": true
+        },
+        "enable_llm_judge_cache": {
+          "type": "boolean",
+          "description": "是否启用LLM Judge结果缓存",
+          "default": true
+        },
+        "require_human_annotation": {
+          "type": "boolean",
+          "description": "是否必需人工标注",
+          "default": true
+        }
+      }
+    }
+  }
+}
