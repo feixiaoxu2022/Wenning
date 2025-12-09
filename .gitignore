@@ -66,5 +66,15 @@ samples/
 *.pid
 .server.pid
 
-# Temporary scripts
+# Development and testing (不提交到GitHub)
+tests/
+docs/
+scripts/
+tasks/
+public/
+
+# Temporary and generated files
 move_tests.sh
+*.md
+!README.md
+!requirements.txt
