@@ -21,24 +21,15 @@ logger = get_logger(__name__)
 
 class FileEditor(BaseAtomicTool):
     name = "file_editor"
-    description = """编辑会话目录中的文件。支持两种模式：
-
-【模式1：精确字符串替换】适合单次修改
-- 参数：old_string（必需）, new_string（必需）, replace_all（可选）
-- 用法：当你知道要替换的确切文本时使用
-- 示例：file_editor(conversation_id="xxx", filename="app.py", old_string="foo", new_string="bar")
-
-【模式2：行范围编辑】适合多轮微调同一位置
-- 参数：start_line（必需）, end_line（必需）, line_content（必需）, verify_context（可选）
-- 用法：当你需要在固定位置多次调整时使用
-- 示例：file_editor(conversation_id="xxx", filename="app.py", start_line=100, end_line=102,
-          line_content="new code\\n", verify_context="def my_func")
-
-注意：
-1. 两种模式互斥，不能同时使用
-2. 模式2的行号从1开始计数
-3. verify_context参数可选，用于安全验证是否在正确的上下文中修改
-"""
+    description = (
+        "文件编辑工具: 编辑会话目录中的文件。支持两种模式：精确字符串替换、行范围编辑。"
+        "适用场景：修改配置文件、更新代码片段、替换文本内容、修正错误内容。"
+        "优势：安全的编辑操作、支持上下文验证、返回diff预览、两种灵活模式。"
+        "不适用：批量编辑多个文件、复杂文本处理（使用code_executor或shell_executor）。"
+        "\n模式1-精确替换: old_string(原文), new_string(新文), replace_all(是否全部替换)"
+        "\n模式2-行范围: start_line(起始行), end_line(结束行), line_content(新内容), verify_context(上下文验证)"
+        "\n参数: filename(必需), conversation_id(必需), 根据模式选择对应参数"
+    )
 
     required_params = ["filename", "conversation_id"]
 

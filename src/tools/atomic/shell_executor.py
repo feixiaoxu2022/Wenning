@@ -26,7 +26,14 @@ class ShellExecutor(BaseAtomicTool):
     """受限 Shell 执行工具"""
 
     name = "shell_executor"
-    description = "在会话目录中执行受限shell命令（安全受限，不允许破坏性操作）"
+    description = (
+        "Shell命令执行: 在会话目录中执行bash命令（安全受限）。"
+        "适用场景：批量文件操作（重命名、移动、复制）、快速查找（find/grep）、管道处理（cat|sort|uniq）、系统工具调用（wc/awk/sed）。"
+        "优势：Shell语法简洁（一行完成批量操作）、支持管道和重定向、适合快速命令。"
+        "不适用：复杂编程逻辑、需要Python库的数据处理（使用code_executor）。"
+        "安全限制：禁止rm、sudo、pip install、ssh等危险命令。"
+        "参数: cmd(bash命令,必需), conversation_id(必需), timeout(超时秒数)"
+    )
     required_params = ["cmd", "conversation_id"]
     parameters_schema = {
         "type": "object",

@@ -1,8 +1,17 @@
+# Web Framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+starlette>=0.27.0
+python-multipart>=0.0.6
+
 # HTTP Requests
 requests>=2.31.0
 
 # Environment Variables
 python-dotenv>=1.0.0
+
+# LLM API
+openai>=1.3.0  # OpenAI compatible API client
 
 # Data Processing
 pandas>=2.0.0

@@ -26,9 +26,12 @@ from src.tools.atomic.plan import PlanTool
 from src.tools.atomic.file_reader import FileReader
 from src.tools.atomic.file_list import FileList
 from src.tools.atomic.file_editor import FileEditor
-from src.tools.atomic.tts_local import TTSLocal
 from src.tools.atomic.media_ffmpeg import MediaFFmpeg
-from src.tools.atomic.webpage_preview import WebPagePreviewTool
+# MiniMax多模态工具
+from src.tools.atomic.tts_minimax import TTSMiniMax
+from src.tools.atomic.image_generation_minimax import ImageGenerationMiniMax
+from src.tools.atomic.video_generation_minimax import VideoGenerationMiniMax
+from src.tools.atomic.music_generation_minimax import MusicGenerationMiniMax
 # 云端TTS暂不启用
 # from src.tools.atomic.tts_google import TTSGoogle
 # from src.tools.atomic.tts_azure import TTSAzure
@@ -99,17 +102,25 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
     if model_name not in agents:
         # 初始化Tool Registry
         tool_registry = ToolRegistry()
+
+        # 1. 核心工具（优先级最高）
         tool_registry.register_atomic_tool(WebSearchTool(config))
         tool_registry.register_atomic_tool(URLFetchTool(config))
-        tool_registry.register_atomic_tool(CodeExecutor(config, conv_manager))  # 传入conv_manager
+        tool_registry.register_atomic_tool(CodeExecutor(config, conv_manager))
+
+        # 2. 专用多模态生成工具（优先级高）
+        tool_registry.register_atomic_tool(ImageGenerationMiniMax(config, conv_manager))
+        tool_registry.register_atomic_tool(VideoGenerationMiniMax(config, conv_manager))
+        tool_registry.register_atomic_tool(MusicGenerationMiniMax(config, conv_manager))
+        tool_registry.register_atomic_tool(TTSMiniMax(config, conv_manager))
+
+        # 3. 通用辅助工具
         tool_registry.register_atomic_tool(PlanTool(config))
+        tool_registry.register_atomic_tool(MediaFFmpeg(config))
         tool_registry.register_atomic_tool(ShellExecutor(config))
         tool_registry.register_atomic_tool(FileReader(config))
         tool_registry.register_atomic_tool(FileList(config))
         tool_registry.register_atomic_tool(FileEditor(config))
-        tool_registry.register_atomic_tool(TTSLocal(config))
-        tool_registry.register_atomic_tool(MediaFFmpeg(config))
-        tool_registry.register_atomic_tool(WebPagePreviewTool(config))
         # 云端TTS暂不注册，按需开启
         # tool_registry.register_atomic_tool(TTSGoogle(config))
         # tool_registry.register_atomic_tool(TTSAzure(config))
@@ -117,7 +128,7 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
         # 创建Agent
         agent = MasterAgent(config, tool_registry, model_name=model_name)
         agents[model_name] = agent
-        logger.info(f"创建新Agent: model={model_name}")
+        logger.info(f"创建新Agent: model={model_name}, tools={len(tool_registry.list_tools())}")
 
     return agents[model_name]
 
@@ -750,6 +761,7 @@ async def list_models():
         {"name": "glm-4.5", "display_name": "智谱GLM-4.5", "default": False},
         {"name": "doubao-seed-1-6-thinking-250615", "display_name": "豆包Thinking模型", "default": False},
         {"name": "gemini-2.5-pro", "display_name": "Google Gemini 2.5 Pro", "default": False},
+        {"name": "gemini-3-pro-preview", "display_name": "Google Gemini 3 Pro (Preview)", "default": False},
         {"name": "claude-sonnet-4-5-20250929", "display_name": "Anthropic Claude Sonnet 4.5 (2025-09-29)", "default": False},
     ]
     return JSONResponse(content={"models": models})
@@ -1025,4 +1037,11 @@ async def workspace_user_all(user: str = Depends(require_user())):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=80)
+    # 配置uvicorn以支持长时间运行的请求（如MiniMax生成任务）
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=80,
+        timeout_keep_alive=650,  # keepalive超时: 10分50秒（略大于最长任务时间）
+        limit_concurrency=100     # 并发限制
+    )

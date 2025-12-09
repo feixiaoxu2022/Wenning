@@ -25,7 +25,13 @@ logger = get_logger(__name__)
 
 class FileReader(BaseAtomicTool):
     name = "file_reader"
-    description = "读取会话目录中的文件（只读，返回结构化预览）"
+    description = (
+        "文件读取工具: 读取会话目录中的文件并返回结构化预览（只读，安全限长）。"
+        "适用场景：快速查看文件内容、预览CSV/Excel表格（自动识别格式）、读取JSON/文本配置。"
+        "优势：自动格式识别、返回结构化预览、限长保护（避免大文件阻塞）、支持多种编码。"
+        "不适用：需要完整读取大文件、需要复杂文本处理（使用code_executor）。"
+        "参数: filename(文件名), conversation_id(必需), mode(可选:text/json/csv/excel), max_bytes/max_lines"
+    )
     required_params = ["filename", "conversation_id"]
     parameters_schema = {
         "type": "object",

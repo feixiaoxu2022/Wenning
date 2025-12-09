@@ -40,6 +40,11 @@ class ContextManager:
         """
         try:
             import tiktoken
+            import socket
+
+            # 设置更短的超时时间，避免长时间等待
+            original_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(5.0)  # 5秒超时
 
             try:
                 encoder = tiktoken.encoding_for_model(self.model_name)
@@ -47,6 +52,9 @@ class ContextManager:
                 # 如果模型不在tiktoken中,使用默认编码
                 logger.warning(f"模型{self.model_name}不在tiktoken中,使用cl100k_base编码")
                 encoder = tiktoken.get_encoding("cl100k_base")
+            finally:
+                # 恢复默认超时
+                socket.setdefaulttimeout(original_timeout)
 
             # 计算总token数
             total_tokens = 0

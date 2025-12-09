@@ -23,11 +23,15 @@ logger = get_logger(__name__)
 class MediaFFmpeg(BaseAtomicTool):
     name = "media_ffmpeg"
     description = (
-        "FFmpeg媒体处理：\n"
-        "- mux: 将音频合入视频(out.mp4)\n"
-        "- transcode: 视频转码为yuv420p+faststart(out.mp4)\n"
-        "- mix: 旁白+背景音乐混音(out.wav/.m4a，或携带video同时输出out.mp4)\n"
-        "示例: {'mode':'mix','vocal':'narration.wav','bgm':'bgm.mp3','out':'mix.m4a','ducking':true,'bgm_gain_db':-14}"
+        "FFmpeg专业媒体处理: 底层音视频操作，支持转码、格式优化、专业混音。"
+        "适用场景：音频混音（旁白+BGM+ducking效果）、视频转码（yuv420p+faststart优化兼容性）、音视频流合成（mux）。"
+        "优势：专业级音频处理（sidechaincompress压缩、淡入淡出）、格式兼容性优化、底层FFmpeg精细控制。"
+        "不适用：视频内容编辑（剪辑、添加字幕、特效）→ 使用code_executor+moviepy。"
+        "\n支持模式："
+        "\n- mux: 音视频合成(video+audio→out.mp4)"
+        "\n- transcode: 视频转码优化(video→yuv420p+faststart)"
+        "\n- mix: 专业混音(vocal+bgm→out, 支持ducking/淡入淡出/循环)"
+        "\n参数: mode(必需), conversation_id(必需), out(输出文件), 根据模式选择video/audio/vocal/bgm等"
     )
 
     parameters_schema = {

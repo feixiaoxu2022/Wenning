@@ -11,7 +11,13 @@ logger = get_logger(__name__)
 
 class FileList(BaseAtomicTool):
     name = "file_list"
-    description = "列出会话目录中的文件（支持过滤/排序/限制）"
+    description = (
+        "文件列表工具: 列出会话目录中的文件，支持过滤、排序和限制。"
+        "适用场景：查找生成的文件、检查文件是否存在、按类型/时间筛选文件、统计文件数量。"
+        "优势：支持扩展名过滤(.png/.xlsx)、glob模式匹配(*.png)、多种排序方式(name/mtime/size)。"
+        "不适用：递归查找子目录、复杂文件操作（使用shell_executor的find命令或code_executor）。"
+        "参数: conversation_id(必需), ext(扩展名过滤), pattern(glob模式), limit(条数限制), sort(排序方式)"
+    )
     required_params = ["conversation_id"]
     parameters_schema = {
         "type": "object",

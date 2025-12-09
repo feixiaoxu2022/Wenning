@@ -25,7 +25,13 @@ class CodeExecutor(BaseAtomicTool):
     """
 
     name = "code_executor"
-    description = "在安全沙箱中执行Python代码"
+    description = (
+        "Python代码执行沙箱: 在安全环境中执行Python代码进行数据处理、科学计算和可视化。"
+        "适用场景：数据统计分析、科学计算、数据可视化（图表生成）、技术图形绘制、算法演示、数据动画（matplotlib.animation）、视频编辑（moviepy）、复杂文件处理。"
+        "优势：完整的Python生态（pandas/numpy/matplotlib/PIL/moviepy）、适合复杂编程逻辑、可以使用各种Python库。"
+        "不适用场景：艺术创作类的图像/视频生成（优先使用MiniMax API）、简单的批量文件操作和命令（优先使用shell_executor更简洁）。"
+        "参数: code(Python代码,必需), conversation_id(会自动注入), language(默认python), timeout(超时秒数)"
+    )
     required_params = ["code"]
     # 为Function Calling提供明确的参数schema，避免LLM不传必需参数
     parameters_schema = {

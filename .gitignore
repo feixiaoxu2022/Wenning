@@ -65,3 +65,6 @@ samples/
 .chainlit/
 *.pid
 .server.pid
+
+# Temporary scripts
+move_tests.sh

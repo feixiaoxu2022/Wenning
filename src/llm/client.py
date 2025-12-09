@@ -39,6 +39,10 @@ class LLMClient:
     def _is_claude(self) -> bool:
         return str(self.model_name).lower().startswith("claude")
 
+    def _is_gemini(self) -> bool:
+        """判断是否为Gemini模型"""
+        return "gemini" in str(self.model_name).lower()
+
     def _build_claude_native_url(self) -> str:
         """构造Claude原生messages端点。
         优先使用配置CLAUDE_API_BASE_URL，否则从统一网关base_url替换成/v1/messages。
@@ -65,6 +69,189 @@ class LLMClient:
                 "input_schema": fn.get("parameters", {"type": "object"})
             })
         return out
+
+    # ===== Gemini native helpers =====
+    def _convert_tools_to_gemini(self, tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
+        """将OpenAI格式的tools转换为Gemini格式
+
+        OpenAI: {"type": "function", "function": {"name": "...", "parameters": {...}}}
+        Gemini: {"functionDeclarations": [{"name": "...", "parameters": {...}}]}
+        """
+        if not tools:
+            return None
+
+        declarations = []
+        for t in tools:
+            fn = (t or {}).get("function") or {}
+            params = fn.get("parameters", {})
+
+            # 转换参数类型为大写（Gemini要求）
+            gemini_params = self._convert_schema_types_to_uppercase(params)
+
+            declarations.append({
+                "name": fn.get("name", ""),
+                "description": fn.get("description", ""),
+                "parameters": gemini_params
+            })
+
+        return [{"functionDeclarations": declarations}]
+
+    def _convert_schema_types_to_uppercase(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """递归转换schema中的type字段为大写（Gemini格式要求）
+
+        object -> OBJECT, string -> STRING, integer -> INTEGER, array -> ARRAY
+        """
+        if not isinstance(schema, dict):
+            return schema
+
+        result = {}
+        for key, value in schema.items():
+            if key == "type" and isinstance(value, str):
+                # 类型映射
+                type_mapping = {
+                    "object": "OBJECT",
+                    "string": "STRING",
+                    "integer": "INTEGER",
+                    "number": "NUMBER",
+                    "boolean": "BOOLEAN",
+                    "array": "ARRAY"
+                }
+                result[key] = type_mapping.get(value.lower(), value.upper())
+            elif isinstance(value, dict):
+                result[key] = self._convert_schema_types_to_uppercase(value)
+            elif isinstance(value, list):
+                result[key] = [self._convert_schema_types_to_uppercase(item) if isinstance(item, dict) else item for item in value]
+            else:
+                result[key] = value
+
+        return result
+
+    def _convert_messages_to_contents(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """将OpenAI格式的messages转换为Gemini格式的contents
+
+        OpenAI: [{"role": "user/assistant/system", "content": "..."}]
+        Gemini: [{"role": "user/model", "parts": [{"text": "..."}]}]
+
+        注意：
+        - system消息会被合并到第一个user消息前
+        - assistant -> model
+        - tool消息转换为functionResponse格式
+        """
+        contents = []
+        system_instruction = None
+
+        for msg in messages:
+            role = msg.get("role", "").lower()
+            content = msg.get("content", "")
+
+            if role == "system":
+                # Gemini将system作为独立配置，暂存
+                system_instruction = content
+                continue
+
+            if role == "assistant":
+                # assistant -> model
+                gemini_role = "model"
+
+                # 检查是否有tool_calls
+                tool_calls = msg.get("tool_calls")
+                if tool_calls:
+                    # 优先使用保存的Gemini原生parts（包含thoughtSignature等字段）
+                    gemini_parts = msg.get("_gemini_original_parts")
+                    if gemini_parts:
+                        # 直接使用原始parts，避免丢失Gemini特有字段
+                        contents.append({"role": gemini_role, "parts": gemini_parts})
+                    else:
+                        # 转换为functionCall格式（兼容非Gemini来源的tool_calls）
+                        parts = []
+                        for tc in tool_calls:
+                            fn = tc.get("function", {})
+                            import json
+                            try:
+                                args = json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else fn.get("arguments", {})
+                            except:
+                                args = {}
+
+                            parts.append({
+                                "functionCall": {
+                                    "name": fn.get("name", ""),
+                                    "args": args
+                                }
+                            })
+
+                        contents.append({"role": gemini_role, "parts": parts})
+                else:
+                    # 普通文本消息
+                    if content:
+                        contents.append({
+                            "role": gemini_role,
+                            "parts": [{"text": str(content)}]
+                        })
+
+            elif role == "user":
+                contents.append({
+                    "role": "user",
+                    "parts": [{"text": str(content)}]
+                })
+
+            elif role == "tool":
+                # tool结果转换为functionResponse
+                # 注意：Gemini要求functionResponse必须在user消息中，以保持user/model交替
+                tool_name = msg.get("name", "unknown")
+                tool_response = {
+                    "functionResponse": {
+                        "name": tool_name,
+                        "response": {
+                            "content": str(content)
+                        }
+                    }
+                }
+                contents.append({
+                    "role": "user",  # functionResponse必须使用user role
+                    "parts": [tool_response]
+                })
+
+        # 如果有system instruction，插入到开头（或作为配置返回）
+        # 这里简化处理：如果有system，添加到第一个user消息前
+        if system_instruction and contents:
+            # 查找第一个user消息
+            for i, c in enumerate(contents):
+                if c.get("role") == "user":
+                    # 将system instruction添加到该user消息的开头
+                    parts = c.get("parts", [])
+                    parts.insert(0, {"text": f"[System Instructions: {system_instruction}]\n\n"})
+                    break
+
+        # Gemini要求：必须user/model交替，且以user开始
+        # 合并连续的相同role消息
+        merged_contents = []
+        for content_msg in contents:
+            if not merged_contents:
+                merged_contents.append(content_msg)
+            elif merged_contents[-1]["role"] == content_msg["role"]:
+                # 相同role，合并parts
+                last_parts = merged_contents[-1]["parts"]
+                current_parts = content_msg["parts"]
+
+                # 智能合并：如果都是text，合并文本内容；否则直接extend
+                if (len(last_parts) == 1 and "text" in last_parts[0] and
+                    len(current_parts) == 1 and "text" in current_parts[0]):
+                    # 合并两个text parts为一个
+                    last_parts[0]["text"] += "\n\n" + current_parts[0]["text"]
+                else:
+                    # 其他情况（functionCall、functionResponse等）直接extend
+                    merged_contents[-1]["parts"].extend(content_msg["parts"])
+            else:
+                merged_contents.append(content_msg)
+
+        # 确保以user开始
+        if merged_contents and merged_contents[0]["role"] != "user":
+            merged_contents.insert(0, {
+                "role": "user",
+                "parts": [{"text": "Continue."}]
+            })
+
+        return merged_contents
 
     def _build_anthropic_messages_payload(self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]], temperature: float, max_tokens: Optional[int]) -> Dict[str, Any]:
         import json as _json
@@ -451,8 +638,112 @@ class LLMClient:
         used_messages = messages
         used_tools = tools
         is_claude = self._is_claude()
+        is_gemini = self._is_gemini()
+
         if is_claude:
             used_messages = _sanitize_msgs_for_claude(messages)
+
+        # ===== Gemini原生API =====
+        if is_gemini:
+            # 从base_url中提取主机名，构建Gemini原生API端点
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self.model_config['base_url'])
+            gemini_url = f"{parsed.scheme}://{parsed.netloc}/v1/models/{self.model_name}"
+            headers_gemini = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.model_config['api_key']}"
+            }
+
+            # 构建Gemini格式payload
+            gemini_contents = self._convert_messages_to_contents(messages)
+            gemini_tools = self._convert_tools_to_gemini(tools)
+
+            payload_gemini = {
+                "contents": gemini_contents
+            }
+            if gemini_tools:
+                payload_gemini["tools"] = gemini_tools
+            if temperature is not None:
+                payload_gemini["generationConfig"] = {"temperature": temperature}
+            if max_tokens:
+                payload_gemini["generationConfig"] = payload_gemini.get("generationConfig", {})
+                payload_gemini["generationConfig"]["maxOutputTokens"] = max_tokens
+
+            logger.info(f"[Gemini] 使用原生API: {gemini_url}")
+            logger.info(f"[Gemini] Payload: {json.dumps(payload_gemini, ensure_ascii=False)}")
+
+            try:
+                response = requests.post(
+                    gemini_url,
+                    headers=headers_gemini,
+                    json=payload_gemini,
+                    timeout=self.model_config["timeout"]
+                )
+                if response.status_code >= 400:
+                    try:
+                        error_detail = response.json()
+                        logger.error(f"[Gemini] 请求失败详情: status={response.status_code}, error={json.dumps(error_detail, ensure_ascii=False)}")
+                    except:
+                        logger.error(f"[Gemini] 请求失败详情: status={response.status_code}, text={response.text[:500]}")
+                response.raise_for_status()
+                gemini_response = response.json()
+
+                logger.info(f"[Gemini] 响应: {json.dumps(gemini_response, ensure_ascii=False)[:500]}")
+
+                # 解析Gemini响应
+                full_content = ""
+                tool_calls_list = []
+                gemini_parts_with_tool_calls = []  # 保存包含functionCall的原始parts
+
+                candidates = gemini_response.get("candidates", [])
+                if candidates:
+                    candidate = candidates[0]
+                    content_data = candidate.get("content", {})
+                    parts = content_data.get("parts", [])
+
+                    for part in parts:
+                        # 文本内容
+                        if "text" in part:
+                            text = part["text"]
+                            full_content += text
+                            yield {"type": "content", "delta": text, "full_content": full_content}
+
+                        # Function call
+                        if "functionCall" in part:
+                            # 保存原始part（包含thoughtSignature等所有字段）
+                            gemini_parts_with_tool_calls.append(part)
+
+                            fc = part["functionCall"]
+                            tool_call_id = f"call_{int(time.time()*1000)}_{len(tool_calls_list)}"
+                            tool_calls_list.append({
+                                "id": tool_call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": fc.get("name", ""),
+                                    "arguments": json.dumps(fc.get("args", {}), ensure_ascii=False)
+                                }
+                            })
+
+                # 构建最终响应
+                final_response = {
+                    "content": full_content or None,
+                    "model": self.model_name,
+                    "usage": gemini_response.get("usageMetadata", {}),
+                    "raw_response": gemini_response
+                }
+
+                if tool_calls_list:
+                    final_response["tool_calls"] = tool_calls_list
+                    # 保存Gemini原生parts供下一轮使用
+                    final_response["_gemini_original_parts"] = gemini_parts_with_tool_calls
+
+                yield {"type": "done", "response": final_response}
+                return
+
+            except Exception as e:
+                logger.error(f"[Gemini] 请求失败: {e}")
+                # Gemini失败不fallback，直接抛出
+                raise
 
         # 优先尝试Claude原生messages协议
         if is_claude and getattr(self.config, 'claude_force_native', True):

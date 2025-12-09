@@ -19,8 +19,15 @@ class PlanTool(BaseAtomicTool):
     """
 
     name = "create_plan"
-    description = "创建或更新任务计划。用于需要多个步骤的复杂任务,帮助跟踪进度。参数: task_description(任务描述), steps(步骤列表)"
-    required_params = ["task_description", "steps"]
+    description = (
+        "任务规划工具: 为复杂多步骤任务创建执行计划和进度跟踪（自动保存到plan.json）。"
+        "适用场景：任务包含3个以上步骤、需要分阶段执行、需要向用户展示进度。"
+        "典型场景：数据分析项目（获取→清洗→分析→可视化）、内容创作流程（调研→撰写→配图→校对）。"
+        "优势：结构化验证、自动统计进度、格式化摘要展示、自动持久化到文件。"
+        "不适用：简单的单步或两步任务。"
+        "参数: task_description(任务总体描述), steps(步骤列表,每步包含step/action/status/result), conversation_id(必需)"
+    )
+    required_params = ["task_description", "steps", "conversation_id"]
     parameters_schema = {
         "type": "object",
         "properties": {
@@ -54,14 +61,19 @@ class PlanTool(BaseAtomicTool):
                     },
                     "required": ["step", "action", "status"]
                 }
+            },
+            "conversation_id": {
+                "type": "string",
+                "description": "会话ID(必需,用于保存plan文件到对应会话目录)"
             }
         },
-        "required": ["task_description", "steps"]
+        "required": ["task_description", "steps", "conversation_id"]
     }
 
     def __init__(self, config):
         super().__init__(config)
         self.current_plan = None
+        self.output_dir = config.output_dir
 
     def execute(self, **kwargs) -> Dict[str, Any]:
         """执行任务规划
@@ -73,6 +85,7 @@ class PlanTool(BaseAtomicTool):
                 - action: 动作描述
                 - status: 状态 (pending/in_progress/completed/failed)
                 - result: 结果(可选)
+            conversation_id: 会话ID(必需,用于保存plan文件)
 
         Returns:
             ToolResult
@@ -80,9 +93,13 @@ class PlanTool(BaseAtomicTool):
         try:
             task_description = kwargs.get("task_description", "")
             steps = kwargs.get("steps", [])
+            conversation_id = kwargs.get("conversation_id")
 
             if not task_description:
                 raise ValueError("缺少task_description参数")
+
+            if not conversation_id:
+                raise ValueError("缺少conversation_id参数")
 
             if not isinstance(steps, list):
                 raise ValueError("steps必须是列表类型")
@@ -102,7 +119,7 @@ class PlanTool(BaseAtomicTool):
                 if step["status"] not in valid_statuses:
                     raise ValueError(f"步骤{i+1}的状态必须是: {', '.join(valid_statuses)}")
 
-            # 保存计划
+            # 保存计划（内存）
             self.current_plan = {
                 "task_description": task_description,
                 "steps": steps,
@@ -113,6 +130,16 @@ class PlanTool(BaseAtomicTool):
                 "failed_steps": len([s for s in steps if s["status"] == "failed"])
             }
 
+            # 持久化到文件
+            plan_dir = self.output_dir / conversation_id
+            plan_dir.mkdir(parents=True, exist_ok=True)
+            plan_file = plan_dir / "plan.json"
+
+            with open(plan_file, 'w', encoding='utf-8') as f:
+                json.dump(self.current_plan, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"Plan已保存到: {plan_file}")
+
             # 生成可读的计划摘要
             summary = self._format_plan_summary(self.current_plan)
 
@@ -121,7 +148,9 @@ class PlanTool(BaseAtomicTool):
 
             return {
                 "summary": summary,
-                "plan": self.current_plan
+                "plan": self.current_plan,
+                "saved_to": "plan.json",
+                "plan_file_path": str(plan_file)
             }
 
         except Exception as e:

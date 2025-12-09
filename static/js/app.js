@@ -228,6 +228,16 @@ async function loadModels() {
             modelSelect.appendChild(option);
         });
 
+        // 优先应用用户持久化的模型偏好
+        try {
+            const savedModel = localStorage.getItem('cf-model');
+            if (savedModel && Array.from(modelSelect.options).some(o => o.value === savedModel)) {
+                modelSelect.value = savedModel;
+                currentModel = savedModel;
+                console.log('[App] 应用本地持久化模型:', savedModel);
+            }
+        } catch (_) {}
+
         console.log('[App] 模型列表加载完成, currentModel:', currentModel);
 
     } catch (err) {
@@ -319,8 +329,8 @@ function createConversationItem(conv) {
  */
 async function ensureConversation() {
     try {
-        // 不传model参数，获取所有对话
-        const response = await fetch(`/conversations`);
+        // 优先获取与当前模型匹配的对话（若存在）
+        const response = await fetch(`/conversations?model=${encodeURIComponent(currentModel)}`);
         const data = await response.json();
 
         if (data.conversations && data.conversations.length > 0) {
@@ -413,16 +423,23 @@ async function loadConversation(convId) {
                 if (msg.role === 'user') {
                     ui.addUserMessage(msg.content);
                 } else if (msg.role === 'assistant') {
-                    ui.showResult({
-                        status: 'success',
-                        result: msg.content
-                    }, false);  // 禁用打字机效果
+                    // 历史列表中，LLM在调用工具时会产生一条content为空的assistant占位（仅包含tool_calls）
+                    // 这类占位会在UI上渲染成一块空白。这里对空内容进行跳过，仅保留有实际文本的assistant消息。
+                    const content = (msg.content || '').trim();
 
-                    // 如果有生成的文件,加载预览
-                    if (msg.generated_files && msg.generated_files.length > 0) {
+                    // 如果该条记录携带生成的文件，仍需加载预览（即使没有可显示的文本）
+                    if (Array.isArray(msg.generated_files) && msg.generated_files.length > 0) {
                         console.log(`[App] 加载历史消息的文件:`, msg.generated_files);
                         ui.loadMultipleFiles(msg.generated_files);
                     }
+
+                    if (!content) {
+                        // 纯函数调用占位，跳过渲染文本，避免出现“大块空白”
+                        return;
+                    }
+
+                    ui.showResult({ status: 'success', result: content }, false); // 禁用打字机效果
+
                 } else if (msg.role === 'tool') {
                     // 提取tool消息content中的generated_files
                     try {
@@ -673,9 +690,10 @@ function bindEvents() {
         }
     });
 
-    // 模型选择变化
+    // 模型选择变化：同步并持久化
     document.getElementById('model-select').addEventListener('change', (e) => {
         currentModel = e.target.value;
+        try { localStorage.setItem('cf-model', currentModel); } catch (_) {}
         console.log('[App] 用户切换模型:', currentModel);
     });
 

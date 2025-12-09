@@ -51,6 +51,13 @@ class Config:
         self.eb5_api_key = os.getenv("EB5_API_KEY", "")
         self.eb5_model_name = os.getenv("EB5_MODEL_NAME", "ernie-5.0-thinking-preview")
 
+        # MiniMax API - 多模态能力
+        self.minimax_api_key = os.getenv("MINIMAX_API_KEY", "")
+        self.minimax_tts_api_url = os.getenv("MINIMAX_TTS_API_URL", "https://api.minimaxi.com/v1/t2a_v2")
+        self.minimax_image_api_url = os.getenv("MINIMAX_IMAGE_API_URL", "https://api.minimaxi.com/v1/image_generation")
+        self.minimax_video_api_url = os.getenv("MINIMAX_VIDEO_API_URL", "https://api.minimaxi.com/v1/video_generation")
+        self.minimax_music_api_url = os.getenv("MINIMAX_MUSIC_API_URL", "https://api.minimaxi.com/v1/music_generation")
+
         # Claude(Anthropic/Bedrock) 专用（可选）
         # 若未配置则默认沿用统一网关；当启用原生适配时会将统一网关的 /v1/chat/completions 替换为 /v1/messages 进行尝试
         self.claude_api_base_url = os.getenv("CLAUDE_API_BASE_URL", "")
@@ -63,6 +70,7 @@ class Config:
             "gpt-5",
             "doubao-seed-1-6-thinking-250615",
             "gemini-2.5-pro",
+            "gemini-3-pro-preview",
             "claude-sonnet-4-5-20250929",
         ]
 
