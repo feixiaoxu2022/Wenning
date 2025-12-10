@@ -72,6 +72,15 @@ docs/
 scripts/
 tasks/
 public/
+evaluator/
+
+# Root directory files to exclude
+debug_*.py
+run_*.py
+*.sh
+pytest.ini
+server.log
+apiinfo.md
 
 # Temporary and generated files
 move_tests.sh
