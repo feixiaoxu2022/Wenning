@@ -37,6 +37,208 @@ class UI {
         this.workspaceListEl = document.getElementById('workspace-list');
     }
 
+    /** 创建通用的复制图标SVG */
+    _copySvg() {
+        // clipboard icon
+        return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg>';
+    }
+
+    /** 复制文本到剪贴板（带fallback） */
+    async copyText(text) {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+        } catch (_) {}
+        // fallback
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return ok;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    /** 创建一个悬浮复制按钮（用于右上角chip） */
+    _createCopyChip(label = '复制') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'copy-chip';
+        btn.innerHTML = `${this._copySvg()} <span class="copy-text">${label}</span>`;
+        btn.title = label || 'Copy';
+        return btn;
+    }
+
+    /** 创建消息用的悬浮左侧 copy 按钮 */
+    _createMsgCopyBtn(label = '复制') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'msg-copy-btn';
+        btn.innerHTML = this._copySvg();
+        btn.title = label || 'Copy';
+        return btn;
+    }
+
+    /** 给消息添加：hover 时左侧显示的复制图标 */
+    attachHoverCopyForMessage(targetEl, getText, label = '复制') {
+        if (!targetEl || typeof getText !== 'function') return;
+        if (targetEl.querySelector(':scope > .msg-copy-btn')) return;
+        const btn = this._createMsgCopyBtn(label);
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+                const ok = await this.copyText(String(await getText() || ''));
+                const oldTitle = btn.title;
+                btn.title = ok ? '已复制' : '复制失败';
+                setTimeout(() => { btn.title = oldTitle || '复制'; }, 1200);
+            } catch (_) {}
+        });
+        targetEl.appendChild(btn);
+        // 粘滞显示：在消息或按钮上时保持可见，离开两者后延迟隐藏
+        let hideTimer = null;
+        const show = () => {
+            if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+            targetEl.classList.add('show-copy');
+        };
+        const scheduleHide = () => {
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => {
+                targetEl.classList.remove('show-copy');
+            }, 180);
+        };
+        targetEl.addEventListener('mouseenter', show);
+        targetEl.addEventListener('mouseleave', scheduleHide);
+        btn.addEventListener('mouseenter', show);
+        btn.addEventListener('mouseleave', scheduleHide);
+        return btn;
+    }
+
+    /** 为给定元素附加右上角复制按钮 */
+    attachCopyChip(targetEl, getText, label = '复制') {
+        if (!targetEl || typeof getText !== 'function') return;
+        // 避免重复添加
+        if (targetEl.querySelector(':scope > .copy-chip')) return;
+        const btn = this._createCopyChip(label);
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+                const ok = await this.copyText(String(await getText() || ''));
+                const oldTitle = btn.title;
+                btn.title = ok ? '已复制' : '复制失败';
+                setTimeout(() => { btn.title = oldTitle || '复制'; }, 1200);
+            } catch (err) {}
+        });
+        targetEl.appendChild(btn);
+    }
+
+    /** 为markdown容器增强：给代码块添加复制按钮 */
+    enhanceMarkdownCopy(container) {
+        if (!container) return;
+        const pres = container.querySelectorAll('pre');
+        pres.forEach((pre) => {
+            const getText = () => {
+                // 优先code元素的纯文本
+                const code = pre.querySelector('code');
+                return (code ? code.innerText : pre.innerText) || '';
+            };
+            this.attachCopyChip(pre, getText, '复制代码');
+        });
+    }
+
+    /** 获取容器内当前可见的Excel表格(table) */
+    _getVisibleExcelTable(container) {
+        if (!container) return null;
+        const wrappers = container.querySelectorAll('.excel-table-wrapper');
+        for (const w of wrappers) {
+            const visible = w.style.display !== 'none';
+            if (visible) {
+                const t = w.querySelector('table');
+                if (t) return t;
+            }
+        }
+        // fallback: 找第一个table
+        return container.querySelector('.excel-table-wrapper table') || container.querySelector('table');
+    }
+
+    /** 将HTMLTableElement序列化为CSV文本 */
+    _tableToCSV(table, delimiter = ',') {
+        if (!table) return '';
+        const rows = Array.from(table.querySelectorAll('tr'));
+        const esc = (v) => {
+            const s = (v || '').replace(/\r?\n/g, '\n');
+            const mustQuote = s.includes('"') || s.includes('\n') || s.includes(delimiter);
+            const out = s.replace(/"/g, '""');
+            return mustQuote ? `"${out}"` : out;
+        };
+        const lines = rows.map((tr) => {
+            const cells = Array.from(tr.querySelectorAll('th,td'));
+            return cells.map((c) => esc(c.innerText.trim())).join(delimiter);
+        });
+        return lines.join('\n');
+    }
+
+    /** 将HTMLTableElement序列化为Markdown表格 */
+    _tableToMarkdown(table) {
+        if (!table) return '';
+        const rows = Array.from(table.querySelectorAll('tr'));
+        if (rows.length === 0) return '';
+        const toCells = (tr) => Array.from(tr.querySelectorAll('th,td')).map((c) => {
+            const s = (c.innerText || '').replace(/\r?\n/g, ' ').trim();
+            return s.replace(/\|/g, '\\|');
+        });
+        // header: thead>tr:first or first row
+        let headerCells = [];
+        const thead = table.querySelector('thead tr');
+        if (thead) headerCells = toCells(thead);
+        else headerCells = toCells(rows[0]);
+        const headerLine = `| ${headerCells.join(' | ')} |`;
+        const sepLine = `| ${headerCells.map(() => '---').join(' | ')} |`;
+        const bodyRows = [];
+        const startIdx = thead ? 0 : 1; // if no thead, skip first row as header
+        rows.forEach((tr, idx) => {
+            if (!thead && idx === 0) return;
+            if (thead && tr.closest('thead')) return; // skip any header rows
+            const cells = toCells(tr);
+            bodyRows.push(`| ${cells.join(' | ')} |`);
+        });
+        return [headerLine, sepLine, ...bodyRows].join('\n');
+    }
+
+    /** 为markdown内容中的表格添加复制按钮（仅 Markdown 表格） */
+    enhanceMarkdownTables(container) {
+        if (!container) return;
+        const tables = container.querySelectorAll('table');
+        tables.forEach((table) => {
+            // 避免重复：若已经有按钮则跳过
+            if (table.querySelector(':scope > .copy-chip[data-kind="md"]')) return;
+            // Markdown表格按钮
+            const mdBtn = this._createCopyChip('复制Markdown');
+            mdBtn.setAttribute('data-kind', 'md');
+            mdBtn.title = 'Copy Markdown Table';
+            mdBtn.style.right = '8px';
+            mdBtn.addEventListener('click', async (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const md = this._tableToMarkdown(table);
+                const ok = await this.copyText(md);
+                const oldTitle = mdBtn.title;
+                mdBtn.title = ok ? 'Copied' : 'Failed';
+                setTimeout(() => { mdBtn.title = oldTitle || 'Copy Markdown Table'; }, 1200);
+            });
+            table.appendChild(mdBtn);
+        });
+    }
+
     /** 强制刷新已存在文件的预览（用于覆盖写之后） */
     refreshFiles(filenames) {
         if (!Array.isArray(filenames) || !filenames.length) return;
@@ -52,7 +254,7 @@ class UI {
             const lower = (obj.filename || '').toLowerCase();
             try {
                 if (lower.endsWith('.xlsx')) this.loadExcelIntoContainer(obj.filename, el);
-                else if (/(\.png|\.jpg|\.jpeg)$/.test(lower)) this.loadImageIntoContainer(obj.filename, el);
+                else if (/(\.png|\.jpg|\.jpeg|\.svg|\.gif|\.webp|\.avif)$/.test(lower)) this.loadImageIntoContainer(obj.filename, el);
                 else if (/(\.mp3|\.wav|\.m4a|\.aac|\.ogg|\.flac)$/.test(lower)) this.loadAudioIntoContainer(obj.filename, el);
                 else if (/(\.mp4|\.webm|\.mov)$/.test(lower)) this.loadVideoIntoContainer(obj.filename, el);
                 else if (lower.endsWith('.html')) this.loadHtmlIntoContainer(obj.filename, el);
@@ -221,7 +423,7 @@ class UI {
     openFileByName(filename) {
         const lower = (filename || '').toLowerCase();
         if (lower.endsWith('.xlsx') || lower.endsWith('.csv')) return this.addFileTab(filename, 'excel');
-        if (/(\.png|\.jpg|\.jpeg)$/.test(lower)) return this.addFileTab(filename, 'image');
+        if (/(\.png|\.jpg|\.jpeg|\.svg|\.gif|\.webp|\.avif)$/.test(lower)) return this.addFileTab(filename, 'image');
         if (/(\.mp3|\.wav|\.m4a|\.aac|\.ogg|\.flac)$/.test(lower)) return this.addFileTab(filename, 'audio');
         if (/(\.mp4|\.webm|\.mov)$/.test(lower)) return this.addFileTab(filename, 'video');
         if (lower.endsWith('.html')) return this.addFileTab(filename, 'html');
@@ -229,7 +431,7 @@ class UI {
         if (lower.endsWith('.jsonl')) return this.addFileTab(filename, 'jsonl');
         if (lower.endsWith('.json')) return this.addFileTab(filename, 'json');
         if (lower.endsWith('.md')) return this.addFileTab(filename, 'markdown');
-        if (/(\.txt|\.md|\.log)$/i.test(lower)) return this.addFileTab(filename, 'text');
+        if (/(\.txt|\.md|\.log|\.yaml|\.yml|\.toml|\.ini|\.cfg|\.conf|\.xml|\.py|\.js|\.ts|\.tsx|\.jsx|\.java|\.go|\.rs|\.[ch](pp)?|\.cs|\.rb|\.php|\.sh|\.bash|\.zsh|\.sql)$/i.test(lower)) return this.addFileTab(filename, 'text');
         // 其它类型暂不内联预览
         alert('暂不支持该类型的内联预览');
     }
@@ -272,6 +474,8 @@ class UI {
         messageDiv.className = 'message user';
         messageDiv.textContent = message;
         this.chatMessages.appendChild(messageDiv);
+        // 消息整体复制按钮（hover 左侧，不遮挡内容）
+        this.attachHoverCopyForMessage(messageDiv, () => messageDiv.textContent || '', '复制');
 
         // 保存到历史
         this.chatHistory.push({role: 'user', content: message});
@@ -535,6 +739,17 @@ class UI {
                 }
             }
 
+            // 添加复制按钮：
+            // 1) 整条消息复制
+            this.attachCopyChip(resultBox, () => {
+                // 复制纯文本，避免复制HTML
+                return resultContent.innerText || '';
+            }, '复制');
+            // 2) 代码块复制
+            this.enhanceMarkdownCopy(resultContent);
+            // 3) Markdown表格复制（CSV/MD）
+            this.enhanceMarkdownTables(resultContent);
+
             // 文件加载由外部通过loadMultipleFiles显式调用
             // 不再使用checkAndLoadFiles的正则匹配逻辑
         }
@@ -595,8 +810,8 @@ class UI {
             }
         }
 
-        // 匹配图片文件 - 修复正则,确保能匹配中文+数字的组合
-        const imgPattern = /([\u4e00-\u9fa5\w\-_]+\.(?:png|jpg|jpeg))/gi;
+        // 匹配图片文件 - 修复正则,确保能匹配中文+数字的组合（扩展: svg/gif/webp/avif）
+        const imgPattern = /([\u4e00-\u9fa5\w\-_]+\.(?:png|jpg|jpeg|svg|gif|webp|avif))/gi;
         const imgMatches = resultText.matchAll(imgPattern);
         for (const match of imgMatches) {
             const filename = match[1];
@@ -651,7 +866,7 @@ class UI {
                 } else if (filename.endsWith('.xlsx')) {
                     console.log(`[UI] Adding Excel tab: ${filename}`);
                     this.addFileTab(filename, 'excel', key);
-                } else if (filename.match(/\.(png|jpg|jpeg)$/i)) {
+                } else if (filename.match(/\.(png|jpg|jpeg|svg|gif|webp|avif)$/i)) {
                     console.log(`[UI] Adding Image tab: ${filename}`);
                     this.addFileTab(filename, 'image', key);
                 } else if (filename.match(/\.(mp3|wav|m4a|aac|ogg|flac)$/i)) {
@@ -675,7 +890,7 @@ class UI {
                 } else if (filename.toLowerCase().endsWith('.md')) {
                     console.log(`[UI] Adding Markdown tab: ${filename}`);
                     this.addFileTab(filename, 'markdown', key);
-                } else if (filename.match(/\.(txt|log)$/i)) {
+                } else if (filename.match(/\.(txt|log|yaml|yml|toml|ini|cfg|conf|xml|py|js|ts|tsx|jsx|java|go|rs|c|cpp|h|cs|rb|php|sh|bash|zsh|sql)$/i)) {
                     console.log(`[UI] Adding Text tab: ${filename}`);
                     this.addFileTab(filename, 'text', key);
                 }
@@ -895,6 +1110,7 @@ class UI {
                             <div style="display:flex; justify-content: space-between; align-items:center;">
                                 <h4>${filename}</h4>
                                 <div style="display:flex; gap:12px; align-items:center;">
+                                    <button class="copy-inline-btn" data-action="copy-table-md" title="Copy Markdown Table"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy MD</span></button>
                                     <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
                                     <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
                                     <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
@@ -904,6 +1120,43 @@ class UI {
                         <div class="excel-table-wrapper">${data.html || '<div style="padding:16px;">No preview</div>'}</div>
                     </div>
                 `;
+                // 复制表格（CSV）
+                const copyBtn = container.querySelector('[data-action="copy-table"]');
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const table = this._getVisibleExcelTable(container);
+                        const csv = this._tableToCSV(table, ',');
+                        const ok = await this.copyText(csv);
+                        const oldTitle = copyBtn.title;
+                        copyBtn.title = ok ? 'Copied' : 'Failed';
+                        setTimeout(() => { copyBtn.title = oldTitle || 'Copy CSV'; }, 1200);
+                    });
+                }
+                const copyBtnTsv = container.querySelector('[data-action="copy-table-tsv"]');
+                if (copyBtnTsv) {
+                    copyBtnTsv.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const table = this._getVisibleExcelTable(container);
+                        const tsv = this._tableToCSV(table, '\t');
+                        const ok = await this.copyText(tsv);
+                        const oldTitle = copyBtnTsv.title;
+                        copyBtnTsv.title = ok ? 'Copied' : 'Failed';
+                        setTimeout(() => { copyBtnTsv.title = oldTitle || 'Copy TSV'; }, 1200);
+                    });
+                }
+                const copyBtnMd = container.querySelector('[data-action="copy-table-md"]');
+                if (copyBtnMd) {
+                    copyBtnMd.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const table = this._getVisibleExcelTable(container);
+                        const md = this._tableToMarkdown(table);
+                        const ok = await this.copyText(md);
+                        const oldTitle = copyBtnMd.title;
+                        copyBtnMd.title = ok ? 'Copied' : 'Failed';
+                        setTimeout(() => { copyBtnMd.title = oldTitle || 'Copy Markdown Table'; }, 1200);
+                    });
+                }
                 const saveBtn = container.querySelector('.workspace-save');
                 if (saveBtn) {
                     saveBtn.addEventListener('click', (e) => {
@@ -938,6 +1191,7 @@ class UI {
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h4>${filename}</h4>
                     <div style="display:flex; gap:12px; align-items:center;">
+                        <button class="copy-inline-btn" data-action="copy-table-md" title="Copy Markdown Table"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy MD</span></button>
                         <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
                         <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
                         <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
@@ -945,6 +1199,34 @@ class UI {
                 </div>
             `;
             excelDiv.appendChild(headerDiv);
+            // 复制表格（CSV/TSV/Markdown）
+            const hdrCsv = headerDiv.querySelector('[data-action="copy-table"]');
+            if (hdrCsv) hdrCsv.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const table = this._getVisibleExcelTable(excelDiv);
+                const csv = this._tableToCSV(table, ',');
+                const ok = await this.copyText(csv);
+                const old = hdrCsv.title; hdrCsv.title = ok ? 'Copied' : 'Failed';
+                setTimeout(() => { hdrCsv.title = old || 'Copy CSV'; }, 1200);
+            });
+            const hdrTsv = headerDiv.querySelector('[data-action="copy-table-tsv"]');
+            if (hdrTsv) hdrTsv.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const table = this._getVisibleExcelTable(excelDiv);
+                const tsv = this._tableToCSV(table, '\t');
+                const ok = await this.copyText(tsv);
+                const old = hdrTsv.title; hdrTsv.title = ok ? 'Copied' : 'Failed';
+                setTimeout(() => { hdrTsv.title = old || 'Copy TSV'; }, 1200);
+            });
+            const hdrMd = headerDiv.querySelector('[data-action="copy-table-md"]');
+            if (hdrMd) hdrMd.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const table = this._getVisibleExcelTable(excelDiv);
+                const md = this._tableToMarkdown(table);
+                const ok = await this.copyText(md);
+                const old = hdrMd.title; hdrMd.title = ok ? 'Copied' : 'Failed';
+                setTimeout(() => { hdrMd.title = old || 'Copy Markdown Table'; }, 1200);
+            });
 
             // Sheet标签页(如果有多个sheet)
             if (workbook.SheetNames.length > 1) {
@@ -1242,6 +1524,8 @@ class UI {
                     <div style="display:flex; justify-content: space-between; align-items: center;">
                         <h4>${filename}</h4>
                         <div style="display:flex; gap:12px; align-items:center;">
+                            <button class="copy-inline-btn" data-action="copy-text" title="Copy"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy</span></button>
+                            <button class="copy-inline-btn" data-action="copy-text-selection" title="Copy Selection"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy Selection</span></button>
                             <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
                             <a href="${this.outputsBaseUrl}/${encoded}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
                             <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
@@ -1250,6 +1534,46 @@ class UI {
                 </div>
                 <pre class="text-preview" style="white-space: pre-wrap; word-break: break-word; padding: 12px; background: var(--panel); border:1px solid var(--border); border-radius:8px; max-height: 60vh; overflow:auto;">${this.escapeHtml(text)}</pre>
             `;
+            // 绑定复制按钮
+            const copyBtn = container.querySelector('[data-action="copy-text"]');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const ok = await this.copyText(text);
+                    const oldTitle = copyBtn.title;
+                    copyBtn.title = ok ? 'Copied' : 'Failed';
+                    setTimeout(() => { copyBtn.title = oldTitle || 'Copy'; }, 1200);
+                });
+            }
+            // 复制选中片段
+            const copySelBtn = container.querySelector('[data-action="copy-text-selection"]');
+            if (copySelBtn) {
+                const pre = container.querySelector('.text-preview');
+                copySelBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    let s = '';
+                    try {
+                        const sel = window.getSelection();
+                        if (sel && sel.toString()) {
+                            const an = sel.anchorNode, fn = sel.focusNode;
+                            if (pre && an && fn && pre.contains(an) && pre.contains(fn)) {
+                                s = sel.toString();
+                            }
+                        }
+                    } catch (_){ }
+                    if (!s) {
+                        const old = copySelBtn.title;
+                        copySelBtn.title = 'No selection';
+                        setTimeout(() => { copySelBtn.title = old || 'Copy Selection'; }, 1200);
+                        return;
+                    }
+                    const ok = await this.copyText(s);
+                    const oldTitle = copySelBtn.title;
+                    copySelBtn.title = ok ? 'Copied' : 'Failed';
+                    setTimeout(() => { copySelBtn.title = oldTitle || 'Copy Selection'; }, 1200);
+                });
+            }
+
             const saveBtn = container.querySelector('.workspace-save');
             if (saveBtn) {
                 saveBtn.addEventListener('click', (e) => { e.preventDefault(); this.workspaceSave(filename, saveBtn); });
@@ -1309,6 +1633,7 @@ class UI {
                     <div style="display:flex; justify-content: space-between; align-items: center;">
                         <h4>${filename}</h4>
                         <div style="display:flex; gap:12px; align-items:center;">
+                            <button class="copy-inline-btn" data-action="copy-json" title="Copy"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy</span></button>
                         <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
                             <a href="${this.outputsBaseUrl}/${encoded}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
                             <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
@@ -1317,6 +1642,18 @@ class UI {
                 </div>
                 <pre class="text-preview" style="white-space: pre; padding: 12px; background: var(--panel); border:1px solid var(--border); border-radius:8px; max-height: 60vh; overflow:auto;">${pretty}</pre>
             `;
+            // 绑定复制按钮（复制原始JSON字符串，保持缩进）
+            const copyBtn = container.querySelector('[data-action="copy-json"]');
+            if (copyBtn) {
+                const raw = JSON.stringify(obj, null, 2);
+                copyBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const ok = await this.copyText(raw);
+                    const oldTitle = copyBtn.title;
+                    copyBtn.title = ok ? 'Copied' : 'Failed';
+                    setTimeout(() => { copyBtn.title = oldTitle || 'Copy'; }, 1200);
+                });
+            }
             const saveBtn = container.querySelector('.workspace-save');
             if (saveBtn) saveBtn.addEventListener('click', (e)=>{ e.preventDefault(); this.workspaceSave(filename, saveBtn); });
             const delBtn = container.querySelector('.file-delete');
@@ -1341,6 +1678,7 @@ class UI {
                     <div style="display:flex; justify-content: space-between; align-items: center;">
                         <h4>${filename}</h4>
                         <div style="display:flex; gap:12px; align-items:center;">
+                        <button class="copy-inline-btn" data-action="copy-markdown" title="Copy"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy</span></button>
                         <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
                             <a href="${this.outputsBaseUrl}/${encoded}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
                             <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
@@ -1349,6 +1687,21 @@ class UI {
                 </div>
                 <div class="markdown-content" style="padding:12px; border:1px solid var(--border); border-radius:8px; max-height:60vh; overflow:auto;">${html}</div>
             `;
+            // 绑定复制按钮（复制原始Markdown文本）
+            const copyBtn = container.querySelector('[data-action="copy-markdown"]');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const ok = await this.copyText(md);
+                    const oldTitle = copyBtn.title;
+                    copyBtn.title = ok ? 'Copied' : 'Failed';
+                    setTimeout(() => { copyBtn.title = oldTitle || 'Copy'; }, 1200);
+                });
+            }
+            // 代码块复制
+            const mdContainer = container.querySelector('.markdown-content');
+            this.enhanceMarkdownCopy(mdContainer);
+            this.enhanceMarkdownTables(mdContainer);
             const saveBtn = container.querySelector('.workspace-save');
             if (saveBtn) saveBtn.addEventListener('click', (e)=>{ e.preventDefault(); this.workspaceSave(filename, saveBtn); });
             const delBtn = container.querySelector('.file-delete');
@@ -1409,6 +1762,7 @@ class UI {
                         <h4>${filename}</h4>
                         <div style="display:flex; gap:12px; align-items:center;">
                             <span style="color:var(--muted); font-size:13px;">${objects.length} records</span>
+                            <button class="copy-inline-btn" data-action="copy-jsonl" title="Copy"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy</span></button>
                             <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
                             <a href="${this.outputsBaseUrl}/${encoded}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
                             <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
@@ -1420,6 +1774,18 @@ class UI {
                     ${errorHtml}
                 </div>
             `;
+
+            // 绑定复制按钮（复制原始JSONL文本）
+            const copyBtn = container.querySelector('[data-action="copy-jsonl"]');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const ok = await this.copyText(text);
+                    const oldTitle = copyBtn.title;
+                    copyBtn.title = ok ? 'Copied' : 'Failed';
+                    setTimeout(() => { copyBtn.title = oldTitle || 'Copy'; }, 1200);
+                });
+            }
 
             // 绑定折叠/展开逻辑
             container.querySelectorAll('.jsonl-header').forEach(header => {
@@ -1526,12 +1892,52 @@ class UI {
                     <div class="preview-info">
                         <div style="display:flex; justify-content: space-between; align-items: center;">
                             <h4>${filename}</h4>
-                            <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+                            <div style=\"display:flex; gap:12px; align-items:center;\">
+                        <button class=\"copy-inline-btn\" data-action=\"copy-table-md\" title=\"Copy Markdown Table\"><span class=\"btn-ico\">${this._copySvg()}</span><span class=\"btn-text\">Copy MD</span></button>
+                                <a href=\"${this.outputsBaseUrl}/${encodedFilename}\" download=\"${filename}\" class=\"file-download\" title=\"Download\"><span class=\"btn-ico\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3v12\"/><path d=\"M8 11l4 4 4-4\"/><path d=\"M5 21h14\"/></svg></span><span class=\"btn-text\">Download</span></a>
+                            </div>
                         </div>
                     </div>
                     <div class="excel-table-wrapper">${data.html || '<div style="padding:16px;">No preview</div>'}</div>
                 `;
                 this.previewContent.appendChild(excelDiv);
+                // 复制表格（CSV/TSV/Markdown）
+                const copyBtn = excelDiv.querySelector('[data-action="copy-table"]');
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const table = this._getVisibleExcelTable(excelDiv);
+                        const csv = this._tableToCSV(table, ',');
+                        const ok = await this.copyText(csv);
+                        const oldTitle = copyBtn.title;
+                        copyBtn.title = ok ? 'Copied' : 'Failed';
+                        setTimeout(() => { copyBtn.title = oldTitle || 'Copy CSV'; }, 1200);
+                    });
+                }
+                const copyBtnTsv2 = excelDiv.querySelector('[data-action="copy-table-tsv"]');
+                if (copyBtnTsv2) {
+                    copyBtnTsv2.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const table = this._getVisibleExcelTable(excelDiv);
+                        const tsv = this._tableToCSV(table, '\t');
+                        const ok = await this.copyText(tsv);
+                        const oldTitle = copyBtnTsv2.title;
+                        copyBtnTsv2.title = ok ? 'Copied' : 'Failed';
+                        setTimeout(() => { copyBtnTsv2.title = oldTitle || 'Copy TSV'; }, 1200);
+                    });
+                }
+                const copyBtnMd2 = excelDiv.querySelector('[data-action="copy-table-md"]');
+                if (copyBtnMd2) {
+                    copyBtnMd2.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const table = this._getVisibleExcelTable(excelDiv);
+                        const md = this._tableToMarkdown(table);
+                        const ok = await this.copyText(md);
+                        const oldTitle = copyBtnMd2.title;
+                        copyBtnMd2.title = ok ? 'Copied' : 'Failed';
+                        setTimeout(() => { copyBtnMd2.title = oldTitle || 'Copy Markdown Table'; }, 1200);
+                    });
+                }
                 return;
             }
 
@@ -1552,10 +1958,41 @@ class UI {
             headerDiv.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h4>${filename}</h4>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <button class="copy-inline-btn" data-action="copy-table-md" title="Copy Markdown Table"><span class="btn-ico">${this._copySvg()}</span><span class="btn-text">Copy MD</span></button>
                     <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+                    </div>
                 </div>
             `;
             excelDiv.appendChild(headerDiv);
+            // 复制表格（CSV/TSV/Markdown）
+            const btnCsv = headerDiv.querySelector('[data-action="copy-table"]');
+            if (btnCsv) btnCsv.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const table = this._getVisibleExcelTable(excelDiv);
+                const csv = this._tableToCSV(table, ',');
+                const ok = await this.copyText(csv);
+                const old = btnCsv.title; btnCsv.title = ok ? 'Copied' : 'Failed';
+                setTimeout(() => { btnCsv.title = old || 'Copy CSV'; }, 1200);
+            });
+            const btnTsv = headerDiv.querySelector('[data-action="copy-table-tsv"]');
+            if (btnTsv) btnTsv.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const table = this._getVisibleExcelTable(excelDiv);
+                const tsv = this._tableToCSV(table, '\\t');
+                const ok = await this.copyText(tsv);
+                const old = btnTsv.title; btnTsv.title = ok ? 'Copied' : 'Failed';
+                setTimeout(() => { btnTsv.title = old || 'Copy TSV'; }, 1200);
+            });
+            const btnMd = headerDiv.querySelector('[data-action="copy-table-md"]');
+            if (btnMd) btnMd.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const table = this._getVisibleExcelTable(excelDiv);
+                const md = this._tableToMarkdown(table);
+                const ok = await this.copyText(md);
+                const old = btnMd.title; btnMd.title = ok ? 'Copied' : 'Failed';
+                setTimeout(() => { btnMd.title = old || 'Copy Markdown Table'; }, 1200);
+            });
 
             // Sheet标签页(如果有多个sheet)
             if (workbook.SheetNames.length > 1) {
@@ -1996,7 +2433,7 @@ class UI {
             const listResp = await fetch(`/outputs/list/${encodeURIComponent(convId)}`);
             if (!listResp.ok) return;
             const data = await listResp.json();
-            const previewables = (data.files || []).filter(fn => /\.(png|jpg|jpeg|xlsx|html|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log)$/i.test(fn));
+            const previewables = (data.files || []).filter(fn => /\.(png|jpg|jpeg|svg|gif|webp|avif|xlsx|html|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log|yaml|yml|toml|ini|cfg|conf|xml|py|js|ts|tsx|jsx|java|go|rs|c|cpp|h|cs|rb|php|sh|bash|zsh|sql)$/i.test(fn));
             this.clearAllFiles();
             if (previewables.length) this.loadMultipleFiles(previewables);
         } catch (e) {

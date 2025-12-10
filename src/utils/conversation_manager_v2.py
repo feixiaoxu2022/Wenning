@@ -496,3 +496,26 @@ class ConversationManagerV2:
         self._save_index()
 
         return target.get("id")
+
+    def set_conversation_model(self, conv_id: str, model: str, username: str | None = None):
+        """更新会话绑定的模型，并刷新更新时间。"""
+        # 权限校验
+        if conv_id not in self.index:
+            return False
+        if username is not None and self.index[conv_id].get("user") not in (None, username):
+            return False
+
+        # 加载并更新
+        conv_path = self._get_conv_path(conv_id)
+        conv = self._load_conversation_file(conv_path)
+        if not conv:
+            return False
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conv["model"] = model
+        conv["updated_at"] = now
+        self._save_conversation_file(conv_path, conv)
+        # 同步索引
+        self.index[conv_id]["model"] = model
+        self.index[conv_id]["updated_at"] = now
+        self._save_index()
+        return True

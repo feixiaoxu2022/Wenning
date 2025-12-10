@@ -150,10 +150,18 @@ async def chat(
             if not conv:
                 raise ValueError(f"对话不存在: {conversation_id}")
 
-            # 使用对话已保存的模型，忽略前端传来的model参数
+            # 模型选择策略：若前端传入与会话保存的模型不同，则更新会话绑定模型
             saved_model = conv.get("model", "gpt-5")
-            agent = get_or_create_agent(saved_model)
-            logger.info(f"收到聊天请求: model={saved_model}(saved), conv_id={conversation_id}, message={message[:50]}...")
+            effective_model = (model or saved_model) if model else saved_model
+            if effective_model and effective_model != saved_model:
+                try:
+                    conv_manager.set_conversation_model(conversation_id, effective_model, username=user)
+                    logger.info(f"会话{conversation_id}切换模型: {saved_model} -> {effective_model}")
+                except Exception as _:
+                    # 失败则退回原模型
+                    effective_model = saved_model
+            agent = get_or_create_agent(effective_model)
+            logger.info(f"收到聊天请求: model={effective_model}, conv_id={conversation_id}, message={message[:50]}...")
 
             conversation_history = conv.get("messages", [])
 
@@ -316,6 +324,14 @@ async def get_file_scoped(conversation_id: str, filename: str, user: str = Depen
         media_type = "image/png"
     elif suffix in (".jpg", ".jpeg"):
         media_type = "image/jpeg"
+    elif suffix == ".svg":
+        media_type = "image/svg+xml"
+    elif suffix == ".gif":
+        media_type = "image/gif"
+    elif suffix == ".webp":
+        media_type = "image/webp"
+    elif suffix == ".avif":
+        media_type = "image/avif"
     elif suffix in (".mp3", ".mpeg"):
         media_type = "audio/mpeg"
     elif suffix == ".wav":
@@ -346,6 +362,10 @@ async def get_file_scoped(conversation_id: str, filename: str, user: str = Depen
         media_type = "application/json; charset=utf-8"
     elif suffix == ".txt":
         media_type = "text/plain; charset=utf-8"
+    elif suffix in (".yaml", ".yml"):
+        media_type = "text/yaml; charset=utf-8"
+    elif suffix == ".xml":
+        media_type = "application/xml; charset=utf-8"
     elif suffix == ".md":
         media_type = "text/markdown; charset=utf-8"
     elif suffix == ".html":
@@ -541,6 +561,14 @@ def _guess_media_type_by_suffix(suffix: str) -> str:
         return "image/png"
     if s in (".jpg", ".jpeg"):
         return "image/jpeg"
+    if s == ".svg":
+        return "image/svg+xml"
+    if s == ".gif":
+        return "image/gif"
+    if s == ".webp":
+        return "image/webp"
+    if s == ".avif":
+        return "image/avif"
     if s in (".mp3", ".mpeg"):
         return "audio/mpeg"
     if s == ".wav":

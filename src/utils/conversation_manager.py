@@ -237,6 +237,16 @@ class ConversationManager:
         self._save()
         return msg_id
 
+    def set_conversation_model(self, conv_id: str, model: str, username: str | None = None):
+        """更新会话绑定的模型，并刷新更新时间。"""
+        conv = self.get_conversation(conv_id, username=username)
+        if not conv:
+            return False
+        conv["model"] = model
+        conv["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self._save()
+        return True
+
     def update_message(
         self,
         conv_id: str,

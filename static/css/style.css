@@ -524,6 +524,7 @@ body {
     word-wrap: break-word;
     line-height: 1.6;
     font-size: 14px;
+    position: relative; /* 便于右上角放置复制按钮 */
 }
 
 .message.user {
@@ -667,6 +668,7 @@ body {
     border-radius: 4px;
     color: #111827;
     line-height: 1.6;
+    position: relative; /* 便于右上角放置复制按钮 */
 }
 
 .result-box .result-label {
@@ -974,6 +976,7 @@ body {
     padding: 12px;
     overflow-x: auto;
     margin: 12px 0;
+    position: relative; /* 代码块右上角复制按钮锚点 */
 }
 
 .markdown-content pre code {
@@ -995,6 +998,7 @@ body {
     border-collapse: collapse;
     width: 100%;
     margin: 12px 0;
+    position: relative; /* 让表格内的复制图标可绝对定位 */
 }
 
 .markdown-content table th,
@@ -1167,3 +1171,65 @@ body {
 .history-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700; }
 .history-close { border:1px solid var(--border); background: var(--panel); border-radius:8px; padding:4px 8px; cursor:pointer; }
 .history-close:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Copy Buttons */
+.copy-chip {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 8px;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: all .15s ease;
+}
+.copy-chip:hover { opacity: 1; color: var(--accent); border-color: var(--accent); }
+.copy-chip svg { color: currentColor; }
+/* 只保留图标，隐藏文字 */
+.copy-chip .copy-text { display:none; }
+
+/* 小型图标按钮（用于header中的Copy） */
+.copy-inline-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 8px;
+    cursor: pointer;
+}
+.copy-inline-btn:hover { border-color: var(--accent); color: var(--accent); }
+.copy-inline-btn .btn-ico { display:inline-flex; }
+/* 只保留图标，隐藏文字 */
+.copy-inline-btn .btn-text { display:none; }
+
+/* Hover Copy (message left floating icon) */
+.msg-copy-btn {
+    position: absolute;
+    top: 50%;
+    left: -36px; /* 靠左侧，避免遮挡内容 */
+    transform: translate(-8px, -50%);
+    width: 28px; height: 28px;
+    display: inline-flex; align-items:center; justify-content:center;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 50%;
+    box-shadow: var(--shadow);
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease, color .15s ease, border-color .15s ease;
+}
+.message:hover .msg-copy-btn,
+.message.show-copy .msg-copy-btn { opacity: 1; visibility: visible; pointer-events: auto; transform: translate(0, -50%); }
+.msg-copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+.msg-copy-btn svg { color: currentColor; }

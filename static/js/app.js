@@ -259,6 +259,10 @@ async function loadConversationsList() {
         conversationsList.innerHTML = '';
 
         if (data.conversations && data.conversations.length > 0) {
+            // 统一按更新时间降序显示，避免后端返回顺序不稳定
+            try {
+                data.conversations.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+            } catch (_) {}
             console.log(`[App] 加载对话列表: ${data.conversations.length}个对话`);
 
             data.conversations.forEach(conv => {
@@ -334,8 +338,17 @@ async function ensureConversation() {
         const data = await response.json();
 
         if (data.conversations && data.conversations.length > 0) {
-            // 加载最新对话
-            currentConversationId = data.conversations[0].id;
+            // 选取 updated_at 最大的作为“最新”
+            let latest = null;
+            try {
+                latest = data.conversations.reduce((best, cur) => {
+                    if (!best) return cur;
+                    const bu = String(best.updated_at || '');
+                    const cu = String(cur.updated_at || '');
+                    return cu.localeCompare(bu) > 0 ? cur : best;
+                }, null);
+            } catch (_) {}
+            currentConversationId = (latest || data.conversations[0]).id;
             await loadConversation(currentConversationId);
         } else {
             // 创建新对话
@@ -504,16 +517,16 @@ async function loadConversation(convId) {
  * 切换对话（暴露给全局供workspace使用）
  */
 async function switchConversation(convId) {
-    if (convId === currentConversationId) {
-        return;
-    }
+    if (!convId || convId === currentConversationId) return;
 
     // 折叠历史浮层（防止遮挡左侧）
     const overlay = document.getElementById('history-overlay');
     if (overlay) overlay.classList.remove('active');
 
     currentConversationId = convId;
+    try { localStorage.setItem('cf-last-conv', convId); } catch (_) {}
     await loadConversation(convId);
+    try { await loadConversationsList(); } catch (_) {}
 }
 
 // 暴露给全局
@@ -545,6 +558,7 @@ async function createNewConversation() {
         const data = await response.json();
 
         currentConversationId = data.conversation_id;
+        try { localStorage.setItem('cf-last-conv', currentConversationId); } catch (_) {}
         console.log('[App] 新对话创建成功:', currentConversationId, 'model:', actualModel);
 
         // 重新加载对话列表
