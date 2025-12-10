@@ -1,10 +1,10 @@
 # Wenning - 智能创意工作流Agent系统
 
-Wenning是一个功能强大的AI Agent系统，专为内容创作者和产品运营人员设计。通过灵活的工具组合和智能的任务规划，帮助用户自动化完成各类复杂创意任务。
+Wenning是一个功能强大的AI Agent系统，专为内容创作者（如自媒体博主、产品运营人员）设计。通过灵活的工具组合和智能的任务规划，帮助用户自动化完成各类复杂创意任务。
 
 ## ✨ 核心特性
 
-- 🤖 **智能Agent系统**：Master Agent + 工具注册表架构，支持复杂任务的自动化执行
+- 🤖 **Agentic Loop架构**：Master Agent + 工具注册表架构，支持复杂任务的自动化执行
 - 🔧 **丰富的工具生态**：
   - 📝 内容生成：UGC分析、封面生成、文本创作
   - 🎨 多媒体创作：图像生成、视频生成、音乐生成
@@ -13,7 +13,7 @@ Wenning是一个功能强大的AI Agent系统，专为内容创作者和产品�
   - 💻 代码执行：Python代码沙箱、Shell命令执行
   - 📁 文件操作：文件读取、编辑、列表管理
 - 🔄 **任务规划能力**：智能任务分解与步骤规划
-- 🧠 **多模型支持**：兼容OpenAI/Claude/Gemini/国产大模型等
+- 🧠 **多模型支持**：兼容OpenAI/Claude/Gemini/EB5/GLM-4.5等
 - 📦 **工作空间管理**：基于对话的文件组织和版本管理
 
 ## 🏗️ 项目架构
@@ -66,6 +66,7 @@ Wenning/
 │       ├── workspace_manager.py     # 工作空间管理
 │       └── workspace_store.py       # 工作空间存储
 │
+├── fastapi_app.py          # FastAPI启动入口
 ├── requirements.txt        # 依赖列表
 ├── .env.example            # 配置模板
 └── README.md               # 项目文档
@@ -111,9 +112,9 @@ cp .env.example .env
 
 ```bash
 # 启动FastAPI服务
-uvicorn src.api.main:app --reload --port 8000
+python fastapi_app.py
 
-# 访问 http://localhost:8000 开始使用
+# 访问 http://localhost 开始使用
 ```
 
 ## 💡 使用场景
