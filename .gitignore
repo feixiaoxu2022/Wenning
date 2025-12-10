@@ -73,6 +73,7 @@ scripts/
 tasks/
 public/
 evaluator/
+schemas/
 
 # Root directory files to exclude
 debug_*.py

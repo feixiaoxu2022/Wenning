@@ -1,4 +1,4 @@
-# Wenning - 智能创意工作流Agent系统
+# Wenning
 
 Wenning是一个功能强大的AI Agent系统，专为内容创作者（如自媒体博主、产品运营人员）设计。通过灵活的工具组合和智能的任务规划，帮助用户自动化完成各类复杂创意任务。
 
@@ -90,6 +90,7 @@ pip install -r requirements.txt
 ```
 
 **可选安装**：
+
 ```bash
 # HTML转图片功能（需要下载Chromium浏览器，约300MB）
 playwright install chromium
@@ -122,9 +123,11 @@ python fastapi_app.py
 ### 场景1: UGC内容分析
 
 **用户输入**：
+
 > "帮我分析小红书上关于'AI Agent'的最新评论，生成分析报告"
 
 **系统执行**：
+
 1. Web搜索相关内容
 2. 情感分析与内容分类
 3. 筛选高价值评论
@@ -135,9 +138,11 @@ python fastapi_app.py
 ### 场景2: 多媒体内容创作
 
 **用户输入**：
+
 > "生成一首轻音乐背景音乐，同时制作一张'Python入门教程'的封面"
 
 **系统执行**：
+
 1. 调用音乐生成工具创建BGM
 2. 调用图像生成工具创建封面
 3. 可选：合成视频内容
@@ -147,9 +152,11 @@ python fastapi_app.py
 ### 场景3: 自动化任务规划
 
 **用户输入**：
+
 > "帮我分析竞品的内容策略，写一份报告"
 
 **系统执行**：
+
 1. 使用plan工具分解任务
 2. Web搜索收集竞品信息
 3. URL抓取深度分析
@@ -166,6 +173,7 @@ python fastapi_app.py
 ### 2. 智能规划
 
 Master Agent具备任务分解和步骤规划能力：
+
 - 理解复杂任务需求
 - 自动分解为可执行步骤
 - 选择合适的工具组合
@@ -193,6 +201,7 @@ Master Agent具备任务分解和步骤规划能力：
 ## 📦 依赖说明
 
 核心依赖：
+
 - `fastapi` - Web API框架
 - `openai` - LLM客户端
 - `pandas` + `openpyxl` - 数据处理和Excel操作
@@ -200,6 +209,7 @@ Master Agent具备任务分解和步骤规划能力：
 - `requests` - HTTP请求
 
 可选依赖：
+
 - `playwright` - HTML转图片（需额外安装浏览器）
 - `moviepy` - 视频处理
 - `google-cloud-texttospeech` - Google TTS
@@ -208,6 +218,7 @@ Master Agent具备任务分解和步骤规划能力：
 ## 🎯 项目定位
 
 Wenning致力于成为：
+
 1. **内容创作者的效率工具**：自动化内容分析、创作、发布流程
 2. **产品运营的决策助手**：数据分析、竞品监控、用户洞察
 3. **创意工作流的编排平台**：灵活组合各类AI能力，定制专属工作流
