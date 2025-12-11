@@ -103,7 +103,7 @@ class SSEClient {
             case 'tool_call_text':
                 console.log('[SSE] 处理tool_call_text消息:', update.content);
                 if (this.onToolCallText) {
-                    this.onToolCallText(update.content || '');
+                    this.onToolCallText(update.content || '', update.iter);
                 }
                 break;
 

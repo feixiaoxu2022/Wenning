@@ -757,13 +757,13 @@ function setupSSECallbacks() {
     };
 
     // 工具调用时的accompanying text（打字机效果）
-    sseClient.onToolCallText = (delta) => {
-        ui.appendToolCallText(delta);
+    sseClient.onToolCallText = (delta, iter) => {
+        ui.appendToolCallText(delta, iter);
     };
 
     // 进度更新
-    sseClient.onProgress = (message, status) => {
-        ui.showProgress(message, status);
+    sseClient.onProgress = (message, status, iter) => {
+        ui.showProgress(message, status, iter);
     };
 
     // 最终结果

@@ -553,7 +553,8 @@ class MasterAgent:
             yield {
                 "type": "progress",
                 "message": f"💭 第{iteration + 1}轮思考...",
-                "status": f"🔄 迭代 {iteration + 1}/{self.max_iterations}"
+                "status": f"🔄 迭代 {iteration + 1}/{self.max_iterations}",
+                "iter": iteration + 1
             }
 
             # 通知前端本轮思考开始（用于分组展示）
@@ -608,7 +609,8 @@ class MasterAgent:
                         yield {
                             "type": "progress",
                             "message": f"⚠️ LLM请求失败（{reason}），{delay}s后进行第{att + 1}次重试...",
-                            "status": f"重试 {att}/{mx}"
+                            "status": f"重试 {att}/{mx}",
+                            "iter": iteration + 1
                         }
                     elif chunk.get("type") == "retry_exhausted":
                         rsn = chunk.get("reason") or "请求失败"
@@ -647,7 +649,8 @@ class MasterAgent:
                     yield {
                         "type": "tool_call_text",
                         "content": content_buffer,
-                        "full_content": content_buffer
+                        "full_content": content_buffer,
+                        "iter": iteration + 1
                     }
 
             # 检查是否返回最终答案
@@ -756,7 +759,8 @@ class MasterAgent:
                     yield {
                         "type": "progress",
                         "message": f"{tool_emoji} 执行工具: {tool_name}\n参数: {args_preview}",
-                        "status": f"⚙️ 调用 {tool_name}"
+                        "status": f"⚙️ 调用 {tool_name}",
+                        "iter": iteration + 1
                     }
 
                     # 执行工具 (带心跳)
@@ -795,7 +799,8 @@ class MasterAgent:
                             yield {
                                 "type": "progress",
                                 "message": f"⏳ {tool_name} 执行中...已等待 {elapsed} 秒",
-                                "status": f"⏳ 等待 {tool_name}"
+                                "status": f"⏳ 等待 {tool_name}",
+                                "iter": iteration + 1
                             }
                             last_heartbeat = elapsed
 
@@ -813,7 +818,8 @@ class MasterAgent:
                         yield {
                             "type": "progress",
                             "message": f"✓ {tool_name} 执行完成",
-                            "status": f"📊 处理 {tool_name} 结果"
+                            "status": f"📊 处理 {tool_name} 结果",
+                            "iter": iteration + 1
                         }
 
                         # 如果工具生成了文件,发送文件列表给前端
@@ -836,7 +842,8 @@ class MasterAgent:
                         yield {
                             "type": "progress",
                             "message": f"! {tool_name} 执行失败: {tool_result.error_message[:100]}",
-                            "status": f"⚠️ {tool_name} 失败"
+                            "status": f"⚠️ {tool_name} 失败",
+                            "iter": iteration + 1
                         }
 
                 except Exception as e:
@@ -847,7 +854,8 @@ class MasterAgent:
                     yield {
                         "type": "progress",
                         "message": f"✗ {tool_name} 执行异常: {str(e)[:100]}",
-                        "status": f"❌ {tool_name} 异常"
+                        "status": f"❌ {tool_name} 异常",
+                        "iter": iteration + 1
                     }
 
                 # 添加工具结果到消息历史

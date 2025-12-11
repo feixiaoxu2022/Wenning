@@ -451,10 +451,14 @@ class UI {
      */
     addUserMessage(message) {
         // 清理之前的thinking、progress和tool_call_text盒子的DOM元素
-        // 清理所有thinking容器，避免上一轮残留串在一起
+        // 清理所有迭代相关容器，避免上一轮残留串在一起
         try {
-            this.chatMessages.querySelectorAll('.thinking-box').forEach(el => el.remove());
+            this.chatMessages.querySelectorAll('.iter-box, .thinking-box, .tool-call-text-box, .progress-box').forEach(el => el.remove());
+            this._iterBoxes = new Map();
             this._thinkingSections = new Map();
+            this._toolTextByIter = new Map();
+            this._progressByIter = new Map();
+            this._lastProgressIter = null;
         } catch (_) {}
         // 删除整个progress box（包括按钮），而不是只删除content
         if (this._progress && this._progress.box && this._progress.box.parentElement) {
@@ -491,19 +495,34 @@ class UI {
     // 思考分组（按迭代轮次）
     startThinkingSection(iter) {
         if (!this._thinkingSections) this._thinkingSections = new Map();
+        if (!this._iterBoxes) this._iterBoxes = new Map();
         const key = String(iter || '1');
         if (this._thinkingSections.has(key)) return;
 
+        // 获取/创建迭代容器
+        let wrap = this._iterBoxes.get(key);
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.className = 'iter-box';
+            const hdr = document.createElement('div');
+            hdr.className = 'iter-header';
+            hdr.textContent = `第${key}轮`;
+            wrap.appendChild(hdr);
+            this.chatMessages.appendChild(wrap);
+            this._iterBoxes.set(key, wrap);
+        }
+
+        // 思考框
         const thinkingBox = document.createElement('div');
         thinkingBox.className = 'thinking-box';
         const label = document.createElement('span');
         label.className = 'thinking-label';
-        label.textContent = `💭 思考（第${key}轮）:`;
+        label.textContent = `💭 思考（第${key}轮）：`;
         thinkingBox.appendChild(label);
         const contentDiv = document.createElement('div');
         contentDiv.className = 'thinking-content';
         thinkingBox.appendChild(contentDiv);
-        this.chatMessages.appendChild(thinkingBox);
+        wrap.appendChild(thinkingBox);
         this._thinkingSections.set(key, contentDiv);
         this.currentThinkingBox = contentDiv;
         this.scrollToBottom();
@@ -528,114 +547,88 @@ class UI {
     /**
      * 追加工具调用时的accompanying text（打字机效果）
      */
-    appendToolCallText(delta) {
-        // 创建或复用tool_call_text box
-        if (!this.currentToolCallTextBox) {
+    appendToolCallText(delta, iter) {
+        if (!this._toolTextByIter) this._toolTextByIter = new Map();
+        const key = String(iter || '1');
+        let contentDiv = this._toolTextByIter.get(key);
+        if (!contentDiv) {
+            // 容器
+            let wrap = this._iterBoxes && this._iterBoxes.get(key);
+            if (!wrap) {
+                this.startThinkingSection(key); // 也会创建iter容器
+                wrap = this._iterBoxes.get(key);
+            }
             const toolCallBox = document.createElement('div');
             toolCallBox.className = 'tool-call-text-box';
-
             const label = document.createElement('div');
             label.className = 'tool-call-text-label';
             label.textContent = '💭 思考中';
             toolCallBox.appendChild(label);
-
-            const contentDiv = document.createElement('div');
+            contentDiv = document.createElement('div');
             contentDiv.className = 'tool-call-text-content';
             toolCallBox.appendChild(contentDiv);
-
-            this.chatMessages.appendChild(toolCallBox);
-            this.currentToolCallTextBox = contentDiv;
+            wrap.appendChild(toolCallBox);
+            this._toolTextByIter.set(key, contentDiv);
         }
-
-        this.currentToolCallTextBox.textContent += delta;
-
-        // 自动滚动
+        contentDiv.textContent += delta;
         this.smartScroll();
     }
 
     /**
      * 显示进度指示器
      */
-    showProgress(message, status) {
-        // 创建或获取进度区域(与thinking分离)
-        if (!this.currentProgressBox) {
+    showProgress(message, status, iter) {
+        const key = String(iter || '1');
+        if (!this._progressByIter) this._progressByIter = new Map();
+        let rec = this._progressByIter.get(key);
+        if (!rec) {
+            // ensure iter container exists
+            this.startThinkingSection(key); // also sets up iter-box
+            // create progress box under this iter
+            const wrap = this._iterBoxes.get(key) || this.chatMessages;
             const progressBox = document.createElement('div');
             progressBox.className = 'progress-box';
-
-            const header = document.createElement('div');
-            header.className = 'progress-header';
-
-            const left = document.createElement('div');
-            left.className = 'progress-left';
-            const dot = document.createElement('span');
-            dot.className = 'progress-dot spinner';
-            const title = document.createElement('span');
-            title.className = 'progress-title';
-            title.textContent = '执行中…';
-            left.appendChild(dot);
-            left.appendChild(title);
-
-            // 先创建 progressContent，再创建引用它的事件监听器
-            const progressContent = document.createElement('div');
-            progressContent.className = 'progress-content';
-            // 初始状态：显示
-            progressContent.style.display = 'block';
-
-            const toggle = document.createElement('button');
-            toggle.type = 'button'; // 明确指定type，防止意外提交
-            toggle.className = 'progress-toggle';
-            toggle.textContent = '隐藏详情'; // 初始文案：与显示状态对应
+            const header = document.createElement('div'); header.className = 'progress-header';
+            const left = document.createElement('div'); left.className = 'progress-left';
+            const dot = document.createElement('span'); dot.className = 'progress-dot spinner';
+            const title = document.createElement('span'); title.className = 'progress-title'; title.textContent = '执行中…';
+            left.appendChild(dot); left.appendChild(title);
+            const progressContent = document.createElement('div'); progressContent.className = 'progress-content'; progressContent.style.display = 'block';
+            const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'progress-toggle'; toggle.textContent = '隐藏详情';
             toggle.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-
-                // 检查当前实际显示状态
+                e.preventDefault(); e.stopPropagation();
                 const currentDisplay = window.getComputedStyle(progressContent).display;
-                const isCurrentlyHidden = currentDisplay === 'none';
-
-                // 切换显示状态和按钮文案（同步更新）
-                if (isCurrentlyHidden) {
-                    // 当前隐藏 → 显示
-                    progressContent.style.display = 'block';
-                    toggle.textContent = '隐藏详情';
-                } else {
-                    // 当前显示 → 隐藏
-                    progressContent.style.display = 'none';
-                    toggle.textContent = '显示详情';
-                }
+                const hidden = currentDisplay === 'none';
+                progressContent.style.display = hidden ? 'block' : 'none';
+                toggle.textContent = hidden ? '隐藏详情' : '显示详情';
             });
-
-            header.appendChild(left);
-            header.appendChild(toggle);
-            progressBox.appendChild(header);
-            progressBox.appendChild(progressContent);
-
-            this.chatMessages.appendChild(progressBox);
-            this.currentProgressBox = progressContent;
-            // 记录引用用于状态更新
-            this._progress = { box: progressBox, header, left, dot, title, toggle, content: progressContent };
+            header.appendChild(left); header.appendChild(toggle);
+            progressBox.appendChild(header); progressBox.appendChild(progressContent);
+            wrap.appendChild(progressBox);
+            rec = { box: progressBox, header, left, dot, title, toggle, content: progressContent };
+            this._progressByIter.set(key, rec);
+            this._lastProgressIter = key;
         }
-
-        // 状态更新（可选）
-        if (status) {
-            this.updateProgressStatus(status);
-        }
-
-        // 追加进度信息
+        // 状态更新
+        if (status) this.updateProgressStatus(status, iter);
+        // 追加行
         if (message) {
             const line = document.createElement('div');
             line.className = 'progress-line';
             line.textContent = message;
-            this.currentProgressBox.appendChild(line);
+            rec.content.appendChild(line);
         }
-
         this.smartScroll();
     }
 
-    updateProgressStatus(status) {
-        if (!this._progress) return;
+    updateProgressStatus(status, iter) {
+        const key = iter ? String(iter) : (this._lastProgressIter || null);
+        let rec = null;
+        if (key && this._progressByIter && this._progressByIter.has(key)) rec = this._progressByIter.get(key);
+        else rec = this._progress || null;
+        if (!rec) return;
         const s = String(status || '').toLowerCase();
-        const { dot, title, content, toggle } = this._progress;
+        const { dot, title, content, toggle } = rec;
 
         // 默认running
         let state = 'running';
