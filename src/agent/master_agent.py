@@ -545,17 +545,13 @@ class MasterAgent:
 
         logger.info(f"ReAct循环开始: 可用工具={[t['function']['name'] for t in tools]}")
 
+        # 追踪连续content_filter次数，防止无限循环
+        consecutive_content_filter_count = 0
+        max_content_filter_retries = 3
+
         # ReAct迭代
         for iteration in range(self.max_iterations):
             logger.info(f"ReAct迭代 {iteration + 1}/{self.max_iterations}")
-
-            # 发送迭代进度
-            yield {
-                "type": "progress",
-                "message": f"💭 第{iteration + 1}轮思考...",
-                "status": f"🔄 迭代 {iteration + 1}/{self.max_iterations}",
-                "iter": iteration + 1
-            }
 
             # 通知前端本轮思考开始（用于分组展示）
             yield {
@@ -639,6 +635,39 @@ class MasterAgent:
 
             # 记录LLM响应
             logger.info(f"LLM响应: content={response.get('content')[:200] if response.get('content') else 'None'}...")
+
+            # 检查是否为content_filter响应
+            finish_reason = response.get("finish_reason")
+            if finish_reason == "content_filter":
+                consecutive_content_filter_count += 1
+                logger.warning(f"检测到content_filter响应（第{consecutive_content_filter_count}次）")
+
+                # 如果连续多次触发content_filter，终止循环
+                if consecutive_content_filter_count >= max_content_filter_retries:
+                    logger.error(f"连续{consecutive_content_filter_count}次触发内容过滤，终止对话")
+
+                    # 给用户友好的失败消息
+                    self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
+                    yield {
+                        "type": "final",
+                        "result": {
+                            "status": "failed",
+                            "error": "抱歉，我无法完成您的请求。请尝试换一种表达方式或询问其他问题。"
+                        }
+                    }
+                    return
+
+                # 还在重试范围内，将系统提示添加到消息历史，让Agent继续尝试
+                messages.append({
+                    "role": "assistant",
+                    "content": response.get("content", "")
+                })
+                logger.info("content_filter提示已添加到消息历史，继续下一轮循环")
+                continue  # 跳到下一次迭代
+            else:
+                # 正常响应，重置计数器
+                consecutive_content_filter_count = 0
+
             if response.get("tool_calls"):
                 logger.info(f"LLM决策: 调用{len(response['tool_calls'])}个工具")
                 for tc in response["tool_calls"]:

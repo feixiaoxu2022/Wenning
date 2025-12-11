@@ -750,7 +750,7 @@ function initSidebarToggles() {
 function setupSSECallbacks() {
     // 思考过程更新
     sseClient.onThinkingStart = (iter) => {
-        try { ui.startThinkingSection(iter); } catch (_) {}
+        try { ui.ensureIterContainer(iter); } catch (_) {}
     };
     sseClient.onThinking = (content, iter) => {
         ui.appendThinking(content, iter);

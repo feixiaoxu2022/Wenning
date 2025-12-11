@@ -1022,6 +1022,41 @@ class LLMClient:
                     status = getattr(e.response, "status_code", None)
                 except Exception:
                     status = None
+
+                # 尝试解析错误响应体，提取详细错误信息
+                error_detail = None
+                error_type = None
+                user_friendly_message = None
+
+                if hasattr(e, 'response') and e.response is not None:
+                    try:
+                        response_text = e.response.text
+                        error_data = json.loads(response_text)
+
+                        # Azure OpenAI错误格式: {"error": {"message": "...", "code": "..."}}
+                        if isinstance(error_data, dict) and "error" in error_data:
+                            error_obj = error_data["error"]
+                            error_detail = error_obj.get("message", "")
+                            error_code = error_obj.get("code", "")
+
+                            # 识别content_filter错误
+                            if "content" in error_detail.lower() and ("filter" in error_detail.lower() or "policy" in error_detail.lower() or "management" in error_detail.lower()):
+                                error_type = "content_filter"
+                                user_friendly_message = "您的请求触发了内容安全策略，请修改后重试。如果您认为这是误判，请尝试换一种表达方式。"
+                            # 识别配额错误
+                            elif "quota" in error_detail.lower() or "insufficient" in error_detail.lower():
+                                error_type = "quota_exceeded"
+                                user_friendly_message = "API配额已用尽，请联系管理员"
+                            # 识别参数错误
+                            elif "invalid" in error_detail.lower() or "parameter" in error_detail.lower():
+                                error_type = "invalid_parameter"
+                                user_friendly_message = "请求参数无效，请检查输入内容"
+                            else:
+                                # 其他4xx错误，使用原始错误消息（截断）
+                                user_friendly_message = error_detail[:200] if len(error_detail) > 200 else error_detail
+                    except Exception as parse_error:
+                        logger.debug(f"无法解析错误响应体: {parse_error}")
+
                 # 可读的失败原因（不暴露敏感信息）
                 reason = "请求失败"
                 if isinstance(e, requests.exceptions.Timeout):
@@ -1031,15 +1066,48 @@ class LLMClient:
                 elif status is not None and status >= 500:
                     reason = "服务异常"
                 elif status is not None and 400 <= status < 500:
-                    reason = "客户端错误"
+                    if error_type:
+                        reason = error_type
+                    else:
+                        reason = "客户端错误"
                 else:
                     reason = "网络异常"
 
-                # 4xx(非429)不重试：上抛，但先yield一次错误提示（供上层展示）
+                # 4xx(非429)错误处理：区分可恢复错误和不可恢复错误
                 if status is not None and 400 <= status < 500 and status != 429:
-                    logger.error(f"LLM流式请求失败(4xx,不重试): {e}")
-                    yield {"type": "error", "message": f"LLM请求失败({reason})", "status_code": status}
-                    raise
+                    logger.error(f"LLM流式请求失败(4xx,不重试): {e}, error_type={error_type}, detail={error_detail[:200] if error_detail else None}")
+
+                    # content_filter错误：Agent可以调整策略，优雅恢复
+                    if error_type == "content_filter":
+                        logger.info("检测到content_filter错误，将作为系统消息返回给Agent，让其调整策略")
+
+                        # 返回系统提示给Agent（不暴露给用户）
+                        system_message = (
+                            "[系统提示] 您的上一次回复触发了内容安全策略。"
+                            "请调整表达方式，避免敏感内容，然后重新回答用户的问题。"
+                        )
+
+                        yield {
+                            "type": "done",
+                            "response": {
+                                "role": "assistant",
+                                "content": system_message,
+                                "finish_reason": "content_filter"
+                            }
+                        }
+                        return  # 不raise，让Agent继续循环
+
+                    # 其他4xx错误：Agent无法自己解决，终止流程
+                    else:
+                        final_message = user_friendly_message if user_friendly_message else f"LLM请求失败({reason})"
+
+                        yield {
+                            "type": "error",
+                            "message": final_message,
+                            "status_code": status,
+                            "error_type": error_type
+                        }
+                        raise
 
                 if attempt >= self.max_retries:
                     logger.error(f"LLM流式请求失败且重试耗尽({attempt}/{self.max_retries}): {e}")

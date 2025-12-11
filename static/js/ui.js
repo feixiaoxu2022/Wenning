@@ -35,6 +35,12 @@ class UI {
 
         // Workspace 引用
         this.workspaceListEl = document.getElementById('workspace-list');
+
+        // 迭代分组状态
+        this._iterBoxes = new Map();
+        this._thinkingSections = new Map();
+        this._progressByIter = new Map();
+        this._toolTextByIter = new Map();
     }
 
     /** 创建通用的复制图标SVG */
@@ -489,6 +495,21 @@ class UI {
         this.scrollToBottom();
     }
 
+    // 获取/创建迭代分组容器
+    ensureIterContainer(iter) {
+        const key = String(iter || '1');
+        if (this._iterBoxes.has(key)) return this._iterBoxes.get(key);
+        const wrap = document.createElement('div');
+        wrap.className = 'iter-box';
+        const hdr = document.createElement('div');
+        hdr.className = 'iter-header';
+        hdr.textContent = `第${key}轮`;
+        wrap.appendChild(hdr);
+        this.chatMessages.appendChild(wrap);
+        this._iterBoxes.set(key, wrap);
+        return wrap;
+    }
+
     /**
      * 创建思考过程盒子
      */
@@ -513,6 +534,7 @@ class UI {
         }
 
         // 思考框
+        const wrap = this.ensureIterContainer(key);
         const thinkingBox = document.createElement('div');
         thinkingBox.className = 'thinking-box';
         const label = document.createElement('span');
