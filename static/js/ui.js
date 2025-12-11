@@ -505,6 +505,12 @@ class UI {
         const hdr = document.createElement('div');
         hdr.className = 'iter-header';
         hdr.textContent = `第${key}轮`;
+        // 状态点（默认spinner）
+        const dot = document.createElement('span');
+        dot.className = 'progress-dot spinner';
+        dot.style.marginLeft = '8px';
+        hdr.appendChild(dot);
+        wrap._statusDot = dot;
         wrap.appendChild(hdr);
         this.chatMessages.appendChild(wrap);
         this._iterBoxes.set(key, wrap);
@@ -581,6 +587,78 @@ class UI {
         }
         contentDiv.textContent += delta;
         this.smartScroll();
+    }
+
+    // 新的 note 接口（等效于 tool_call_text）
+    appendNote(delta, iter) {
+        if (!delta) return;
+        const key = String(iter || '1');
+        let contentDiv = this._toolTextByIter.get(key);
+        if (!contentDiv) {
+            const wrap = this.ensureIterContainer(key);
+            const box = document.createElement('div');
+            box.className = 'tool-call-text-box';
+            const label = document.createElement('div'); label.className = 'tool-call-text-label'; label.textContent = '📎 说明'; box.appendChild(label);
+            contentDiv = document.createElement('div'); contentDiv.className = 'tool-call-text-content'; box.appendChild(contentDiv);
+            wrap.appendChild(box);
+            this._toolTextByIter.set(key, contentDiv);
+        }
+        contentDiv.textContent += (contentDiv.textContent ? '\n' : '') + delta;
+        this.smartScroll();
+    }
+
+    // 按轮次追加执行行
+    appendExec(iter, evt) {
+        const key = String(iter || '1');
+        const wrap = this.ensureIterContainer(key);
+        let list = wrap.querySelector('.exec-list');
+        if (!list) { list = document.createElement('div'); list.className = 'exec-list'; wrap.appendChild(list); }
+        if (!this._execLastByTool) this._execLastByTool = new Map();
+        if (!this._execLastByTool.has(key)) this._execLastByTool.set(key, new Map());
+        const toolMap = this._execLastByTool.get(key);
+
+        const phase = evt.phase || 'info';
+        if (phase === 'start') {
+            const row = document.createElement('div'); row.className = 'progress-line';
+            row.textContent = `🛠 执行工具: ${evt.tool}` + (evt.args_preview ? `\n参数: ${evt.args_preview}` : '');
+            list.appendChild(row); toolMap.set(evt.tool || 'unknown', row);
+        } else if (phase === 'heartbeat') {
+            const k = evt.tool || 'unknown';
+            let row = toolMap.get(k);
+            if (!row) { row = document.createElement('div'); row.className='progress-line'; row.textContent = `⏳ ${k} 执行中...`; list.appendChild(row); toolMap.set(k, row); }
+            row.textContent = row.textContent.replace(/(已等待 .*秒)?$/, '') + ` 已等待 ${evt.elapsed_sec || 0}s`;
+        } else if (phase === 'done') {
+            const k = evt.tool || 'unknown'; const row = toolMap.get(k);
+            if (row) row.textContent += ' ✓ 完成'; else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✓ ${k} 执行完成`; list.appendChild(r); }
+            toolMap.delete(k);
+        } else if (phase === 'error') {
+            const k = evt.tool || 'unknown'; const row = toolMap.get(k);
+            const msg = evt.message ? `: ${evt.message}` : '';
+            if (row) row.textContent += ` ✗ 失败${msg}`; else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✗ ${k} 执行失败${msg}`; list.appendChild(r); }
+            toolMap.delete(k);
+        } else if (phase === 'files') {
+            const r = document.createElement('div'); r.className='progress-line'; r.textContent = `📄 生成文件: ${(evt.files||[]).join(', ')}`; list.appendChild(r);
+        } else if (phase === 'info') {
+            if (evt.message) { const r=document.createElement('div'); r.className='progress-line'; r.textContent = evt.message; list.appendChild(r); }
+        }
+        this.smartScroll();
+    }
+
+    appendFilesGenerated(iter, files) {
+        if (!files || !files.length) return;
+        this.appendExec(iter, {phase:'files', files});
+    }
+
+    finishIter(iter, status) {
+        const key = String(iter || '1');
+        const wrap = this._iterBoxes.get(key);
+        if (!wrap) return;
+        const dot = wrap._statusDot;
+        if (!dot) return;
+        dot.classList.remove('spinner','success','failed');
+        const s = String(status||'').toLowerCase();
+        if (s.includes('fail') || s.includes('error')) dot.classList.add('failed');
+        else dot.classList.add('success');
     }
 
     /**
