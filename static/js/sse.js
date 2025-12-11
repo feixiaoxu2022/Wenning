@@ -16,6 +16,7 @@ class SSEClient {
         this.onCompressionDone = null;
         this.onFilesGenerated = null;
         this.onPlanUpdate = null;
+        this.onThinkingStart = null;
     }
 
     /**
@@ -86,10 +87,16 @@ class SSEClient {
         console.log('[SSE] 分发消息:', update.type, update);
 
         switch (update.type) {
+            case 'thinking_start':
+                console.log('[SSE] 处理thinking_start:', update.iter);
+                if (this.onThinkingStart) {
+                    this.onThinkingStart(update.iter);
+                }
+                break;
             case 'thinking':
                 console.log('[SSE] 处理thinking消息:', update.content);
                 if (this.onThinking) {
-                    this.onThinking(update.content);
+                    this.onThinking(update.content || '', update.iter);
                 }
                 break;
 

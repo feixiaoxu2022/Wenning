@@ -126,6 +126,10 @@ class ContextManager:
             logger.info("对话历史太短,无需压缩")
             return conversation_history
 
+        # 计算压缩前的token数
+        before_stats = self.calculate_usage(conversation_history)
+        logger.info(f"压缩前: {len(conversation_history)}条消息, {before_stats['total_tokens']} tokens")
+
         # 分离最近的对话和旧对话
         recent = conversation_history[-(self.recent_turns_to_keep * 2):]
         old = conversation_history[:-(self.recent_turns_to_keep * 2)]
@@ -141,8 +145,10 @@ class ContextManager:
             summary = self._generate_summary(old, llm_client)
 
             if not summary:
-                logger.warning("摘要生成失败,保留原始历史")
+                logger.error("⚠️  摘要生成失败或为空,保留原始历史")
                 return conversation_history
+
+            logger.info(f"摘要生成成功: {len(summary)}字符")
 
             # 构建压缩后的历史
             compressed = [
@@ -152,12 +158,24 @@ class ContextManager:
                 }
             ] + recent
 
-            logger.info(f"对话压缩完成: {len(conversation_history)}条 → {len(compressed)}条")
+            # 计算压缩后的token数
+            after_stats = self.calculate_usage(compressed)
+            compression_ratio = (1 - after_stats['total_tokens'] / before_stats['total_tokens']) * 100
+
+            logger.info(f"压缩完成: {len(conversation_history)}条 → {len(compressed)}条")
+            logger.info(f"Token压缩: {before_stats['total_tokens']} → {after_stats['total_tokens']} ({compression_ratio:.1f}%减少)")
+
+            # 如果压缩后token数反而增加，返回原始历史
+            if after_stats['total_tokens'] >= before_stats['total_tokens']:
+                logger.warning(f"⚠️  压缩后token数未减少({before_stats['total_tokens']} → {after_stats['total_tokens']})，保留原始历史")
+                return conversation_history
 
             return compressed
 
         except Exception as e:
             logger.error(f"对话压缩失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return conversation_history
 
     def _generate_summary(self, old_conversation: List[Dict], llm_client) -> str:
@@ -176,7 +194,7 @@ class ContextManager:
         # 压缩提示词
         compression_prompt = self._build_compression_prompt(conversation_text)
 
-        logger.info("调用LLM生成对话摘要...")
+        logger.info(f"调用LLM生成对话摘要... (原对话: {len(conversation_text)}字符)")
 
         try:
             # 调用LLM生成摘要
@@ -188,18 +206,28 @@ class ContextManager:
                 model_override=None
             )
 
-            summary = response.get("content", "")
+            # 检查响应格式
+            if isinstance(response, dict):
+                summary = response.get("content", "")
+            elif isinstance(response, str):
+                summary = response
+            else:
+                logger.error(f"LLM返回未知格式: {type(response)}")
+                return ""
 
-            if not summary:
+            if not summary or not summary.strip():
                 logger.error("LLM返回空摘要")
                 return ""
 
-            logger.info(f"摘要生成成功,长度: {len(summary)}字符")
+            summary = summary.strip()
+            logger.info(f"摘要生成成功: {len(summary)}字符 (压缩比: {len(summary)/len(conversation_text)*100:.1f}%)")
 
             return summary
 
         except Exception as e:
             logger.error(f"LLM生成摘要失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return ""
 
     def _format_conversation_for_summary(self, conversation: List[Dict]) -> str:

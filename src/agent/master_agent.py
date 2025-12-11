@@ -497,28 +497,39 @@ class MasterAgent:
             }
 
             # 执行压缩
+            old_history_len = len(conversation_to_use)
             compressed_history = self.context_manager.compress_conversation_history(
                 conversation_history=conversation_to_use,
                 llm_client=self.llm
             )
 
-            # 更新对话历史
-            self.conversation_history = compressed_history
-            conversation_to_use = compressed_history
+            # 检查压缩是否成功
+            if compressed_history == conversation_to_use:
+                logger.warning("压缩未生效，保持原始历史")
+                # 通知前端压缩失败
+                yield {
+                    "type": "compression_failed",
+                    "message": "⚠️  压缩未生效，继续使用原始对话历史",
+                    "stats": context_stats
+                }
+            else:
+                # 更新对话历史
+                self.conversation_history = compressed_history
+                conversation_to_use = compressed_history
 
-            # 重新计算压缩后的使用率
-            temp_messages = messages + conversation_to_use + [{"role": "user", "content": user_input}]
-            new_stats = self.context_manager.calculate_usage(temp_messages)
+                # 重新计算压缩后的使用率
+                temp_messages = messages + conversation_to_use + [{"role": "user", "content": user_input}]
+                new_stats = self.context_manager.calculate_usage(temp_messages)
 
-            logger.info(f"压缩完成: {len(self.conversation_history)}条消息, 新使用率: {new_stats['usage_percent']}%")
+                logger.info(f"压缩完成: {old_history_len}条 → {len(compressed_history)}条消息, 使用率: {context_stats['usage_percent']}% → {new_stats['usage_percent']}%")
 
-            # 通知前端压缩完成
-            yield {
-                "type": "compression_done",
-                "message": f"✓ 压缩完成 · 使用率 {context_stats['usage_percent']}% → {new_stats['usage_percent']}%",
-                "old_stats": context_stats,
-                "new_stats": new_stats
-            }
+                # 通知前端压缩完成
+                yield {
+                    "type": "compression_done",
+                    "message": f"✓ 压缩完成 · 使用率 {context_stats['usage_percent']}% → {new_stats['usage_percent']}%",
+                    "old_stats": context_stats,
+                    "new_stats": new_stats
+                }
 
         # 添加对话历史到messages
         messages.extend(conversation_to_use)
@@ -543,6 +554,12 @@ class MasterAgent:
                 "type": "progress",
                 "message": f"💭 第{iteration + 1}轮思考...",
                 "status": f"🔄 迭代 {iteration + 1}/{self.max_iterations}"
+            }
+
+            # 通知前端本轮思考开始（用于分组展示）
+            yield {
+                "type": "thinking_start",
+                "iter": iteration + 1
             }
 
             # Reason: LLM决策（流式）
@@ -575,7 +592,8 @@ class MasterAgent:
                         yield {
                             "type": "thinking",
                             "content": chunk.get("delta", ""),
-                            "full_content": thinking_content
+                            "full_content": thinking_content,
+                            "iter": iteration + 1
                         }
                     elif chunk.get("type") == "content":
                         # 普通内容 - 先缓存，等确定是否有tool_calls再决定展示方式

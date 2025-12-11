@@ -146,31 +146,74 @@ class MusicGenerationMiniMax(BaseAtomicTool):
                 return {"status": "failed", "error": f"MiniMax Music Generation 失败: {error_msg}"}
 
             # 提取音频数据
-            # MiniMax Music API 返回格式: {"base_resp": {...}, "data": {"audio": "base64_string", ...}}
+            # MiniMax Music API 返回格式: {"base_resp": {...}, "data": {"audio": "hex_or_base64_string", ...}}
             if "data" in result and "audio" in result["data"]:
-                audio_base64 = result["data"]["audio"]
+                audio_encoded = result["data"]["audio"]
 
-                # 调试信息：检查base64字符串
-                logger.info(f"收到音频base64数据，长度: {len(audio_base64)} 字符")
+                # 调试信息：检查编码数据
+                logger.info(f"收到音频编码数据，长度: {len(audio_encoded)} 字符")
+                logger.info(f"数据前100字符: {audio_encoded[:100]}")
 
-                # 修复base64 padding问题
-                # 某些API返回的base64可能缺少padding，需要补全
-                missing_padding = len(audio_base64) % 4
-                if missing_padding:
-                    audio_base64 += '=' * (4 - missing_padding)
-                    logger.info(f"已修复base64 padding，补充了 {4 - missing_padding} 个'='")
+                # 检测编码类型（十六进制 vs base64）
+                # 十六进制只包含 0-9, a-f, A-F
+                # Base64包含 A-Z, a-z, 0-9, +, /, =
+                is_hex = all(c in '0123456789abcdefABCDEF' for c in audio_encoded)
 
                 try:
-                    audio_bytes = base64.b64decode(audio_base64)
-                    logger.info(f"base64解码成功，音频数据大小: {len(audio_bytes)} 字节")
+                    if is_hex:
+                        # 十六进制解码
+                        logger.info("检测到十六进制编码，使用hex解码")
+                        audio_bytes = bytes.fromhex(audio_encoded)
+                        logger.info(f"Hex解码成功，音频数据大小: {len(audio_bytes)} 字节")
+                    else:
+                        # Base64解码
+                        logger.info("检测到base64编码，使用base64解码")
+                        import base64
+                        # 修复base64 padding问题
+                        missing_padding = len(audio_encoded) % 4
+                        if missing_padding:
+                            audio_encoded += '=' * (4 - missing_padding)
+                            logger.info(f"已修复base64 padding，补充了 {4 - missing_padding} 个'='")
+                        audio_bytes = base64.b64decode(audio_encoded)
+                        logger.info(f"Base64解码成功，音频数据大小: {len(audio_bytes)} 字节")
                 except Exception as decode_error:
-                    error_msg = f"base64解码失败: {decode_error}. base64前100字符: {audio_base64[:100]}"
+                    error_msg = f"音频解码失败: {decode_error}. 数据前100字符: {audio_encoded[:100]}"
                     logger.error(error_msg)
                     return {"status": "failed", "error": error_msg}
 
+                # 验证音频文件格式
+                if len(audio_bytes) < 10:
+                    error_msg = f"音频数据太短（{len(audio_bytes)}字节），可能不是有效的音频文件"
+                    logger.error(error_msg)
+                    return {"status": "failed", "error": error_msg}
+
+                # 检查文件头，判断实际格式
+                header = audio_bytes[:10]
+                logger.info(f"音频文件头 (hex): {header.hex()}")
+
+                # MP3文件头: ID3 (0x494433) 或 MPEG sync (0xFFxx)
+                # WAV文件头: RIFF (0x52494646)
+                actual_format = None
+                if header[:3] == b'ID3' or header[0:2] in [b'\xff\xfb', b'\xff\xfa', b'\xff\xf3', b'\xff\xf2']:
+                    actual_format = "mp3"
+                    logger.info("✓ 检测到有效的MP3文件格式")
+                elif header[:4] == b'RIFF':
+                    actual_format = "wav"
+                    logger.warning("⚠️ 检测到WAV格式，但请求的是MP3格式")
+                else:
+                    # 尝试检查是否是文本
+                    try:
+                        text_sample = audio_bytes[:100].decode('utf-8', errors='ignore')
+                        if all(32 <= ord(c) < 127 or c in '\n\r\t' for c in text_sample):
+                            logger.error(f"❌ 音频数据实际是文本内容: {text_sample[:200]}")
+                            return {"status": "failed", "error": f"API返回的不是音频文件，而是文本: {text_sample[:100]}"}
+                    except:
+                        pass
+                    logger.warning(f"⚠️ 无法识别的音频格式，文件头: {header.hex()}")
+
                 file_path = work_dir / filename
                 file_path.write_bytes(audio_bytes)
-                logger.info(f"音乐文件保存成功: {filename}")
+                logger.info(f"音乐文件保存成功: {filename}（实际格式: {actual_format or '未知'}）")
 
                 return {
                     "status": "success",

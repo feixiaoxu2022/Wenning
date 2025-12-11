@@ -27,9 +27,10 @@ from src.tools.atomic.file_reader import FileReader
 from src.tools.atomic.file_list import FileList
 from src.tools.atomic.file_editor import FileEditor
 from src.tools.atomic.media_ffmpeg import MediaFFmpeg
+# 通用图像生成工具
+from src.tools.atomic.image_generation import ImageGeneration
 # MiniMax多模态工具
 from src.tools.atomic.tts_minimax import TTSMiniMax
-from src.tools.atomic.image_generation_minimax import ImageGenerationMiniMax
 from src.tools.atomic.video_generation_minimax import VideoGenerationMiniMax
 from src.tools.atomic.music_generation_minimax import MusicGenerationMiniMax
 # 云端TTS暂不启用
@@ -109,7 +110,7 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
         tool_registry.register_atomic_tool(CodeExecutor(config, conv_manager))
 
         # 2. 专用多模态生成工具（优先级高）
-        tool_registry.register_atomic_tool(ImageGenerationMiniMax(config, conv_manager))
+        tool_registry.register_atomic_tool(ImageGeneration(config, conv_manager))  # 通用图像生成
         tool_registry.register_atomic_tool(VideoGenerationMiniMax(config, conv_manager))
         tool_registry.register_atomic_tool(MusicGenerationMiniMax(config, conv_manager))
         tool_registry.register_atomic_tool(TTSMiniMax(config, conv_manager))
@@ -378,10 +379,17 @@ async def get_file_scoped(conversation_id: str, filename: str, user: str = Depen
         media_type = "application/octet-stream"
 
     headers = {"X-File-Scope": "conversation"}
-    if suffix == ".html":
+    # 为可内联预览的类型去掉 filename, 避免 Content-Disposition: attachment 导致浏览器不内联渲染（SVG 尤其如此）
+    inline_types = {
+        ".html", ".txt", ".md", ".json", ".jsonl", ".yaml", ".yml", ".xml",
+        ".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".avif",
+        ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac",
+        ".mp4", ".webm", ".mov",
+        ".pdf"
+    }
+    if suffix in inline_types:
         return FileResponse(path=str(file_path), media_type=media_type, headers=headers)
-    else:
-        return FileResponse(path=str(file_path), filename=filename, media_type=media_type, headers=headers)
+    return FileResponse(path=str(file_path), filename=filename, media_type=media_type, headers=headers)
 
 
 @app.head("/outputs/{conversation_id}/{filename}")

@@ -30,6 +30,9 @@ pyttsx3>=2.90  # 非macOS离线TTS(可选)
 google-cloud-texttospeech>=2.15.0
 azure-cognitiveservices-speech>=1.37.0
 
+# Math Animation Engine (需要系统依赖: brew install ffmpeg cairo pango)
+manim>=0.18.0  # manim-community 数学动画引擎
+
 # Tokenization for context usage
 tiktoken>=0.7.0
 

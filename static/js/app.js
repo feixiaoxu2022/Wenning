@@ -749,8 +749,11 @@ function initSidebarToggles() {
  */
 function setupSSECallbacks() {
     // 思考过程更新
-    sseClient.onThinking = (content) => {
-        ui.appendThinking(content);
+    sseClient.onThinkingStart = (iter) => {
+        try { ui.startThinkingSection(iter); } catch (_) {}
+    };
+    sseClient.onThinking = (content, iter) => {
+        ui.appendThinking(content, iter);
     };
 
     // 工具调用时的accompanying text（打字机效果）

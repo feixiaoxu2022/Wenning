@@ -451,10 +451,11 @@ class UI {
      */
     addUserMessage(message) {
         // 清理之前的thinking、progress和tool_call_text盒子的DOM元素
-        if (this.currentThinkingBox && this.currentThinkingBox.parentElement) {
-            const thinkingContainer = this.currentThinkingBox.closest('.thinking-box');
-            if (thinkingContainer) thinkingContainer.remove();
-        }
+        // 清理所有thinking容器，避免上一轮残留串在一起
+        try {
+            this.chatMessages.querySelectorAll('.thinking-box').forEach(el => el.remove());
+            this._thinkingSections = new Map();
+        } catch (_) {}
         // 删除整个progress box（包括按钮），而不是只删除content
         if (this._progress && this._progress.box && this._progress.box.parentElement) {
             this._progress.box.remove();
@@ -487,44 +488,40 @@ class UI {
     /**
      * 创建思考过程盒子
      */
-    createThinkingBox() {
-        if (this.currentThinkingBox) {
-            return; // 已经存在
-        }
+    // 思考分组（按迭代轮次）
+    startThinkingSection(iter) {
+        if (!this._thinkingSections) this._thinkingSections = new Map();
+        const key = String(iter || '1');
+        if (this._thinkingSections.has(key)) return;
 
         const thinkingBox = document.createElement('div');
         thinkingBox.className = 'thinking-box';
-
         const label = document.createElement('span');
         label.className = 'thinking-label';
-        label.textContent = '💭 思考过程:';
+        label.textContent = `💭 思考（第${key}轮）:`;
         thinkingBox.appendChild(label);
-
         const contentDiv = document.createElement('div');
         contentDiv.className = 'thinking-content';
         thinkingBox.appendChild(contentDiv);
-
         this.chatMessages.appendChild(thinkingBox);
+        this._thinkingSections.set(key, contentDiv);
         this.currentThinkingBox = contentDiv;
-
         this.scrollToBottom();
     }
 
     /**
      * 追加思考内容
      */
-    appendThinking(content) {
-        if (!this.currentThinkingBox) {
-            this.createThinkingBox();
+    appendThinking(content, iter) {
+        if (!this._thinkingSections) this._thinkingSections = new Map();
+        const key = String(iter || '1');
+        if (!this._thinkingSections.has(key)) {
+            this.startThinkingSection(key);
         }
-
-        // 每个thinking chunk之间加换行分隔,避免连成一片
-        if (this.currentThinkingBox.textContent && content) {
-            this.currentThinkingBox.textContent += '\n\n';
-        }
-        this.currentThinkingBox.textContent += content;
-
-        // 自动滚动（如果用户在底部附近）
+        const target = this._thinkingSections.get(key) || this.currentThinkingBox;
+        if (!target) return;
+        if (target.textContent && content) target.textContent += '\n\n';
+        target.textContent += content;
         this.smartScroll();
     }
 
@@ -674,11 +671,9 @@ class UI {
         // 仅在实时渲染时清理thinking/progress/tool_call_text（历史消息不需要）
         if (useTypewriter) {
             // 清理thinking box和tool_call_text box的DOM元素
-            if (this.currentThinkingBox && this.currentThinkingBox.parentElement) {
-                // 找到thinking-box容器并移除
-                const thinkingContainer = this.currentThinkingBox.closest('.thinking-box');
-                if (thinkingContainer) thinkingContainer.remove();
-            }
+            // 移除所有thinking容器
+            try { this.chatMessages.querySelectorAll('.thinking-box').forEach(el => el.remove()); } catch (_) {}
+            this._thinkingSections = new Map();
             if (this.currentToolCallTextBox && this.currentToolCallTextBox.parentElement) {
                 // 找到tool-call-text-box容器并移除
                 const toolCallContainer = this.currentToolCallTextBox.closest('.tool-call-text-box');
@@ -734,6 +729,8 @@ class UI {
                 // 直接渲染(用于历史消息)
                 if (typeof marked !== 'undefined') {
                     resultContent.innerHTML = marked.parse(result.result || '');
+                    // 修复markdown中的相对路径图片链接
+                    this.fixMarkdownImagePaths(resultContent);
                 } else {
                     resultContent.textContent = result.result || '';
                 }
@@ -788,6 +785,42 @@ class UI {
                 await new Promise(resolve => setTimeout(resolve, speed));
             }
         }
+
+        // 打字机渲染完成后，修复markdown中的相对路径图片链接
+        if (typeof marked !== 'undefined') {
+            this.fixMarkdownImagePaths(element);
+        }
+    }
+
+    /**
+     * 修复markdown渲染后的图片相对路径
+     * 将 ![img](filename.png) 渲染出的 <img src="filename.png"> 修正为 <img src="/outputs/{conversationId}/filename.png">
+     */
+    fixMarkdownImagePaths(element) {
+        if (!element) return;
+
+        // 查找所有img标签
+        const images = element.querySelectorAll('img');
+
+        images.forEach(img => {
+            const originalSrc = img.getAttribute('src');
+
+            // 只处理相对路径（不是http://或https://开头，也不是/开头）
+            if (originalSrc &&
+                !originalSrc.startsWith('http://') &&
+                !originalSrc.startsWith('https://') &&
+                !originalSrc.startsWith('/')) {
+
+                // 构造完整的URL路径
+                const fullUrl = `${this.outputsBaseUrl}/${encodeURIComponent(originalSrc)}`;
+                console.log(`[UI] 修复图片路径: ${originalSrc} → ${fullUrl}`);
+                img.setAttribute('src', fullUrl);
+
+                // 添加cache-bust参数（防止缓存问题）
+                const cacheBustUrl = `${fullUrl}?t=${Date.now()}`;
+                img.setAttribute('src', cacheBustUrl);
+            }
+        });
     }
 
     /**
@@ -1343,6 +1376,19 @@ class UI {
             ? `/stream/${encodeURIComponent(this.currentConvId)}/${encoded}${bust}`
             : `/stream/${encoded}${bust}`;
         const directSrc = `${this.outputsBaseUrl}/${encoded}${bust}`;
+
+        // 根据文件扩展名确定MIME类型
+        const ext = filename.toLowerCase().split('.').pop();
+        const mimeTypes = {
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'm4a': 'audio/mp4',
+            'aac': 'audio/aac',
+            'ogg': 'audio/ogg',
+            'flac': 'audio/flac'
+        };
+        const mimeType = mimeTypes[ext] || 'audio/mpeg';
+
         container.innerHTML = `
             <div class="image-preview-container">
                 <div class="preview-info">
@@ -1357,8 +1403,8 @@ class UI {
                 </div>
                 <div class="image-content">
                     <audio controls style="width:100%">
-                        <source src="${streamSrc}" type="audio/wav" />
-                        <source src="${directSrc}" type="audio/wav" />
+                        <source src="${streamSrc}" type="${mimeType}" />
+                        <source src="${directSrc}" type="${mimeType}" />
                         您的浏览器不支持音频播放。
                     </audio>
                 </div>
