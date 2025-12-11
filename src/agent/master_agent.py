@@ -553,11 +553,8 @@ class MasterAgent:
         for iteration in range(self.max_iterations):
             logger.info(f"ReAct迭代 {iteration + 1}/{self.max_iterations}")
 
-            # 通知前端本轮思考开始（用于分组展示）
-            yield {
-                "type": "thinking_start",
-                "iter": iteration + 1
-            }
+            # 本轮开始
+            yield {"type": "iter_start", "iter": iteration + 1, "ts": time.time()}
 
             # Reason: LLM决策（流式）
             self.state = AgentState.REASONING
@@ -590,7 +587,8 @@ class MasterAgent:
                             "type": "thinking",
                             "content": chunk.get("delta", ""),
                             "full_content": thinking_content,
-                            "iter": iteration + 1
+                            "iter": iteration + 1,
+                            "ts": time.time()
                         }
                     elif chunk.get("type") == "content":
                         # 普通内容 - 先缓存，等确定是否有tool_calls再决定展示方式
@@ -603,10 +601,10 @@ class MasterAgent:
                         delay = chunk.get("delay") or 0
                         reason = chunk.get("reason") or "请求失败"
                         yield {
-                            "type": "progress",
-                            "message": f"⚠️ LLM请求失败（{reason}），{delay}s后进行第{att + 1}次重试...",
-                            "status": f"重试 {att}/{mx}",
-                            "iter": iteration + 1
+                            "type": "note",
+                            "delta": f"⚠️ LLM请求失败（{reason}），{delay}s后进行第{att + 1}次重试...",
+                            "iter": iteration + 1,
+                            "ts": time.time()
                         }
                     elif chunk.get("type") == "retry_exhausted":
                         rsn = chunk.get("reason") or "请求失败"
@@ -676,10 +674,10 @@ class MasterAgent:
                 # 有tool_calls时，如果有content_buffer，展示为accompanying text
                 if content_buffer:
                     yield {
-                        "type": "tool_call_text",
-                        "content": content_buffer,
-                        "full_content": content_buffer,
-                        "iter": iteration + 1
+                        "type": "note",
+                        "delta": content_buffer,
+                        "iter": iteration + 1,
+                        "ts": time.time()
                     }
 
             # 检查是否返回最终答案
@@ -706,6 +704,8 @@ class MasterAgent:
                 self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
                 logger.info(f"同步对话历史: {len(self.conversation_history)}条消息")
 
+                # 最后一轮结束
+                yield {"type": "iter_done", "iter": iteration + 1, "status": "success", "ts": time.time()}
                 yield {
                     "type": "final",
                     "result": {
@@ -786,10 +786,12 @@ class MasterAgent:
                     tool_emoji = {"web_search": "🔎", "url_fetch": "🌐", "code_executor": "🛠"}.get(tool_name, "•")
                     args_preview = str(arguments)[:80] + "..." if len(str(arguments)) > 80 else str(arguments)
                     yield {
-                        "type": "progress",
-                        "message": f"{tool_emoji} 执行工具: {tool_name}\n参数: {args_preview}",
-                        "status": f"⚙️ 调用 {tool_name}",
-                        "iter": iteration + 1
+                        "type": "exec",
+                        "iter": iteration + 1,
+                        "phase": "start",
+                        "tool": tool_name,
+                        "args_preview": args_preview,
+                        "ts": time.time()
                     }
 
                     # 执行工具 (带心跳)
@@ -826,10 +828,12 @@ class MasterAgent:
                         # 每隔10秒yield心跳
                         if elapsed >= last_heartbeat + heartbeat_interval and elapsed > 0:
                             yield {
-                                "type": "progress",
-                                "message": f"⏳ {tool_name} 执行中...已等待 {elapsed} 秒",
-                                "status": f"⏳ 等待 {tool_name}",
-                                "iter": iteration + 1
+                                "type": "exec",
+                                "iter": iteration + 1,
+                                "phase": "heartbeat",
+                                "tool": tool_name,
+                                "elapsed_sec": elapsed,
+                                "ts": time.time()
                             }
                             last_heartbeat = elapsed
 
@@ -845,10 +849,13 @@ class MasterAgent:
 
                         # 发送成功进度（使用更简洁现代的勾号符号）
                         yield {
-                            "type": "progress",
-                            "message": f"✓ {tool_name} 执行完成",
-                            "status": f"📊 处理 {tool_name} 结果",
-                            "iter": iteration + 1
+                            "type": "exec",
+                            "iter": iteration + 1,
+                            "phase": "done",
+                            "tool": tool_name,
+                            "message": "执行完成",
+                            "success": True,
+                            "ts": time.time()
                         }
 
                         # 如果工具生成了文件,发送文件列表给前端
@@ -859,7 +866,9 @@ class MasterAgent:
                             if previewable:
                                 yield {
                                     "type": "files_generated",
-                                    "files": previewable
+                                    "iter": iteration + 1,
+                                    "files": previewable,
+                                    "ts": time.time()
                                 }
                     else:
                         logger.warning(f"工具执行失败: {tool_name}")
@@ -869,10 +878,13 @@ class MasterAgent:
 
                         # 发送失败进度（使用警示符号 !）
                         yield {
-                            "type": "progress",
-                            "message": f"! {tool_name} 执行失败: {tool_result.error_message[:100]}",
-                            "status": f"⚠️ {tool_name} 失败",
-                            "iter": iteration + 1
+                            "type": "exec",
+                            "iter": iteration + 1,
+                            "phase": "error",
+                            "tool": tool_name,
+                            "message": tool_result.error_message[:200] if tool_result.error_message else "执行失败",
+                            "success": False,
+                            "ts": time.time()
                         }
 
                 except Exception as e:
@@ -881,10 +893,13 @@ class MasterAgent:
 
                     # 发送异常进度（使用警示符号 !）
                     yield {
-                        "type": "progress",
-                        "message": f"✗ {tool_name} 执行异常: {str(e)[:100]}",
-                        "status": f"❌ {tool_name} 异常",
-                        "iter": iteration + 1
+                        "type": "exec",
+                        "iter": iteration + 1,
+                        "phase": "error",
+                        "tool": tool_name,
+                        "message": str(e)[:200],
+                        "success": False,
+                        "ts": time.time()
                     }
 
                 # 添加工具结果到消息历史
@@ -903,6 +918,8 @@ class MasterAgent:
 
                 logger.info(f"工具结果已反馈给LLM: {tool_name} (消息长度: {len(result_message)}字符)")
 
+            # 本轮结束（工具已执行），等待下一轮
+            yield {"type": "iter_done", "iter": iteration + 1, "status": "success", "ts": time.time()}
             # 继续下一轮循环,让LLM看到工具结果后决定下一步
 
         # 达到最大迭代次数

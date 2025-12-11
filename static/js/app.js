@@ -753,22 +753,17 @@ function initSidebarToggles() {
  */
 function setupSSECallbacks() {
     // 思考过程更新
-    sseClient.onThinkingStart = (iter) => {
-        try { ui.ensureIterContainer(iter); } catch (_) {}
-    };
+    sseClient.onIterStart = (iter) => { try { ui.ensureIterContainer(iter); } catch (_) {} };
+    sseClient.onIterDone = (iter, status) => { try { ui.finishIter(iter, status); } catch (_) {} };
     sseClient.onThinking = (content, iter) => {
         ui.appendThinking(content, iter);
     };
 
     // 工具调用时的accompanying text（打字机效果）
-    sseClient.onToolCallText = (delta, iter) => {
-        ui.appendToolCallText(delta, iter);
-    };
+    sseClient.onNote = (delta, iter) => { ui.appendNote(delta, iter); };
 
     // 进度更新
-    sseClient.onProgress = (message, status, iter) => {
-        ui.showProgress(message, status, iter);
-    };
+    sseClient.onExec = (evt) => { ui.appendExec(evt.iter, evt); };
 
     // 最终结果
     sseClient.onFinal = (result) => {
@@ -827,10 +822,11 @@ function setupSSECallbacks() {
     };
 
     // 文件生成通知
-    sseClient.onFilesGenerated = (files) => {
+    sseClient.onFilesGenerated = (files, iter) => {
         console.log('[App] 收到生成文件列表:', files);
-        // 兜底：确保文件预览以当前会话为作用域，避免误用根目录导致 HEAD 404
+        // 兜底：确保文件预览以当前会话为作用域
         try { if (currentConversationId) ui.setOutputsBase(currentConversationId); } catch (_) {}
+        try { ui.appendFilesGenerated(iter, files); } catch (_) {}
         ui.loadMultipleFiles(files);
         // 覆盖写时强制刷新已存在的预览（带cache bust）
         try { ui.refreshFiles(files); } catch (e) { console.warn('refreshFiles failed', e); }

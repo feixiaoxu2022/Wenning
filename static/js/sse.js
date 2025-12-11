@@ -17,6 +17,11 @@ class SSEClient {
         this.onFilesGenerated = null;
         this.onPlanUpdate = null;
         this.onThinkingStart = null;
+        // iter grouped new handlers
+        this.onIterStart = null;
+        this.onIterDone = null;
+        this.onNote = null;
+        this.onExec = null;
     }
 
     /**
@@ -87,11 +92,15 @@ class SSEClient {
         console.log('[SSE] 分发消息:', update.type, update);
 
         switch (update.type) {
+            case 'iter_start':
+                if (this.onIterStart) this.onIterStart(update.iter);
+                break;
+            case 'iter_done':
+                if (this.onIterDone) this.onIterDone(update.iter, update.status);
+                break;
             case 'thinking_start':
                 console.log('[SSE] 处理thinking_start:', update.iter);
-                if (this.onThinkingStart) {
-                    this.onThinkingStart(update.iter);
-                }
+                if (this.onIterStart) this.onIterStart(update.iter);
                 break;
             case 'thinking':
                 console.log('[SSE] 处理thinking消息:', update.content);
@@ -102,16 +111,21 @@ class SSEClient {
 
             case 'tool_call_text':
                 console.log('[SSE] 处理tool_call_text消息:', update.content);
-                if (this.onToolCallText) {
-                    this.onToolCallText(update.content || '', update.iter);
-                }
+                if (this.onNote) this.onNote(update.content || update.delta || '', update.iter);
+                break;
+
+            case 'note':
+                if (this.onNote) this.onNote(update.delta || '', update.iter);
+                break;
+
+            case 'exec':
+                if (this.onExec) this.onExec(update);
                 break;
 
             case 'progress':
                 console.log('[SSE] 处理progress消息:', update.message);
-                if (this.onProgress) {
-                    this.onProgress(update.message, update.status);
-                }
+                // 兼容旧progress：转为exec/info
+                if (this.onExec) this.onExec({iter: update.iter, phase: 'info', message: update.message, status: update.status, ts: update.ts});
                 break;
 
             case 'final':
@@ -144,9 +158,8 @@ class SSEClient {
 
             case 'files_generated':
                 console.log('[SSE] 处理files_generated消息:', update.files);
-                if (this.onFilesGenerated) {
-                    this.onFilesGenerated(update.files);
-                }
+                if (this.onFilesGenerated) this.onFilesGenerated(update.files, update.iter);
+                if (this.onExec) this.onExec({iter: update.iter, phase: 'files', files: update.files, ts: update.ts});
                 break;
 
             case 'plan_update':
