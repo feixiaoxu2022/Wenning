@@ -1432,7 +1432,7 @@ class UI {
                     <div style="display:flex; justify-content: space-between; align-items:center;">
                         <h4>${filename}</h4>
                         <div style="display:flex; gap:12px; align-items:center;">
-                            <a href="#" class="link-button workspace-save">Save to Workspace</a>
+                            <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
                             <a href="${this.outputsBaseUrl}/${encoded}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
                             <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
                         </div>
