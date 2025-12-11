@@ -764,6 +764,8 @@ function setupSSECallbacks() {
 
     // 进度更新
     sseClient.onExec = (evt) => { ui.appendExec(evt.iter, evt); };
+    // 兼容旧progress：按轮追加信息行（不会重复显示）
+    sseClient.onProgress = (message, status, iter) => { ui.showProgress(message, status, iter); };
 
     // 最终结果
     sseClient.onFinal = (result) => {

@@ -124,8 +124,9 @@ class SSEClient {
 
             case 'progress':
                 console.log('[SSE] 处理progress消息:', update.message);
-                // 兼容旧progress：转为exec/info
+                // 兼容旧progress：同时走 exec/info 和 per-iter progress UI
                 if (this.onExec) this.onExec({iter: update.iter, phase: 'info', message: update.message, status: update.status, ts: update.ts});
+                if (this.onProgress) this.onProgress(update.message, update.status, update.iter);
                 break;
 
             case 'final':
