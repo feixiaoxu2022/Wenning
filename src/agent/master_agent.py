@@ -1045,7 +1045,7 @@ class MasterAgent:
 ### 代码执行
 - **环境**: Python 3.x，已安装pandas/numpy/matplotlib/PIL/moviepy/playwright等常用库
 - **视频兼容性**: 生成mp4时使用yuv420p像素格式和libx264编码确保兼容性
-- **中文支持**: matplotlib中文会自动显示，moviepy使用系统注入的 `_MOVIEPY_FONT_CONFIG` 变量
+- **中文显示**: matplotlib包含中文时必须先设置字体避免乱码：`matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'Microsoft YaHei']`，moviepy使用 `_MOVIEPY_FONT_CONFIG` 变量
 - **限制**: 不能使用subprocess/os.system，网络操作通过工具完成
 
 ### 信息获取

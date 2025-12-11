@@ -41,6 +41,7 @@ class UI {
         this._thinkingSections = new Map();
         this._progressByIter = new Map();
         this._toolTextByIter = new Map();
+        this._execLastByTool = new Map(); // iter -> Map(tool -> rowEl)
     }
 
     /** 创建通用的复制图标SVG */
