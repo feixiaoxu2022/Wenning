@@ -516,24 +516,10 @@ class UI {
     // 思考分组（按迭代轮次）
     startThinkingSection(iter) {
         if (!this._thinkingSections) this._thinkingSections = new Map();
-        if (!this._iterBoxes) this._iterBoxes = new Map();
         const key = String(iter || '1');
         if (this._thinkingSections.has(key)) return;
 
-        // 获取/创建迭代容器
-        let wrap = this._iterBoxes.get(key);
-        if (!wrap) {
-            wrap = document.createElement('div');
-            wrap.className = 'iter-box';
-            const hdr = document.createElement('div');
-            hdr.className = 'iter-header';
-            hdr.textContent = `第${key}轮`;
-            wrap.appendChild(hdr);
-            this.chatMessages.appendChild(wrap);
-            this._iterBoxes.set(key, wrap);
-        }
-
-        // 思考框
+        // 容器
         const wrap = this.ensureIterContainer(key);
         const thinkingBox = document.createElement('div');
         thinkingBox.className = 'thinking-box';

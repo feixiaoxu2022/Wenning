@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('[App] 应用初始化');
     await checkAuthAndInit();
     try { initResizableLayout(); } catch (e) { console.warn('resizable init failed', e); }
+    // 兜底：无论鉴权状态如何，都绑定一次登录/注册按钮
+    try { if (!authHandlersWired) wireAuthHandlers(); } catch (e) { console.warn('wireAuthHandlers fallback failed', e); }
 });
 
 let authHandlersWired = false;
@@ -45,6 +47,8 @@ async function checkAuthAndInit() {
                 const regBtn = document.getElementById('auth-register-btn');
                 if (regBtn) regBtn.style.display = allowRegisterCache ? 'inline-block' : 'none';
             } catch {}
+            // 仍然加载模型下拉，避免看起来“空白”
+            try { await loadModels(); } catch (_) {}
         } else {
             // 其他错误，先继续初始化但提示
             console.warn('[Auth] /auth/me 非预期状态:', resp.status);
