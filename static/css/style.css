@@ -504,6 +504,199 @@ body {
 .auth-actions .secondary:hover { border-color: var(--accent); color: var(--accent); box-shadow: var(--shadow); }
 .auth-error { color: #dc2626; font-size: 12px; min-height: 16px; }
 
+/* Feedback Modal */
+.feedback-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2,6,23,0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+}
+
+.feedback-modal {
+    width: 480px;
+    max-width: 90vw;
+    max-height: 85vh;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    padding: 28px;
+    position: relative;
+    overflow-y: auto;
+}
+
+.feedback-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.feedback-close:hover {
+    background: rgba(100,116,139,0.1);
+    color: var(--text);
+}
+
+.feedback-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+
+.feedback-subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 24px;
+}
+
+.feedback-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.feedback-field label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.feedback-field .required {
+    color: #ef4444;
+}
+
+.feedback-field select,
+.feedback-field input,
+.feedback-field textarea {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.feedback-field select:focus,
+.feedback-field input:focus,
+.feedback-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--ring);
+}
+
+.feedback-field textarea {
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.5;
+}
+
+.feedback-success,
+.feedback-error {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.feedback-success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid #22c55e;
+    color: #22c55e;
+}
+
+.feedback-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid #ef4444;
+    color: #ef4444;
+}
+
+.feedback-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.feedback-actions .primary {
+    padding: 11px 20px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.feedback-actions .primary:hover {
+    background: var(--accent-600);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.feedback-actions .primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.feedback-actions .secondary {
+    padding: 11px 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    border-radius: 10px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.feedback-actions .secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+/* Feedback Button in Header */
+.feedback-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.feedback-btn:hover {
+    background: rgba(100,116,139,0.1);
+    transform: scale(1.05);
+}
+
 /* Chat Panel (Right) */
 .chat-panel { flex: 1; display:flex; flex-direction:column; background: var(--panel); overflow:hidden; }
 
@@ -831,6 +1024,24 @@ body {
 .attachment-chip:hover .att-remove { opacity: 1; }
 .attachment-chip .att-name { position: absolute; left: 4px; right: 4px; bottom: 4px; background: rgba(17,17,17,.8); color:#fff; border-radius: 6px; padding: 0 4px; font-size: 10px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; opacity: 0; transition: opacity .15s ease; }
 .attachment-chip:hover .att-name { opacity: 1; }
+
+/* Ellipsis chip (show more) */
+.attachment-chip.attachment-ellipsis {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.attachment-chip.attachment-ellipsis:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: var(--accent);
+}
+.attachment-chip.attachment-ellipsis .att-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
@@ -1609,4 +1820,140 @@ body {
 @keyframes gradientShift {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
+}
+
+/* ========== 拖拽上传样式 ========== */
+.drag-over {
+    position: relative;
+    background-color: var(--accent) !important;
+    opacity: 0.1;
+    border: 2px dashed var(--accent) !important;
+    border-radius: 8px;
+}
+
+.chat-input-box.drag-over {
+    background-color: rgba(59, 130, 246, 0.05) !important;
+    opacity: 1;
+}
+
+.chat-messages.drag-over {
+    background-color: rgba(59, 130, 246, 0.03) !important;
+    opacity: 1;
+}
+
+.chat-messages.drag-over::after {
+    content: "拖放文件到此处上传";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--accent);
+    pointer-events: none;
+    z-index: 1000;
+    background: var(--panel);
+    padding: 20px 40px;
+    border-radius: 12px;
+    border: 2px dashed var(--accent);
+    box-shadow: var(--shadow);
+}
+
+/* ========== 附件图标样式 ========== */
+.attachment-chip .att-icon {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.attachment-chip .att-icon svg {
+    width: 28px;
+    height: 28px;
+    color: var(--muted);
+}
+
+/* 不同文件类型的图标颜色 */
+.attachment-chip[data-type="image"] .att-icon {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.attachment-chip[data-type="image"] .att-icon svg {
+    color: #3b82f6;
+}
+
+.attachment-chip[data-type="pdf"] .att-icon {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.attachment-chip[data-type="pdf"] .att-icon svg {
+    color: #ef4444;
+}
+
+.attachment-chip[data-type="word"] .att-icon {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.attachment-chip[data-type="word"] .att-icon svg {
+    color: #2563eb;
+}
+
+.attachment-chip[data-type="text"] .att-icon {
+    background: rgba(100, 116, 139, 0.1);
+}
+
+.attachment-chip[data-type="text"] .att-icon svg {
+    color: #64748b;
+}
+
+.attachment-chip[data-type="presentation"] .att-icon {
+    background: rgba(249, 115, 22, 0.1);
+}
+
+.attachment-chip[data-type="presentation"] .att-icon svg {
+    color: #f97316;
+}
+
+.attachment-chip[data-type="spreadsheet"] .att-icon {
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.attachment-chip[data-type="spreadsheet"] .att-icon svg {
+    color: #22c55e;
+}
+
+.attachment-chip[data-type="archive"] .att-icon {
+    background: rgba(168, 85, 247, 0.1);
+}
+
+.attachment-chip[data-type="archive"] .att-icon svg {
+    color: #a855f7;
+}
+
+.attachment-chip[data-type="audio"] .att-icon {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.attachment-chip[data-type="audio"] .att-icon svg {
+    color: #f59e0b;
+}
+
+.attachment-chip[data-type="video"] .att-icon {
+    background: rgba(236, 72, 153, 0.1);
+}
+
+.attachment-chip[data-type="video"] .att-icon svg {
+    color: #ec4899;
+}
+
+.attachment-chip[data-type="other"] .att-icon {
+    background: rgba(100, 116, 139, 0.1);
+}
+
+.attachment-chip[data-type="other"] .att-icon svg {
+    color: var(--muted);
 }

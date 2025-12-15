@@ -27,10 +27,11 @@ class FileReader(BaseAtomicTool):
     name = "file_reader"
     description = (
         "文件读取工具: 读取会话目录中的文件并返回结构化预览（只读，安全限长）。"
-        "适用场景：快速查看文件内容、预览CSV/Excel表格（自动识别格式）、读取JSON/文本配置。"
+        "适用场景：快速查看文件内容、预览CSV/Excel表格（自动识别格式）、读取JSON/文本配置、提取PDF文本内容。"
         "优势：自动格式识别、返回结构化预览、限长保护（避免大文件阻塞）、支持多种编码。"
+        "PDF支持：优先使用PyPDF2（纯Python，无系统依赖），自动fallback到pdfplumber（需要Poppler）。"
         "不适用：需要完整读取大文件、需要复杂文本处理（使用code_executor）。"
-        "参数: filename(文件名), conversation_id(必需), mode(可选:text/json/csv/excel), max_bytes/max_lines"
+        "参数: filename(文件名), conversation_id(必需), mode(可选:text/json/csv/excel/pdf), max_bytes/max_lines/max_pages"
     )
     required_params = ["filename", "conversation_id"]
     parameters_schema = {
@@ -40,7 +41,7 @@ class FileReader(BaseAtomicTool):
             "conversation_id": {"type": "string", "description": "会话ID"},
             "mode": {
                 "type": "string",
-                "enum": ["auto", "text", "json", "csv", "excel", "binary"],
+                "enum": ["auto", "text", "json", "csv", "excel", "pdf", "binary"],
                 "default": "auto",
                 "description": "读取模式"
             },
@@ -48,7 +49,8 @@ class FileReader(BaseAtomicTool):
             "max_bytes": {"type": "integer", "description": "最大读取字节数", "default": 200_000},
             "max_lines": {"type": "integer", "description": "最大行数(文本/CSV)", "default": 200},
             "rows": {"type": "integer", "description": "Excel/CSV 预览行数", "default": 100},
-            "sheet": {"type": "string", "description": "Excel sheet名或索引", "default": "0"}
+            "sheet": {"type": "string", "description": "Excel sheet名或索引", "default": "0"},
+            "max_pages": {"type": "integer", "description": "PDF最大读取页数", "default": 10}
         },
         "required": ["filename", "conversation_id"]
     }
@@ -80,6 +82,8 @@ class FileReader(BaseAtomicTool):
             return "csv"
         if ext in [".xls", ".xlsx"]:
             return "excel"
+        if ext == ".pdf":
+            return "pdf"
         if ext in [".png", ".jpg", ".jpeg"]:
             return "binary"  # image as binary meta
         return "binary"
@@ -170,6 +174,106 @@ class FileReader(BaseAtomicTool):
             pass
         return {"meta": meta}
 
+    def _read_pdf(self, path: Path, max_pages: int = 10) -> Dict[str, Any]:
+        """读取PDF文件内容（多方案fallback）
+
+        优先使用PyPDF2（纯Python，无系统依赖），如果失败则尝试pdfplumber（需要Poppler）
+
+        Args:
+            path: PDF文件路径
+            max_pages: 最多读取页数（避免大文件阻塞）
+
+        Returns:
+            包含文本内容、页数等信息的字典
+        """
+        result = {"filename": path.name, "type": "pdf"}
+
+        # 方案1: 优先使用 PyPDF2 (纯Python，无系统依赖)
+        try:
+            from PyPDF2 import PdfReader
+
+            reader = PdfReader(str(path))
+            total_pages = len(reader.pages)
+            read_pages = min(max_pages, total_pages)
+
+            text_parts = []
+            for i in range(read_pages):
+                try:
+                    page_text = reader.pages[i].extract_text()
+                    if page_text:
+                        text_parts.append(f"--- Page {i+1} ---\n{page_text}")
+                except Exception as e:
+                    text_parts.append(f"--- Page {i+1} ---\n[提取失败: {e}]")
+
+            result.update({
+                "content": "\n\n".join(text_parts),
+                "pages": total_pages,
+                "read_pages": read_pages,
+                "truncated": read_pages < total_pages,
+                "method": "PyPDF2"
+            })
+
+            logger.info(f"使用PyPDF2成功读取PDF: {path.name}, {total_pages}页")
+            return result
+
+        except ImportError:
+            logger.warning("PyPDF2未安装，尝试使用pdfplumber...")
+        except Exception as e:
+            logger.warning(f"PyPDF2读取失败: {e}，尝试使用pdfplumber...")
+
+        # 方案2: 尝试使用 pdfplumber (功能更强，但需要Poppler)
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(str(path)) as pdf:
+                total_pages = len(pdf.pages)
+                read_pages = min(max_pages, total_pages)
+
+                text_parts = []
+                for i in range(read_pages):
+                    try:
+                        page = pdf.pages[i]
+                        page_text = page.extract_text()
+                        if page_text:
+                            text_parts.append(f"--- Page {i+1} ---\n{page_text}")
+                    except Exception as e:
+                        text_parts.append(f"--- Page {i+1} ---\n[提取失败: {e}]")
+
+                result.update({
+                    "content": "\n\n".join(text_parts),
+                    "pages": total_pages,
+                    "read_pages": read_pages,
+                    "truncated": read_pages < total_pages,
+                    "method": "pdfplumber"
+                })
+
+                logger.info(f"使用pdfplumber成功读取PDF: {path.name}, {total_pages}页")
+                return result
+
+        except ImportError:
+            error_msg = (
+                "PDF读取失败: 缺少必要的Python库。\n"
+                "请安装: pip install PyPDF2 pdfplumber\n"
+                "注意: pdfplumber需要系统安装Poppler (macOS: brew install poppler)"
+            )
+            logger.error(error_msg)
+            return {"error": error_msg, "type": "pdf"}
+        except Exception as e:
+            error_msg = f"pdfplumber读取失败: {e}"
+            logger.error(error_msg)
+
+            # 提供详细的安装指导
+            if "poppler" in str(e).lower():
+                install_guide = (
+                    "\n\n系统缺少Poppler工具，请安装:\n"
+                    "macOS: brew install poppler\n"
+                    "Ubuntu/Debian: sudo apt-get install poppler-utils\n"
+                    "或者只使用PyPDF2 (pip install PyPDF2，无需系统依赖)"
+                )
+                error_msg += install_guide
+
+            return {"error": error_msg, "type": "pdf"}
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         filename: str = kwargs.get("filename")
         output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
@@ -179,6 +283,7 @@ class FileReader(BaseAtomicTool):
         max_lines: int = int(kwargs.get("max_lines") or 200)
         rows: int = int(kwargs.get("rows") or 100)
         sheet: str = str(kwargs.get("sheet") or "0")
+        max_pages: int = int(kwargs.get("max_pages") or 10)  # PDF最大页数
 
         if not output_dir_name:
             raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
@@ -199,6 +304,8 @@ class FileReader(BaseAtomicTool):
             data.update(self._read_csv(path, encoding, rows))
         elif file_mode == "excel":
             data.update(self._read_excel(path, sheet, rows))
+        elif file_mode == "pdf":
+            data.update(self._read_pdf(path, max_pages))
         else:
             data.update(self._read_binary(path))
 

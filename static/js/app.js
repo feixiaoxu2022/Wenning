@@ -559,7 +559,7 @@ async function loadConversation(convId) {
                 const data = await listResp.json();
                 if (data && Array.isArray(data.files) && data.files.length) {
                     const shown = new Set((ui.files || []).map(f => f.filename));
-                    const previewables = data.files.filter(fn => /\.(png|jpg|jpeg|xlsx|pptx|csv|html|pdf|json|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log)$/i.test(fn));
+                    const previewables = data.files.filter(fn => /\.(png|jpg|jpeg|xlsx|pptx|docx|doc|csv|html|pdf|json|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log)$/i.test(fn));
                     const missing = previewables.filter(fn => !shown.has(fn));
                     if (missing.length) {
                         console.log('[App] 兜底补充会话文件:', missing);
@@ -799,6 +799,48 @@ function bindEvents() {
             }
         });
     }
+
+    // 拖拽上传功能
+    const chatInputBox = document.querySelector('.chat-input-box');
+    const chatMessages = document.getElementById('chat-messages');
+
+    // 拖拽区域可以是输入框或消息区域
+    const dropZones = [chatInputBox, chatMessages].filter(Boolean);
+
+    dropZones.forEach(dropZone => {
+        // 阻止默认拖拽行为
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        // 拖拽进入时添加高亮效果
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.add('drag-over');
+            });
+        });
+
+        // 拖拽离开时移除高亮效果
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('drag-over');
+            });
+        });
+
+        // 文件放下时处理上传
+        dropZone.addEventListener('drop', async (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files && files.length > 0) {
+                console.log('[App] 拖拽上传文件:', files.length, '个文件');
+                await uploadFiles(files);
+            }
+        });
+    });
 }
 
 /**
@@ -1299,3 +1341,191 @@ function genClientId() {
     const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
     return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
 }
+
+// ==================== 用户反馈功能 ====================
+
+/**
+ * 反馈模态框管理
+ */
+const feedbackModal = {
+    overlay: null,
+    typeSelect: null,
+    contentTextarea: null,
+    contactInput: null,
+    submitBtn: null,
+    cancelBtn: null,
+    closeBtn: null,
+    successMsg: null,
+    errorMsg: null,
+
+    init() {
+        // 获取DOM元素
+        this.overlay = document.getElementById('feedback-overlay');
+        this.typeSelect = document.getElementById('feedback-type');
+        this.contentTextarea = document.getElementById('feedback-content');
+        this.contactInput = document.getElementById('feedback-contact');
+        this.submitBtn = document.getElementById('feedback-submit-btn');
+        this.cancelBtn = document.getElementById('feedback-cancel-btn');
+        this.closeBtn = document.getElementById('feedback-close');
+        this.successMsg = document.getElementById('feedback-success');
+        this.errorMsg = document.getElementById('feedback-error');
+
+        if (!this.overlay) {
+            console.warn('[Feedback] 反馈模态框未找到');
+            return;
+        }
+
+        // 绑定事件
+        const feedbackBtn = document.getElementById('feedback-btn');
+        if (feedbackBtn) {
+            feedbackBtn.addEventListener('click', () => this.open());
+        }
+
+        // 关闭按钮
+        if (this.closeBtn) {
+            this.closeBtn.addEventListener('click', () => this.close());
+        }
+
+        // 取消按钮
+        if (this.cancelBtn) {
+            this.cancelBtn.addEventListener('click', () => this.close());
+        }
+
+        // 提交按钮
+        if (this.submitBtn) {
+            this.submitBtn.addEventListener('click', () => this.submit());
+        }
+
+        // 点击遮罩关闭
+        this.overlay.addEventListener('click', (e) => {
+            if (e.target === this.overlay) {
+                this.close();
+            }
+        });
+
+        // ESC键关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.overlay.style.display !== 'none') {
+                this.close();
+            }
+        });
+
+        console.log('[Feedback] 反馈功能已初始化');
+    },
+
+    open() {
+        if (!this.overlay) return;
+
+        // 重置表单
+        this.reset();
+
+        // 显示模态框
+        this.overlay.style.display = 'flex';
+
+        // 聚焦到类型选择
+        if (this.typeSelect) {
+            setTimeout(() => this.typeSelect.focus(), 100);
+        }
+    },
+
+    close() {
+        if (!this.overlay) return;
+        this.overlay.style.display = 'none';
+        this.reset();
+    },
+
+    reset() {
+        // 重置表单
+        if (this.typeSelect) this.typeSelect.value = '';
+        if (this.contentTextarea) this.contentTextarea.value = '';
+        if (this.contactInput) this.contactInput.value = '';
+
+        // 隐藏消息
+        if (this.successMsg) this.successMsg.style.display = 'none';
+        if (this.errorMsg) this.errorMsg.style.display = 'none';
+
+        // 启用按钮
+        if (this.submitBtn) this.submitBtn.disabled = false;
+    },
+
+    showError(message) {
+        if (!this.errorMsg) return;
+        this.errorMsg.textContent = message;
+        this.errorMsg.style.display = 'block';
+        if (this.successMsg) this.successMsg.style.display = 'none';
+    },
+
+    showSuccess() {
+        if (!this.successMsg) return;
+        this.successMsg.style.display = 'block';
+        if (this.errorMsg) this.errorMsg.style.display = 'none';
+    },
+
+    async submit() {
+        // 验证必填项
+        const type = this.typeSelect?.value;
+        const content = this.contentTextarea?.value?.trim();
+
+        if (!type) {
+            this.showError('请选择反馈类型');
+            return;
+        }
+
+        if (!content) {
+            this.showError('请填写详细描述');
+            return;
+        }
+
+        if (content.length < 10) {
+            this.showError('描述内容至少需要10个字符');
+            return;
+        }
+
+        // 禁用提交按钮
+        if (this.submitBtn) this.submitBtn.disabled = true;
+
+        // 准备反馈数据
+        const feedbackData = {
+            type: type,
+            content: content,
+            contact: this.contactInput?.value?.trim() || '',
+            timestamp: new Date().toISOString(),
+            conversation_id: currentConversationId || '',
+            user_agent: navigator.userAgent
+        };
+
+        try {
+            // 发送反馈到后端
+            const response = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(feedbackData)
+            });
+
+            if (response.ok) {
+                // 提交成功
+                this.showSuccess();
+                console.log('[Feedback] 反馈提交成功');
+
+                // 2秒后自动关闭
+                setTimeout(() => this.close(), 2000);
+            } else {
+                // 后端返回错误
+                const error = await response.json().catch(() => ({}));
+                this.showError(error.message || '提交失败，请稍后重试');
+                if (this.submitBtn) this.submitBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('[Feedback] 提交失败:', error);
+            this.showError('网络错误，请稍后重试');
+            if (this.submitBtn) this.submitBtn.disabled = false;
+        }
+    }
+};
+
+// 页面加载后初始化反馈功能
+document.addEventListener('DOMContentLoaded', () => {
+    feedbackModal.init();
+});

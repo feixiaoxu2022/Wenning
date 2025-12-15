@@ -23,6 +23,7 @@
                     <!-- 动态加载 -->
                 </select>
                 <button id="theme-toggle" class="theme-toggle" title="Toggle Theme">🌙</button>
+                <button id="feedback-btn" class="feedback-btn" title="Feedback">💬</button>
                 <div class="account" id="account">
                     <button id="account-btn" class="account-btn" title="Account">👤</button>
                     <div id="account-menu" class="account-menu" style="display:none;">
@@ -197,6 +198,50 @@
             <div class="auth-actions">
                 <button id="auth-login-btn" class="primary">Sign In</button>
                 <button id="auth-register-btn" class="secondary">Create Account</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div class="feedback-overlay" id="feedback-overlay" style="display:none;">
+        <div class="feedback-modal">
+            <button class="feedback-close" id="feedback-close">✕</button>
+            <div class="feedback-title">💬 用户反馈</div>
+            <div class="feedback-subtitle">告诉我们您的需求和建议</div>
+
+            <div class="feedback-field">
+                <label>反馈类型 <span class="required">*</span></label>
+                <select id="feedback-type">
+                    <option value="">请选择...</option>
+                    <option value="feature">功能需求</option>
+                    <option value="bug">问题报告</option>
+                    <option value="improvement">改进建议</option>
+                    <option value="other">其他</option>
+                </select>
+            </div>
+
+            <div class="feedback-field">
+                <label>详细描述 <span class="required">*</span></label>
+                <textarea id="feedback-content"
+                          placeholder="请详细描述您的需求或遇到的问题..."
+                          rows="6"></textarea>
+            </div>
+
+            <div class="feedback-field">
+                <label>联系方式（可选）</label>
+                <input type="text"
+                       id="feedback-contact"
+                       placeholder="邮箱或其他联系方式（以便我们跟进）" />
+            </div>
+
+            <div class="feedback-success" id="feedback-success" style="display:none;">
+                ✓ 感谢您的反馈！我们会认真处理您的意见。
+            </div>
+            <div class="feedback-error" id="feedback-error" style="display:none;"></div>
+
+            <div class="feedback-actions">
+                <button id="feedback-submit-btn" class="primary">提交反馈</button>
+                <button id="feedback-cancel-btn" class="secondary">取消</button>
             </div>
         </div>
     </div>

@@ -828,6 +828,102 @@ async def preview_excel_scoped(
         return JSONResponse(status_code=500, content={"error": f"预览失败: {str(e)}"})
 
 
+@app.get("/preview/word/{conversation_id}/{filename}")
+async def preview_word(
+    conversation_id: str,
+    filename: str,
+    user: str = Depends(require_user())
+):
+    """Word文件预览接口（.doc/.docx）- 使用mammoth转换为HTML"""
+    conv = conv_manager.get_conversation(conversation_id, username=user)
+    if not conv:
+        logger.warning(f"Word预览失败: 会话 {conversation_id} 不存在或用户 {user} 无权限")
+        return JSONResponse(status_code=404, content={"error": "会话不存在或无权限"})
+
+    # 使用带时间戳的输出目录名
+    output_dir_name = conv_manager.get_output_dir_name(conversation_id)
+    file_path = Path("outputs") / output_dir_name / filename
+
+    logger.info(f"Word预览: conversation_id={conversation_id}, output_dir={output_dir_name}, file_path={file_path}")
+
+    if not file_path.exists():
+        logger.warning(f"Word预览失败: 文件不存在 {file_path}")
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"文件不存在: {filename}"}
+        )
+
+    try:
+        import mammoth
+
+        # 使用mammoth转换Word为HTML
+        with open(file_path, "rb") as docx_file:
+            result = mammoth.convert_to_html(docx_file)
+            html_content = result.value  # 生成的HTML
+            messages = result.messages  # 转换警告/错误
+
+        # 记录转换警告
+        if messages:
+            for msg in messages:
+                logger.warning(f"Word转换警告: {msg}")
+
+        return JSONResponse(content={
+            "html": html_content,
+            "warnings": [str(msg) for msg in messages] if messages else []
+        })
+
+    except ImportError:
+        logger.error("mammoth库未安装，无法预览Word文档")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "服务器缺少Word预览支持，请联系管理员"}
+        )
+    except Exception as e:
+        logger.error(f"Word预览失败: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"预览失败: {str(e)}"})
+
+
+@app.get("/preview/word/{filename}")
+async def preview_word_legacy(filename: str):
+    """Word文件预览接口（根outputs目录 - 兼容旧链接）"""
+    file_path = Path("outputs") / filename
+
+    if not file_path.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"文件不存在: {filename}"}
+        )
+
+    try:
+        import mammoth
+
+        # 使用mammoth转换Word为HTML
+        with open(file_path, "rb") as docx_file:
+            result = mammoth.convert_to_html(docx_file)
+            html_content = result.value
+            messages = result.messages
+
+        # 记录转换警告
+        if messages:
+            for msg in messages:
+                logger.warning(f"Word转换警告: {msg}")
+
+        return JSONResponse(content={
+            "html": html_content,
+            "warnings": [str(msg) for msg in messages] if messages else []
+        })
+
+    except ImportError:
+        logger.error("mammoth库未安装，无法预览Word文档")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "服务器缺少Word预览支持，请联系管理员"}
+        )
+    except Exception as e:
+        logger.error(f"Word预览失败: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"预览失败: {str(e)}"})
+
+
 @app.get("/models")
 async def list_models():
     """获取可用模型列表"""
@@ -1110,6 +1206,76 @@ async def workspace_user_all(user: str = Depends(require_user())):
     except Exception as e:
         logger.error(f"workspace_user_all失败: {e}")
         return JSONResponse(status_code=500, content={"error": "获取用户文件失败"})
+
+
+# ==================== 用户反馈 API ====================
+
+@app.post("/api/feedback")
+async def submit_feedback(
+    request: Request,
+    user: str = Depends(require_user())
+):
+    """
+    接收用户反馈
+
+    请求体示例:
+    {
+        "type": "feature",
+        "content": "希望增加XXX功能",
+        "contact": "user@example.com",
+        "timestamp": "2024-01-01T12:00:00Z",
+        "conversation_id": "conv123",
+        "user_agent": "Mozilla/5.0..."
+    }
+    """
+    try:
+        data = await request.json()
+
+        # 验证必填字段
+        if not data.get('type'):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "反馈类型不能为空"}
+            )
+
+        if not data.get('content') or len(data.get('content', '').strip()) < 10:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "反馈内容至少需要10个字符"}
+            )
+
+        # 准备反馈数据
+        feedback_entry = {
+            "username": user,
+            "type": data.get('type'),
+            "content": data.get('content'),
+            "contact": data.get('contact', ''),
+            "timestamp": data.get('timestamp'),
+            "conversation_id": data.get('conversation_id', ''),
+            "user_agent": data.get('user_agent', '')
+        }
+
+        # 保存到文件（追加模式）
+        feedback_file = Path("outputs") / "feedback.jsonl"
+        try:
+            with open(feedback_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(feedback_entry, ensure_ascii=False) + '\n')
+            logger.info(f"收到用户反馈 [{user}] - {data.get('type')}")
+        except Exception as e:
+            logger.error(f"保存反馈失败: {e}")
+            # 即使保存失败也返回成功，避免影响用户体验
+
+        return JSONResponse(content={
+            "success": True,
+            "message": "感谢您的反馈！"
+        })
+
+    except Exception as e:
+        logger.error(f"处理反馈失败: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "提交反馈失败，请稍后重试"}
+        )
 
 
 if __name__ == "__main__":

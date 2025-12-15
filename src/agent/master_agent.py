@@ -1209,7 +1209,6 @@ class MasterAgent:
 {chr(10).join(f'- {t}' for t in video_tools)}
 
 **选择建议**:
-- 自然场景短视频 → video_generation_minimax（AI生成6秒视频）
 - 数据动画/算法演示 → code_executor + matplotlib.animation
 - 视频剪辑/字幕特效 → code_executor + moviepy
 

@@ -11,6 +11,7 @@ class UI {
         this.sendBtn = document.getElementById('send-btn');
         this.attachmentsStrip = document.getElementById('attachments-strip');
         this.pendingAttachments = [];
+        this.attachmentsExpanded = false; // 附件是否展开显示
         // 输出文件基础URL，默认根目录；app在切换对话时设置为 /outputs/{conversationId}
         this.outputsBaseUrl = '/outputs';
 
@@ -280,21 +281,92 @@ class UI {
         // 去重
         if (this.pendingAttachments.includes(filename)) return;
         this.pendingAttachments.push(filename);
+        this.renderAttachmentsStrip();
+    }
 
+    // 渲染附件条（支持省略号展示）
+    renderAttachmentsStrip() {
+        if (!this.attachmentsStrip) return;
+
+        // 清空现有内容
+        this.attachmentsStrip.innerHTML = '';
+
+        const totalCount = this.pendingAttachments.length;
+        const maxVisible = 5;
+
+        // 决定显示哪些附件
+        let displayAttachments = [];
+        let showEllipsis = false;
+
+        if (totalCount <= maxVisible || this.attachmentsExpanded) {
+            // 显示全部
+            displayAttachments = this.pendingAttachments;
+        } else {
+            // 显示前4个 + 省略号
+            displayAttachments = this.pendingAttachments.slice(0, 4);
+            showEllipsis = true;
+        }
+
+        // 渲染每个附件chip
+        displayAttachments.forEach(filename => {
+            const chip = this._createAttachmentChipElement(filename);
+            this.attachmentsStrip.appendChild(chip);
+        });
+
+        // 添加省略号chip
+        if (showEllipsis) {
+            const ellipsisChip = document.createElement('div');
+            ellipsisChip.className = 'attachment-chip attachment-ellipsis';
+            ellipsisChip.innerHTML = `
+                <div class="att-icon" style="background: rgba(100,116,139,0.1);">
+                    <div style="font-size: 18px; color: #64748b;">+${totalCount - 4}</div>
+                </div>
+            `;
+            ellipsisChip.title = `点击查看全部 ${totalCount} 个附件`;
+            ellipsisChip.addEventListener('click', () => {
+                this.attachmentsExpanded = true;
+                this.renderAttachmentsStrip();
+            });
+            this.attachmentsStrip.appendChild(ellipsisChip);
+        }
+
+        this.updateAttachmentsPresence();
+    }
+
+    // 创建单个附件chip元素
+    _createAttachmentChipElement(filename) {
         const chip = document.createElement('div');
         chip.className = 'attachment-chip';
         chip.dataset.filename = filename;
 
         const enc = encodeURIComponent(filename);
-        // 强制使用会话ID路径（无会话ID时报错，避免静默失败）
         if (!this.currentConvId) {
-            console.error('[UI] addAttachmentChip: 缺少currentConvId');
-            return;
+            console.error('[UI] _createAttachmentChipElement: 缺少currentConvId');
+            return chip;
         }
         const src = `/outputs/${encodeURIComponent(this.currentConvId)}/${enc}`;
-        const img = document.createElement('img');
-        img.src = src;
-        chip.appendChild(img);
+
+        // 根据文件类型决定显示方式
+        const ext = filename.toLowerCase().match(/\.([^.]+)$/)?.[1] || '';
+        const isImage = /^(jpg|jpeg|png|gif|svg|webp|avif|bmp)$/.test(ext);
+
+        // 设置文件类型
+        const fileType = this._getFileType(ext);
+        chip.dataset.type = fileType;
+
+        if (isImage) {
+            // 图片文件：显示缩略图
+            const img = document.createElement('img');
+            img.src = src;
+            img.onerror = () => {
+                // 图片加载失败时，也显示图标
+                img.replaceWith(this._createFileIcon(filename));
+            };
+            chip.appendChild(img);
+        } else {
+            // 非图片文件：显示文件类型图标
+            chip.appendChild(this._createFileIcon(filename));
+        }
 
         const rm = document.createElement('button');
         rm.className = 'att-remove';
@@ -311,17 +383,83 @@ class UI {
         name.textContent = filename;
         chip.appendChild(name);
 
-        this.attachmentsStrip.appendChild(chip);
-        this.updateAttachmentsPresence();
+        return chip;
+    }
+
+    // 获取文件类型
+    _getFileType(ext) {
+        if (/^(jpg|jpeg|png|gif|svg|webp|avif|bmp)$/.test(ext)) {
+            return 'image';
+        } else if (/^(pdf)$/.test(ext)) {
+            return 'pdf';
+        } else if (/^(doc|docx)$/.test(ext)) {
+            return 'word';
+        } else if (/^(txt|md)$/.test(ext)) {
+            return 'text';
+        } else if (/^(ppt|pptx)$/.test(ext)) {
+            return 'presentation';
+        } else if (/^(xls|xlsx|csv)$/.test(ext)) {
+            return 'spreadsheet';
+        } else if (/^(zip|rar|7z|tar|gz)$/.test(ext)) {
+            return 'archive';
+        } else if (/^(mp3|wav|m4a|aac|ogg|flac)$/.test(ext)) {
+            return 'audio';
+        } else if (/^(mp4|webm|mov|avi|mkv)$/.test(ext)) {
+            return 'video';
+        } else {
+            return 'other';
+        }
+    }
+
+    // 创建文件类型图标
+    _createFileIcon(filename) {
+        const ext = filename.toLowerCase().match(/\.([^.]+)$/)?.[1] || '';
+        const fileType = this._getFileType(ext);
+
+        // 根据文件类型选择图标路径
+        let iconPath = '';
+        if (fileType === 'image') {
+            iconPath = 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m14-7l-5-5m0 0L7 8m5-5v12';
+        } else if (fileType === 'pdf') {
+            // PDF文件图标 - 带PDF标识
+            iconPath = 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z';
+        } else if (fileType === 'word') {
+            // Word文档图标 - 文字文档
+            iconPath = 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z';
+        } else if (fileType === 'text') {
+            // 纯文本图标 - 简单文本行
+            iconPath = 'M9 12h6M9 16h6M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z';
+        } else if (fileType === 'presentation') {
+            // PPT演示文稿图标 - 幻灯片样式
+            iconPath = 'M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2zm0 4h10M7 11h10m-7 4h4';
+        } else if (fileType === 'spreadsheet') {
+            iconPath = 'M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z';
+        } else if (fileType === 'archive') {
+            iconPath = 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4';
+        } else if (fileType === 'audio') {
+            iconPath = 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3';
+        } else if (fileType === 'video') {
+            iconPath = 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z';
+        } else {
+            iconPath = 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z';
+        }
+
+        const container = document.createElement('div');
+        container.className = 'att-icon';
+        container.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="${iconPath}"/>
+            </svg>
+        `;
+
+        return container;
     }
 
     // 附件缩略图：移除
     removeAttachmentChip(filename) {
         if (!this.attachmentsStrip || !filename) return;
         this.pendingAttachments = this.pendingAttachments.filter(n => n !== filename);
-        const el = this.attachmentsStrip.querySelector(`.attachment-chip[data-filename="${CSS.escape(filename)}"]`);
-        if (el) el.remove();
-        this.updateAttachmentsPresence();
+        this.renderAttachmentsStrip();
     }
 
     async removeAttachmentAndDelete(filename) {
@@ -364,6 +502,7 @@ class UI {
     // 清空所有附件缩略图
     clearAllAttachments() {
         this.pendingAttachments = [];
+        this.attachmentsExpanded = false; // 重置展开状态
         if (this.attachmentsStrip) {
             this.attachmentsStrip.innerHTML = '';
         }
@@ -435,6 +574,7 @@ class UI {
         const lower = (filename || '').toLowerCase();
         if (lower.endsWith('.xlsx') || lower.endsWith('.csv')) return this.addFileTab(filename, 'excel');
         if (lower.endsWith('.pptx')) return this.addFileTab(filename, 'pptx');
+        if (/\.(doc|docx)$/.test(lower)) return this.addFileTab(filename, 'word');
         if (/(\.png|\.jpg|\.jpeg|\.svg|\.gif|\.webp|\.avif)$/.test(lower)) return this.addFileTab(filename, 'image');
         if (/(\.mp3|\.wav|\.m4a|\.aac|\.ogg|\.flac)$/.test(lower)) return this.addFileTab(filename, 'audio');
         if (/(\.mp4|\.webm|\.mov)$/.test(lower)) return this.addFileTab(filename, 'video');
@@ -1082,6 +1222,9 @@ class UI {
                 } else if (filename.toLowerCase().endsWith('.pptx')) {
                     console.log(`[UI] Adding PPTX tab: ${filename}`);
                     this.addFileTab(filename, 'pptx', key);
+                } else if (filename.match(/\.(doc|docx)$/i)) {
+                    console.log(`[UI] Adding Word tab: ${filename}`);
+                    this.addFileTab(filename, 'word', key);
                 } else if (filename.match(/\.(png|jpg|jpeg|svg|gif|webp|avif)$/i)) {
                     console.log(`[UI] Adding Image tab: ${filename}`);
                     this.addFileTab(filename, 'image', key);
@@ -1170,6 +1313,8 @@ class UI {
             this.loadExcelIntoContainer(filename, contentDiv);
         } else if (type === 'pptx') {
             this.loadPptxIntoContainer(filename, contentDiv);
+        } else if (type === 'word') {
+            this.loadWordIntoContainer(filename, contentDiv);
         } else if (type === 'image') {
             this.loadImageIntoContainer(filename, contentDiv);
         } else if (type === 'audio') {
@@ -1233,24 +1378,76 @@ class UI {
         // 清空现有标签
         this.fileTabs.innerHTML = '';
 
-        // 定义文件分组配置
+        // SVG 图标生成函数（与 workspace 保持一致）
+        const icon = (p) => `<svg class="file-group-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+        // 定义文件分组配置（与 workspace 保持一致）
         const groups = {
-            image: { label: '📷 图片', types: ['image'], files: [] },
-            video: { label: '🎬 视频', types: ['video'], files: [] },
-            audio: { label: '🎵 音频', types: ['audio'], files: [] },
-            document: { label: '📊 文档', types: ['excel', 'pptx', 'pdf'], files: [] },
-            webpage: { label: '🌐 网页', types: ['webpage', 'html'], files: [] },
-            text: { label: '📝 文本/代码', types: ['text', 'json', 'jsonl', 'markdown'], files: [] }
+            image: {
+                label: 'Images',
+                icon: icon('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-4-4-3 3-2-2-4 4"/>'),
+                types: ['image'],
+                files: []
+            },
+            video: {
+                label: 'Videos',
+                icon: icon('<rect x="3" y="3" width="18" height="18" rx="2"/><polygon points="10 8 16 12 10 16 10 8"/>'),
+                types: ['video'],
+                files: []
+            },
+            table: {
+                label: 'Sheets',
+                icon: icon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h10M7 12h10M7 17h10"/>'),
+                types: ['excel'],
+                files: []
+            },
+            document: {
+                label: 'Docs',
+                icon: icon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12V7z"/><path d="M14 3v4h4"/>'),
+                types: ['word', 'pdf', 'markdown'],
+                files: []
+            },
+            audio: {
+                label: 'Audio',
+                icon: icon('<path d="M9 18V6l8-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/>'),
+                types: ['audio'],
+                files: []
+            },
+            code: {
+                label: 'Code',
+                icon: icon('<polyline points="7 8 3 12 7 16"/><polyline points="17 8 21 12 17 16"/>'),
+                types: ['text', 'json', 'jsonl', 'html'],
+                files: []
+            },
+            webpage: {
+                label: 'Web',
+                icon: icon('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'),
+                types: ['webpage', 'pptx'],
+                files: []
+            },
+            other: {
+                label: 'Others',
+                icon: icon('<path d="M3 7h5l2 3h11v9a2 2 0 0 1-2 2H3z"/><path d="M3 7V5a2 2 0 0 1 2-2h6l2 2h6a2 2 0 0 1 2 2v3"/>'),
+                types: [],
+                files: []
+            }
         };
 
         // 将文件分类到各个分组
         this.files.forEach((file, index) => {
             file.index = index;  // 保存原始索引
+            let matched = false;
             for (const groupKey in groups) {
+                if (groupKey === 'other') continue; // 跳过"其他"分组，最后处理
                 if (groups[groupKey].types.includes(file.type)) {
                     groups[groupKey].files.push(file);
+                    matched = true;
                     break;
                 }
+            }
+            // 未匹配到任何分组的文件归入"其他"
+            if (!matched) {
+                groups.other.files.push(file);
             }
         });
 
@@ -1263,7 +1460,7 @@ class UI {
             const groupHeader = document.createElement('div');
             groupHeader.className = 'file-group-header';
             groupHeader.innerHTML = `
-                <span class="file-group-title">${group.label}</span>
+                <span class="file-group-title">${group.icon}<span>${group.label}</span></span>
                 <span class="file-group-count">${group.files.length}</span>
             `;
             this.fileTabs.appendChild(groupHeader);
@@ -1762,6 +1959,105 @@ class UI {
         const delBtn = container.querySelector('.file-delete');
         if (delBtn) {
             delBtn.addEventListener('click', async (e) => { e.preventDefault(); await this.deleteFile(filename); });
+        }
+    }
+
+    /** 加载Word文件到指定容器（使用后端mammoth转换） */
+    async loadWordIntoContainer(filename, container) {
+        // 强制要求会话ID，不允许兜底
+        if (!this.currentConvId) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">错误: 当前无会话ID，无法加载文件</div>';
+            console.error('[UI] 无会话ID，无法加载Word:', filename);
+            return;
+        }
+
+        const encoded = encodeURIComponent(filename);
+        const downloadUrl = `${this.outputsBaseUrl}/${encoded}`;
+
+        // 显示加载中
+        container.innerHTML = `
+            <div class="word-preview-container">
+                <div class="preview-info">
+                    <div style="display:flex; justify-content: space-between; align-items:center;">
+                        <h4>${filename}</h4>
+                        <div style="display:flex; gap:12px; align-items:center;">
+                            <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
+                            <a href="${downloadUrl}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+                            <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:20px; text-align:center; color:var(--muted);">
+                    <div style="margin-bottom:12px;">📄 正在加载Word文档...</div>
+                </div>
+            </div>
+        `;
+
+        try {
+            // 调用后端API转换Word为HTML
+            const previewUrl = `/preview/word/${encodeURIComponent(this.currentConvId)}/${encoded}`;
+            const response = await fetch(previewUrl);
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // 渲染转换后的HTML
+            container.innerHTML = `
+                <div class="word-preview-container">
+                    <div class="preview-info">
+                        <div style="display:flex; justify-content: space-between; align-items:center;">
+                            <h4>${filename}</h4>
+                            <div style="display:flex; gap:12px; align-items:center;">
+                                <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
+                                <a href="${downloadUrl}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+                                <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
+                            </div>
+                        </div>
+                    </div>
+                    ${data.warnings && data.warnings.length > 0 ? `
+                        <div style="padding:10px 16px; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; margin:12px 16px; font-size:13px; color:#856404;">
+                            ⚠️ 转换警告: ${data.warnings.join('; ')}
+                        </div>
+                    ` : ''}
+                    <div class="word-content markdown-content" style="padding:16px; background:var(--bg); border:1px solid var(--border); border-radius:8px; margin:12px; max-height:70vh; overflow:auto;">
+                        ${data.html || '<div style="padding:20px; text-align:center; color:var(--muted);">文档内容为空</div>'}
+                    </div>
+                </div>
+            `;
+
+            // 绑定按钮事件
+            const saveBtn = container.querySelector('.workspace-save');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', (e) => { e.preventDefault(); this.workspaceSave(filename, saveBtn); });
+            }
+            const delBtn = container.querySelector('.file-delete');
+            if (delBtn) {
+                delBtn.addEventListener('click', async (e) => { e.preventDefault(); await this.deleteFile(filename); });
+            }
+
+        } catch (error) {
+            console.error('[UI] Word预览失败:', error);
+            container.innerHTML = `
+                <div class="word-preview-container">
+                    <div class="preview-info">
+                        <div style="display:flex; justify-content: space-between; align-items:center;">
+                            <h4>${filename}</h4>
+                            <div style="display:flex; gap:12px; align-items:center;">
+                                <a href="${downloadUrl}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="error-box" style="margin:16px;">
+                        <span class="error-label">预览失败:</span>
+                        <div>${error.message || error}</div>
+                        <div style="margin-top:12px; font-size:13px;">请下载文件后使用 Microsoft Word、LibreOffice 或其他兼容软件查看。</div>
+                    </div>
+                </div>
+            `;
         }
     }
 
