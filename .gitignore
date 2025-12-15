@@ -83,6 +83,7 @@ debug_*.py
 run_*.py
 test_*.py
 test_*.mp3
+test_*.png
 check_*.py
 diagnose_*.py
 verify_*.py
@@ -96,6 +97,9 @@ response_*.json
 my_voice_config.json
 user_preferences.json
 cloned_voice_sample_*.mp3
+*_test_*.png
+gemini_*.png
+Gemini*.png
 
 # Temporary and generated files
 move_tests.sh
