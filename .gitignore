@@ -65,6 +65,9 @@ samples/
 .chainlit/
 *.pid
 .server.pid
+prompt_templates/
+static/showcase/
+static/js/showcase.js
 
 # Development and testing (不提交到GitHub)
 tests/
@@ -78,10 +81,21 @@ schemas/
 # Root directory files to exclude
 debug_*.py
 run_*.py
+test_*.py
+test_*.mp3
+check_*.py
+diagnose_*.py
+verify_*.py
+clone_*.py
+move_*.py
 *.sh
 pytest.ini
 server.log
 apiinfo.md
+response_*.json
+my_voice_config.json
+user_preferences.json
+cloned_voice_sample_*.mp3
 
 # Temporary and generated files
 move_tests.sh
