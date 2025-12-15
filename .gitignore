@@ -67,6 +67,7 @@ samples/
 .server.pid
 prompt_templates/
 static/showcase/
+media/
 static/js/showcase.js
 
 # Development and testing (不提交到GitHub)
