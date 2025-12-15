@@ -60,17 +60,21 @@ class TTSLocal(BaseAtomicTool):
             fmt: str = (kwargs.get("format") or "wav").lower()
             filename: Optional[str] = kwargs.get("filename")
             conv_id: str = kwargs.get("conversation_id")
+            output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
             timeout: int = int(kwargs.get("timeout") or self.timeout)
 
             if not text:
                 return {"status": "failed", "error": "text不能为空"}
             if not conv_id:
                 return {"status": "failed", "error": "conversation_id缺失"}
+            if not output_dir_name:
+                return {"status": "failed", "error": "缺少_output_dir_name参数（应由master_agent自动注入）"}
 
             # 规范化会话ID（防止传入 'outputs/<id>' 或包含路径）
             from pathlib import Path as _P
             conv_id = _P(str(conv_id)).name
-            work_dir = self.output_dir / conv_id
+
+            work_dir = self.output_dir / output_dir_name
             work_dir.mkdir(parents=True, exist_ok=True)
 
             sysname = platform.system().lower()

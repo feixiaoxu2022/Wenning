@@ -119,7 +119,8 @@ class ConversationManagerV2:
             "created_at": now,
             "updated_at": now,
             "messages": [],
-            "user": username
+            "user": username,
+            "pending_images": []  # 待附加的图片列表
         }
 
         # 保存对话文件
@@ -518,4 +519,73 @@ class ConversationManagerV2:
         self.index[conv_id]["model"] = model
         self.index[conv_id]["updated_at"] = now
         self._save_index()
+        return True
+
+    # ===== Pending Images Management =====
+
+    def add_pending_image(self, conv_id: str, image_path: str, username: str | None = None) -> bool:
+        """添加待附加的图片到pending_images列表
+
+        Args:
+            conv_id: 对话ID
+            image_path: 图片文件路径（相对于outputs目录）
+            username: 用户名（权限校验）
+
+        Returns:
+            是否成功
+        """
+        conv = self.get_conversation(conv_id, username=username)
+        if not conv:
+            return False
+
+        # 确保pending_images字段存在
+        if "pending_images" not in conv:
+            conv["pending_images"] = []
+
+        # 添加图片路径
+        if image_path not in conv["pending_images"]:
+            conv["pending_images"].append(image_path)
+
+        # 保存对话文件
+        conv_path = self._get_conv_path(conv_id)
+        self._save_conversation_file(conv_path, conv)
+
+        return True
+
+    def get_pending_images(self, conv_id: str, username: str | None = None) -> List[str]:
+        """获取待附加的图片列表
+
+        Args:
+            conv_id: 对话ID
+            username: 用户名（权限校验）
+
+        Returns:
+            图片路径列表
+        """
+        conv = self.get_conversation(conv_id, username=username)
+        if not conv:
+            return []
+
+        return conv.get("pending_images", [])
+
+    def clear_pending_images(self, conv_id: str, username: str | None = None) -> bool:
+        """清空pending_images列表
+
+        Args:
+            conv_id: 对话ID
+            username: 用户名（权限校验）
+
+        Returns:
+            是否成功
+        """
+        conv = self.get_conversation(conv_id, username=username)
+        if not conv:
+            return False
+
+        conv["pending_images"] = []
+
+        # 保存对话文件
+        conv_path = self._get_conv_path(conv_id)
+        self._save_conversation_file(conv_path, conv)
+
         return True

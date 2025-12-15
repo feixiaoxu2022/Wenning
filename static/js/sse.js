@@ -30,7 +30,7 @@ class SSEClient {
      * @param {string} model - 模型名称
      * @param {string} conversationId - 对话ID
      */
-    send(message, model = 'gpt-5', conversationId, clientMsgId) {
+    send(message, model = 'gpt-5.2', conversationId, clientMsgId) {
         // 关闭之前的连接
         this.close();
 
@@ -119,7 +119,14 @@ class SSEClient {
                 break;
 
             case 'exec':
-                if (this.onExec) this.onExec(update);
+                console.log('[SSE] exec case: this.onExec存在?', !!this.onExec);
+                if (this.onExec) {
+                    console.log('[SSE] 即将调用onExec');
+                    this.onExec(update);
+                    console.log('[SSE] onExec调用完成');
+                } else {
+                    console.error('[SSE] this.onExec不存在！');
+                }
                 break;
 
             case 'progress':
@@ -160,7 +167,7 @@ class SSEClient {
             case 'files_generated':
                 console.log('[SSE] 处理files_generated消息:', update.files);
                 if (this.onFilesGenerated) this.onFilesGenerated(update.files, update.iter);
-                if (this.onExec) this.onExec({iter: update.iter, phase: 'files', files: update.files, ts: update.ts});
+                // 注意：不再调用onExec，避免重复显示（onFilesGenerated中已调用appendFilesGenerated）
                 break;
 
             case 'plan_update':

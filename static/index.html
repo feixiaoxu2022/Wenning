@@ -11,6 +11,12 @@
     <header class="header">
         <div class="header-content">
             <h1 class="title">Wenning</h1>
+
+            <!-- Showcase Buttons -->
+            <div class="showcase-buttons" id="showcase-buttons">
+                <!-- 动态加载showcase按钮 -->
+            </div>
+
             <div class="model-selector">
                 <label for="model-select">Model</label>
                 <select id="model-select">
@@ -27,6 +33,48 @@
             </div>
         </div>
     </header>
+
+    <!-- Showcase Modal -->
+    <div class="showcase-modal" id="showcase-modal">
+        <div class="showcase-modal-overlay" id="showcase-modal-overlay"></div>
+        <div class="showcase-modal-content">
+            <button class="showcase-modal-close" id="showcase-modal-close">✕</button>
+            <div class="showcase-modal-body">
+                <!-- Left: Prompt Card -->
+                <div class="showcase-prompt-section">
+                    <div class="showcase-prompt-header">
+                        <h3 id="showcase-case-title">示例标题</h3>
+                        <p id="showcase-case-description">示例描述</p>
+                    </div>
+                    <div class="showcase-prompt-card">
+                        <div class="showcase-prompt-toolbar">
+                            <span class="showcase-prompt-label">Prompt</span>
+                            <div class="showcase-prompt-actions">
+                                <button class="showcase-btn showcase-btn-secondary" id="showcase-copy-btn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                    复制
+                                </button>
+                                <button class="showcase-btn showcase-btn-primary" id="showcase-try-btn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                                    试试
+                                </button>
+                            </div>
+                        </div>
+                        <pre class="showcase-prompt-content" id="showcase-prompt-content"></pre>
+                    </div>
+                </div>
+                <!-- Right: Preview Section -->
+                <div class="showcase-preview-section">
+                    <div class="showcase-preview-header">
+                        <h3>交付物预览</h3>
+                    </div>
+                    <div class="showcase-preview-container" id="showcase-preview-container">
+                        <div class="showcase-preview-placeholder">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Container -->
     <div class="main-container center-mode">
@@ -160,8 +208,9 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
     <!-- Scripts -->
-    <script src="/static/js/sse.js?v=20251201-3"></script>
-    <script src="/static/js/ui.js?v=20251201-3"></script>
-    <script src="/static/js/app.js?v=20251201-3"></script>
+    <script src="/static/js/sse.js?v=20251212-fix"></script>
+    <script src="/static/js/ui.js?v=20251212-fix"></script>
+    <script src="/static/js/showcase.js?v=20251212"></script>
+    <script src="/static/js/app.js?v=20251212-fix"></script>
 </body>
 </html>

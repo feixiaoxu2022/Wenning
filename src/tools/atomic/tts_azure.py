@@ -64,6 +64,7 @@ class TTSAzure(BaseAtomicTool):
         try:
             text: str = (kwargs.get("text") or "").strip()
             conv_id: str = kwargs.get("conversation_id")
+            output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
             voice_name: Optional[str] = kwargs.get("voice_name") or "zh-CN-XiaoxiaoNeural"
             rate: float = float(kwargs.get("speaking_rate") or 1.0)
             pitch: float = float(kwargs.get("pitch") or 0.0)
@@ -74,6 +75,8 @@ class TTSAzure(BaseAtomicTool):
                 return {"status": "failed", "error": "text不能为空"}
             if not conv_id:
                 return {"status": "failed", "error": "conversation_id缺失"}
+            if not output_dir_name:
+                return {"status": "failed", "error": "缺少_output_dir_name参数（应由master_agent自动注入）"}
 
             # 规范化会话ID
             from pathlib import Path as _P
@@ -91,7 +94,7 @@ class TTSAzure(BaseAtomicTool):
                 return {"status": "failed", "error": f"缺少依赖 azure-cognitiveservices-speech，请安装: {e}"}
 
             # 输出文件与目录
-            work_dir = self.output_dir / conv_id
+            work_dir = self.output_dir / output_dir_name
             work_dir.mkdir(parents=True, exist_ok=True)
             if not filename:
                 filename = f"narration.{fmt}"

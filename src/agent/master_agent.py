@@ -38,32 +38,43 @@ class MasterAgent:
     4. 处理工具调用结果,反馈给LLM继续决策
     """
 
-    def __init__(self, config: Config, tool_registry: ToolRegistry, model_name: str = "glm-4.5"):
+    def __init__(self, config: Config, tool_registry: ToolRegistry, model_name: str = "glm-4.5", conv_manager=None):
         """初始化Master Agent
 
         Args:
             config: 全局配置
             tool_registry: 工具注册中心
             model_name: 使用的LLM模型
+            conv_manager: 对话管理器（用于路径转换）
         """
         self.config = config
         self.llm = LLMClient(config, model_name)
         self.tool_registry = tool_registry
         self.state = AgentState.IDLE
-        self.max_iterations = 30  # 最大ReAct迭代次数
+        self.max_iterations = 100  # 最大ReAct迭代次数
         self.conversation_history = []  # 多轮对话历史
         self.current_conversation_id = None
         self.message_callback = None  # 消息保存回调函数
+        self.conv_manager = conv_manager  # 对话管理器
 
-        # 初始化Context Manager
+        # 初始化Context Manager（自动识别模型context window大小）
         self.context_manager = ContextManager(
-            model_name=model_name,
-            max_tokens=128000  # 默认128K上下文窗口
+            model_name=model_name
+            # max_tokens参数已移除，将自动根据模型名称推断：
+            # - Claude系列: 200K
+            # - Gemini 1.5: 1M
+            # - GPT-4 Turbo/4o: 128K
+            # - GLM-4/Deepseek: 128K
         )
 
         logger.info(f"MasterAgent初始化完成: model={model_name}, tools={len(tool_registry.list_tools())}")
 
     def _filter_existing_files(self, files):
+        """过滤文件列表，保留在线URL和本地文件
+
+        注意：不再检查文件是否真实存在，直接信任工具返回的generated_files，
+        避免因文件写入延迟导致的文件被过滤问题。
+        """
         try:
             root_dir = Path(self.config.output_dir)
         except Exception:
@@ -72,25 +83,36 @@ class MasterAgent:
         existing = []
         for name in files:
             try:
-                # 如果是在线URL，直接保留（不需要检查本地文件是否存在）
+                # 如果是在线URL，直接保留
                 if isinstance(name, str) and name.startswith(('http://', 'https://')):
                     existing.append(name)
                     continue
 
-                if not self.current_conversation_id:
-                    continue
-                p_conv = root_dir / self.current_conversation_id / name
-                if p_conv.exists() and p_conv.is_file():
+                # 本地文件：直接信任工具返回，不检查文件是否存在
+                # （避免因文件写入延迟导致检查失败）
+                if self.current_conversation_id:
                     existing.append(name)
             except Exception:
                 continue
         return existing
 
     def _filter_previewable(self, files):
+        """过滤可预览文件，与前端ui.js的支持类型保持一致"""
         allowed = {
-            '.png', '.jpg', '.jpeg', '.xlsx', '.html',
+            # 图片
+            '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.avif',
+            # 表格与演示
+            '.xlsx', '.pptx',
+            # 音频
             '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac',
-            '.mp4', '.webm', '.mov'
+            # 视频
+            '.mp4', '.webm', '.mov',
+            # 文档
+            '.html', '.pdf', '.jsonl', '.json', '.md',
+            # 文本/代码（前端支持语法高亮预览）
+            '.txt', '.log', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.xml',
+            '.py', '.js', '.ts', '.tsx', '.jsx', '.java', '.go', '.rs',
+            '.c', '.cpp', '.h', '.cs', '.rb', '.php', '.sh', '.bash', '.zsh', '.sql'
         }
         result = []
         for f in files:
@@ -291,6 +313,9 @@ class MasterAgent:
     def _react_loop(self, user_input: str) -> str:
         """ReAct循环: Reason → Act → Observe
 
+        注意：此方法为非流式简化版本，不使用对话历史和压缩功能。
+        主要用于测试或特殊场景。生产环境请使用 _react_loop_with_progress 方法。
+
         Args:
             user_input: 用户输入
 
@@ -473,6 +498,15 @@ class MasterAgent:
         # 添加历史对话 (可能需要压缩)
         conversation_to_use = self.conversation_history
 
+        # 调试日志：检查即将使用的历史
+        logger.info("=== Agent历史使用调试 ===")
+        logger.info(f"self.conversation_history长度: {len(self.conversation_history)}")
+        logger.info(f"conversation_to_use长度: {len(conversation_to_use)}")
+        if conversation_to_use:
+            logger.info(f"历史最后3条roles: {[msg.get('role') for msg in conversation_to_use[-3:]]}")
+        else:
+            logger.info("对话历史为空（这是第一条消息或历史已清空）")
+
         # 计算context使用情况
         temp_messages = messages + conversation_to_use + [{"role": "user", "content": user_input}]
         context_stats = self.context_manager.calculate_usage(temp_messages)
@@ -534,11 +568,99 @@ class MasterAgent:
         # 添加对话历史到messages
         messages.extend(conversation_to_use)
 
+        # 记录历史消息数量（用于后续追加新消息）
+        history_message_count = len(conversation_to_use)
+
+        # 检查是否有待附加的图片
+        user_content = user_input  # 默认纯文本
+        if self.conv_manager and self.current_conversation_id:
+            pending_images = self.conv_manager.get_pending_images(self.current_conversation_id)
+            if pending_images:
+                logger.info(f"检测到{len(pending_images)}张待附加图片，构造multimodal消息")
+
+                # 构造multimodal content
+                import base64
+                from pathlib import Path as _Path
+
+                content_parts = [{"type": "text", "text": user_input}]
+
+                for img_path in pending_images:
+                    try:
+                        # 读取图片文件
+                        full_path = _Path("outputs") / img_path
+                        if not full_path.exists():
+                            logger.warning(f"图片文件不存在: {full_path}")
+                            continue
+
+                        # 读取并转base64
+                        with open(full_path, "rb") as f:
+                            image_bytes = f.read()
+
+                        # 检测图片类型
+                        ext = full_path.suffix.lower()
+                        mime_types = {
+                            '.jpg': 'image/jpeg',
+                            '.jpeg': 'image/jpeg',
+                            '.png': 'image/png',
+                            '.gif': 'image/gif',
+                            '.webp': 'image/webp',
+                            '.bmp': 'image/bmp'
+                        }
+                        mime_type = mime_types.get(ext, 'image/jpeg')
+
+                        # 压缩大图片（避免token超限）
+                        if len(image_bytes) > 2 * 1024 * 1024:  # 大于2MB
+                            try:
+                                from PIL import Image
+                                import io
+                                img = Image.open(full_path)
+                                # 压缩到最大1024px
+                                img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                                buffer = io.BytesIO()
+                                img.save(buffer, format='JPEG', quality=85)
+                                image_bytes = buffer.getvalue()
+                                mime_type = 'image/jpeg'
+                                logger.info(f"图片已压缩: {full_path.name} ({len(image_bytes)/1024:.1f}KB)")
+                            except Exception as e:
+                                logger.warning(f"图片压缩失败，使用原图: {e}")
+
+                        # 转base64
+                        base64_str = base64.b64encode(image_bytes).decode('utf-8')
+
+                        # 添加图片到content（OpenAI格式）
+                        content_parts.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_str}"
+                            }
+                        })
+                        logger.info(f"图片已添加: {full_path.name} ({len(image_bytes)/1024:.1f}KB, {mime_type})")
+
+                    except Exception as e:
+                        logger.error(f"处理图片失败: {img_path}, error={e}")
+                        import traceback
+                        traceback.print_exc()
+
+                # 使用multimodal content
+                if len(content_parts) > 1:
+                    user_content = content_parts
+                    logger.info(f"Multimodal消息构造完成: {len(content_parts)-1}张图片")
+
+                # 清空pending_images
+                self.conv_manager.clear_pending_images(self.current_conversation_id)
+
         # 添加当前用户输入
         messages.append({
             "role": "user",
-            "content": user_input
+            "content": user_content
         })
+
+        # 最终确认日志：检查即将发送给LLM的完整messages
+        logger.info(f"=== 即将发送给LLM的messages ===")
+        logger.info(f"总消息数: {len(messages)} (system=1, history={history_message_count}, current_user=1)")
+        logger.info(f"messages结构: {[m.get('role') for m in messages]}")
+        if len(messages) > 5:
+            logger.info(f"最后5条消息roles: {[m.get('role') for m in messages[-5:]]}")
 
         # 获取所有可用工具的schema
         tools = self.tool_registry.get_function_calling_schemas()
@@ -608,8 +730,10 @@ class MasterAgent:
                         }
                     elif chunk.get("type") == "retry_exhausted":
                         rsn = chunk.get("reason") or "请求失败"
-                        # 同步messages到conversation_history
-                        self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
+                        # 同步messages到conversation_history（只追加本轮新消息）
+                        new_messages_start_idx = 1 + history_message_count
+                        new_messages = [msg for msg in messages[new_messages_start_idx:] if msg.get("role") != "system"]
+                        self.conversation_history.extend(new_messages)
                         yield {
                             "type": "final",
                             "result": {"status": "failed", "error": f"LLM请求失败（{rsn}），重试已达上限，请稍后重试"}
@@ -617,8 +741,10 @@ class MasterAgent:
                         return
                     elif chunk.get("type") == "error":
                         msg = chunk.get("message") or "LLM请求失败"
-                        # 同步messages到conversation_history
-                        self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
+                        # 同步messages到conversation_history（只追加本轮新消息）
+                        new_messages_start_idx = 1 + history_message_count
+                        new_messages = [msg for msg in messages[new_messages_start_idx:] if msg.get("role") != "system"]
+                        self.conversation_history.extend(new_messages)
                         yield {"type": "final", "result": {"status": "failed", "error": msg}}
                         return
                     elif chunk.get("type") == "done":
@@ -626,8 +752,10 @@ class MasterAgent:
                         break
             except Exception as e:
                 logger.error(f"处理LLM流异常: {e}")
-                # 同步messages到conversation_history
-                self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
+                # 同步messages到conversation_history（只追加本轮新消息）
+                new_messages_start_idx = 1 + history_message_count
+                new_messages = [msg for msg in messages[new_messages_start_idx:] if msg.get("role") != "system"]
+                self.conversation_history.extend(new_messages)
                 yield {"type": "final", "result": {"status": "failed", "error": "LLM连接异常，请稍后重试"}}
                 return
 
@@ -700,9 +828,16 @@ class MasterAgent:
                 # 完成
                 self.state = AgentState.COMPLETED
 
-                # 同步messages到conversation_history（排除system prompt）
-                self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
-                logger.info(f"同步对话历史: {len(self.conversation_history)}条消息")
+                # 同步messages到conversation_history
+                # 注意：如果本轮做了压缩，self.conversation_history已经是压缩后的版本
+                # 只需追加本轮新增的消息（从user_input开始的所有消息）
+                # messages结构：[0]=system, [1:1+history_message_count]=历史, [1+history_message_count:]=本轮新增
+                new_messages_start_idx = 1 + history_message_count
+                new_messages = [msg for msg in messages[new_messages_start_idx:] if msg.get("role") != "system"]
+
+                # 追加新消息到对话历史（保持压缩后的历史不变）
+                self.conversation_history.extend(new_messages)
+                logger.info(f"同步对话历史: 追加{len(new_messages)}条新消息, 总计{len(self.conversation_history)}条")
 
                 # 最后一轮结束
                 yield {"type": "iter_done", "iter": iteration + 1, "status": "success", "ts": time.time()}
@@ -775,9 +910,12 @@ class MasterAgent:
 
                     # 对code_executor强制注入conversation_id，避免LLM参数覆盖/缺失
                     # 强制对需要会话上下文的工具注入正确的 conversation_id
-                    if tool_name in ("code_executor", "shell_executor", "file_reader", "file_list", "tts_local", "media_ffmpeg", "tts_google", "tts_azure"):
+                    if tool_name in ("code_executor", "shell_executor", "file_reader", "file_list", "tts_local", "media_ffmpeg", "tts_google", "tts_azure", "file_writer", "file_editor", "create_plan"):
                         try:
                             arguments["conversation_id"] = self.current_conversation_id
+                            # 统一注入完整目录名，避免每个工具重复转换
+                            if hasattr(self, 'conv_manager') and self.conv_manager:
+                                arguments["_output_dir_name"] = self.conv_manager.get_output_dir_name(self.current_conversation_id)
                         except Exception:
                             pass
                     logger.info(f"执行工具: {tool_name}, 参数: {arguments}")
@@ -927,8 +1065,12 @@ class MasterAgent:
         self.state = AgentState.FAILED
 
         # 同步messages到conversation_history
-        self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
-        logger.info(f"同步对话历史(超时): {len(self.conversation_history)}条消息")
+        # 注意：如果本轮做了压缩，self.conversation_history已经是压缩后的版本
+        # 只需追加本轮新增的消息
+        new_messages_start_idx = 1 + history_message_count
+        new_messages = [msg for msg in messages[new_messages_start_idx:] if msg.get("role") != "system"]
+        self.conversation_history.extend(new_messages)
+        logger.info(f"同步对话历史(超时): 追加{len(new_messages)}条新消息, 总计{len(self.conversation_history)}条")
 
         yield {
             "type": "final",
@@ -938,6 +1080,43 @@ class MasterAgent:
                 "message": "达到最大迭代次数"
             }
         }
+
+    def _get_python_env_info(self) -> str:
+        """获取Python环境关键库的版本信息
+
+        Returns:
+            格式化的环境信息字符串
+        """
+        # 定义需要检测的常用库
+        common_libraries = [
+            'pandas', 'numpy', 'matplotlib', 'PIL', 'moviepy',
+            'requests', 'openpyxl', 'playwright', 'pptx'
+        ]
+
+        versions = []
+        for lib_name in common_libraries:
+            try:
+                # 特殊处理：PIL实际包名是Pillow
+                if lib_name == 'PIL':
+                    lib = __import__(lib_name)
+                    from PIL import __version__
+                    version = __version__
+                else:
+                    lib = __import__(lib_name)
+                    version = lib.__version__
+
+                versions.append(f"{lib_name}={version}")
+            except ImportError:
+                pass  # 库未安装，跳过
+            except AttributeError:
+                pass  # 没有__version__属性，跳过
+            except Exception:
+                pass  # 其他异常，跳过
+
+        if versions:
+            return f"- **已安装库版本**: {', '.join(versions)}"
+        else:
+            return ""
 
     def _build_system_prompt(self) -> str:
         """构建系统提示词（优化版 - Just Right原则）
@@ -982,6 +1161,9 @@ class MasterAgent:
         except Exception:
             workspace_files = "- (empty)"
 
+        # 获取Python环境信息
+        python_env_info = self._get_python_env_info()
+
         return f"""你是Wenning，一个专业的创意工作流自动化助手。
 
 ## 核心能力
@@ -996,9 +1178,12 @@ class MasterAgent:
 
 **当前时间**: {current_datetime} (北京时间)
 **当前年份**: {current_year}年
-**工作目录**: outputs/{conv_id or '[会话ID]'}
+**会话ID**: {conv_id or '[会话ID]'}
+**工作目录**: outputs/{conv_id or '[会话ID]'}/
 **现有文件**（最近20个）:
 {workspace_files}
+
+**重要**: 调用需要conversation_id参数的工具（如tts_minimax、image_generation_minimax等）时，只传递会话ID本身（如 "{conv_id or '[会话ID]'}"），不要包含"outputs/"路径前缀
 
 ## 可用工具
 
@@ -1040,10 +1225,14 @@ class MasterAgent:
 - **输出路径**: 所有生成的文件使用简单文件名（如 `chart.png`, `report.xlsx`），不使用绝对路径或相对路径，系统会自动处理存储位置
 - **文件引用**: 在回复内容中引用文件时，必须只使用文件名（如 `ai_trend_1.png`），不要使用任何路径前缀（如 `/mnt/data/`, `sandbox:/`, 等）
 - **读取文件**: 使用 `file_reader` 工具，列出文件使用 `file_list` 工具
-- **支持格式**: 图片（.png/.jpg）、表格（.xlsx）、网页（.html）、视频（.mp4）、音频（.mp3/.wav）
+- **支持格式**: 图片（.png/.jpg）、表格（.xlsx）、PPT演示文稿（.pptx）、网页（.html）、视频（.mp4）、音频（.mp3/.wav）
 
 ### 代码执行
-- **环境**: Python 3.x，已安装pandas/numpy/matplotlib/PIL/moviepy/playwright等常用库
+- **环境**: Python 3.x
+{python_env_info}
+- **执行模式**:
+  - 短代码（<50行）：使用code_executor的code参数直接执行
+  - 长代码（≥50行）：建议先用file_writer保存为.py文件，再用code_executor的script_file参数执行（便于调试和迭代修改）
 - **视频兼容性**: 生成mp4时使用yuv420p像素格式和libx264编码确保兼容性
 - **中文显示**: matplotlib包含中文时必须先设置字体避免乱码：`matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'Microsoft YaHei']`，moviepy使用 `_MOVIEPY_FONT_CONFIG` 变量
 - **限制**: 不能使用subprocess/os.system，网络操作通过工具完成
@@ -1078,7 +1267,7 @@ class MasterAgent:
 """
 
     def _format_tool_success_message(self, result: ToolResult) -> str:
-        """格式化工具成功消息
+        """格式化工具成功消息（优化版：压缩冗余信息）
 
         Args:
             result: 工具执行结果
@@ -1086,14 +1275,57 @@ class MasterAgent:
         Returns:
             格式化的消息
         """
-        # 将data转为JSON字符串
-        return json.dumps({
-            "status": "success",
-            "data": result.data
-        }, ensure_ascii=False)
+        data = result.data
+        tool_name = result.tool_name
+
+        # 🔧 针对不同工具做精简优化
+        if tool_name == "code_executor":
+            # Code Executor：只保留关键信息，删除冗长的stdout/stderr
+            optimized_data = {
+                "status": "success",
+                "generated_files": data.get("generated_files", [])
+            }
+            # 只在有stderr时才保留（通常是警告）
+            if data.get("stderr") and data["stderr"].strip():
+                # 只保留最后5行stderr（通常是最关键的错误信息）
+                stderr_lines = data["stderr"].strip().split('\n')
+                optimized_data["stderr_summary"] = '\n'.join(stderr_lines[-5:]) if len(stderr_lines) > 5 else data["stderr"]
+
+            # 如果stdout很短（<200字符），可以保留；否则只保留最后3行
+            stdout = data.get("stdout", "")
+            if stdout and len(stdout) < 200:
+                optimized_data["stdout"] = stdout
+            elif stdout:
+                stdout_lines = stdout.strip().split('\n')
+                if len(stdout_lines) > 3:
+                    optimized_data["stdout_summary"] = '\n'.join(stdout_lines[-3:]) + f"\n[前{len(stdout_lines)-3}行已省略]"
+                else:
+                    optimized_data["stdout"] = stdout
+
+            return json.dumps({"status": "success", "data": optimized_data}, ensure_ascii=False)
+
+        elif tool_name == "web_search":
+            # Web Search：限制每个结果的snippet长度
+            optimized_data = dict(data)
+            if "results" in optimized_data:
+                for result in optimized_data["results"]:
+                    if "snippet" in result and len(result["snippet"]) > 300:
+                        result["snippet"] = result["snippet"][:300] + "..."
+            return json.dumps({"status": "success", "data": optimized_data}, ensure_ascii=False)
+
+        elif tool_name == "url_fetch":
+            # URL Fetch：限制内容长度
+            optimized_data = dict(data)
+            if "content" in optimized_data and len(optimized_data["content"]) > 2000:
+                optimized_data["content"] = optimized_data["content"][:2000] + "\n[内容过长已截断，共" + str(len(data.get("content", ""))) + "字符]"
+            return json.dumps({"status": "success", "data": optimized_data}, ensure_ascii=False)
+
+        else:
+            # 其他工具：保持原样
+            return json.dumps({"status": "success", "data": data}, ensure_ascii=False)
 
     def _format_tool_failure_message(self, result: ToolResult) -> str:
-        """格式化工具失败消息
+        """格式化工具失败消息（优化版：只保留关键错误信息）
 
         Args:
             result: 工具执行结果
@@ -1101,13 +1333,12 @@ class MasterAgent:
         Returns:
             格式化的消息
         """
-        # 提供详细的错误信息,帮助LLM理解问题
+        # 🔧 失败消息精简：只保留error_message，删除冗余字段
+        # partial_results和recovery_suggestions在对话历史中价值不大
         return json.dumps({
             "status": "failed",
             "error_type": result.error_type.value if result.error_type else "unknown",
-            "error_message": result.error_message,
-            "partial_results": result.partial_results,
-            "recovery_suggestions": result.recovery_suggestions
+            "error_message": result.error_message
         }, ensure_ascii=False)
 
     def switch_model(self, model_name: str):

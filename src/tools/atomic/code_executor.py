@@ -27,20 +27,27 @@ class CodeExecutor(BaseAtomicTool):
     name = "code_executor"
     description = (
         "Python代码执行沙箱: 在安全环境中执行Python代码进行数据处理、科学计算和可视化。"
+        "支持两种模式：\n"
+        "1. 内联模式（code参数）：直接传入代码，适合一次性代码\n"
+        "2. 文件模式（script_file参数）：执行已保存的脚本文件，适合需要迭代调整的代码\n"
         "适用场景：数据统计分析、科学计算、数据可视化（图表生成）、技术图形绘制、算法演示、"
         "数据动画（matplotlib.animation）、数学动画（manim库生成教学视频）、视频编辑（moviepy）、复杂文件处理。"
-        "优势：完整的Python生态（pandas/numpy/matplotlib/PIL/moviepy/manim）、适合复杂编程逻辑、可以使用各种Python库。"
+        "优势：完整的Python生态（pandas/numpy/matplotlib/PIL/moviepy/manim）、适合复杂编程逻辑、可以使用各种Python库、支持文件模式便于迭代。"
         "不适用场景：艺术创作类的图像/视频生成（优先使用MiniMax API）、简单的批量文件操作和命令（优先使用shell_executor更简洁）。"
-        "参数: code(Python代码,必需), conversation_id(会自动注入), language(默认python), timeout(超时秒数)"
+        "参数: code(内联代码)或script_file(脚本文件名,二选一), conversation_id(会自动注入), language(默认python), timeout(超时秒数)"
     )
-    required_params = ["code"]
+    required_params = []  # code和script_file二选一，不能硬性要求
     # 为Function Calling提供明确的参数schema，避免LLM不传必需参数
     parameters_schema = {
         "type": "object",
         "properties": {
             "code": {
                 "type": "string",
-                "description": "要执行的Python代码（必须）"
+                "description": "【模式1-内联】要执行的Python代码（与script_file二选一）"
+            },
+            "script_file": {
+                "type": "string",
+                "description": "【模式2-文件】要执行的脚本文件名（仅文件名，不含路径，与code二选一）"
             },
             "language": {
                 "type": "string",
@@ -63,35 +70,55 @@ class CodeExecutor(BaseAtomicTool):
                 "minimum": 1
             }
         },
-        "required": ["code"]
+        "required": []  # code和script_file至少有一个，在execute中验证
     }
 
     def __init__(self, config, conv_manager=None):
         super().__init__(config)
         self.timeout = config.code_executor_timeout
         self.output_dir = config.output_dir
-        self.conv_manager = conv_manager
+        self.conv_manager = conv_manager  # 保存conv_manager用于图片识别
 
     def execute(
         self,
-        code: str,
+        code: Optional[str] = None,
+        script_file: Optional[str] = None,
         language: str = "python",
         save_output: bool = True,
         output_filename: Optional[str] = None,
         timeout: Optional[int] = None,
-        conversation_id: Optional[str] = None
+        conversation_id: Optional[str] = None,
+        **kwargs  # 接收master_agent注入的_output_dir_name等参数
     ) -> Dict[str, Any]:
         """执行代码
 
         Args:
-            code: 要执行的代码
+            code: 要执行的代码（与script_file二选一）
+            script_file: 要执行的脚本文件名（与code二选一）
             language: 编程语言（目前仅支持python）
             save_output: 是否保存输出文件
             output_filename: 输出文件名（如生成图片）
+            timeout: 超时秒数
+            conversation_id: 会话ID
 
         Returns:
             执行结果数据字典（不含状态包装），由run()进行包装
         """
+        # 模式验证：code和script_file必须提供且只能提供一个
+        if not code and not script_file:
+            raise ValueError(
+                "必须提供code或script_file参数之一。\n"
+                "- 模式1（内联）：传入code参数\n"
+                "- 模式2（文件）：传入script_file参数"
+            )
+
+        if code and script_file:
+            raise ValueError(
+                "不能同时提供code和script_file参数，请选择一种模式：\n"
+                "- 模式1（内联）：只传code\n"
+                "- 模式2（文件）：只传script_file"
+            )
+
         if language != "python":
             raise ValueError(f"暂不支持的语言: {language}")
 
@@ -99,8 +126,34 @@ class CodeExecutor(BaseAtomicTool):
         if not conversation_id or str(conversation_id).strip() == "":
             raise RuntimeError("缺少conversation_id，拒绝执行以避免写入根目录")
 
+        # 模式2：从文件读取代码
+        if script_file:
+            # 安全路径检查
+            p = Path(script_file)
+            if p.is_absolute() or ".." in p.parts or "/" in script_file or "\\" in script_file:
+                raise ValueError("script_file仅允许文件名，不允许路径")
+
+            # 获取master_agent注入的输出目录名
+            output_dir_name = kwargs.get("_output_dir_name")
+            if not output_dir_name:
+                raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
+
+            # 构造文件路径
+            script_path = self.output_dir / output_dir_name / script_file
+
+            if not script_path.exists():
+                raise FileNotFoundError(
+                    f"脚本文件不存在: {script_file}\n"
+                    "提示：请先使用file_writer工具创建脚本文件，再使用code_executor执行"
+                )
+
+            # 读取文件内容
+            logger.info(f"从文件读取代码: {script_path}")
+            code = script_path.read_text(encoding='utf-8')
+            logger.info(f"读取完成: {len(code)} characters")
+
         used_timeout = int(timeout or self.timeout)
-        logger.info(f"执行Python代码: {len(code)} characters (conversation_id={conversation_id}, timeout={used_timeout}s)")
+        logger.info(f"执行Python代码: {len(code)} characters (conversation_id={conversation_id}, timeout={used_timeout}s, mode={'file' if script_file else 'inline'})")
 
         # 预处理代码：
         # - 修正LLM常见导入拼写(moviepy.edit -> moviepy.editor)
@@ -118,16 +171,12 @@ class CodeExecutor(BaseAtomicTool):
         try:
             # 执行代码
             # 确定工作目录（对话级隔离）
-            work_dir: Path = self.output_dir
-            if conversation_id:
-                # 使用带时间戳的输出目录名
-                if self.conv_manager:
-                    output_dir_name = self.conv_manager.get_output_dir_name(conversation_id)
-                    work_dir = self.output_dir / output_dir_name
-                else:
-                    # 兜底：如果没有conv_manager，使用原始conversation_id
-                    work_dir = self.output_dir / conversation_id
-                work_dir.mkdir(parents=True, exist_ok=True)
+            output_dir_name = kwargs.get("_output_dir_name")
+            if not output_dir_name:
+                raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
+
+            work_dir = self.output_dir / output_dir_name
+            work_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"CodeExecutor work_dir resolved to: {work_dir}")
 
             # 记录执行前文件快照
@@ -173,7 +222,12 @@ class CodeExecutor(BaseAtomicTool):
                 logger.info(f"新增文件（仅会话目录差集）: {new_files}")
 
                 if not new_files and not (output_filename and (work_dir / output_filename).exists()):
-                    raise RuntimeError("代码执行完成，但会话目录内未发现新文件；请仅使用文件名保存（相对当前目录）")
+                    # 允许不生成文件的代码执行（如检查、分析类代码）
+                    # 只在明确指定output_filename但文件不存在时记录警告
+                    if output_filename:
+                        logger.warning(f"指定的输出文件不存在: {output_filename}")
+                    else:
+                        logger.info("代码执行成功，无新文件生成（可能是检查/分析类代码）")
 
                 if output_filename:
                     expected_path = work_dir / output_filename
@@ -429,20 +483,25 @@ _context_data = json.loads('''{context_json}''')
     def _harmonize_imports(self, code: str) -> str:
         """修正常见第三方导入拼写错误，提升容错性。
 
-        - moviepy.edit -> moviepy.editor
-        - 兼容 `import moviepy.edit as mpy` / `from moviepy.edit import ...`
+        注意：moviepy.edit -> moviepy.editor 的修正（常见拼写错误）
+        不再进行版本相关的自动转换，让LLM根据版本信息生成正确代码
         """
         import re
         original = code
+
+        # 只修正明显的拼写错误：moviepy.edit -> moviepy.editor
         patterns = [
+            # from moviepy.edit -> from moviepy.editor（拼写错误修正）
             (r"\bfrom\s+moviepy\.edit\b", "from moviepy.editor"),
+            # import moviepy.edit as mpy -> import moviepy.editor as mpy
             (r"\bimport\s+moviepy\.edit\s+as\s+(\w+)", r"import moviepy.editor as \1"),
+            # import moviepy.edit -> import moviepy.editor
             (r"\bimport\s+moviepy\.edit\b", "import moviepy.editor"),
         ]
         for pat, rep in patterns:
             code = re.sub(pat, rep, code)
         if code != original:
-            logger.info("已将 'moviepy.edit' 更正为 'moviepy.editor'")
+            logger.info("已将 'moviepy.edit' 拼写错误修正为 'moviepy.editor'")
         return code
 
     def _get_chinese_font_path(self) -> str:

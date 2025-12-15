@@ -26,13 +26,17 @@ from src.tools.atomic.plan import PlanTool
 from src.tools.atomic.file_reader import FileReader
 from src.tools.atomic.file_list import FileList
 from src.tools.atomic.file_editor import FileEditor
+from src.tools.atomic.file_writer import FileWriter
 from src.tools.atomic.media_ffmpeg import MediaFFmpeg
 # 通用图像生成工具
 from src.tools.atomic.image_generation import ImageGeneration
 # MiniMax多模态工具
 from src.tools.atomic.tts_minimax import TTSMiniMax
+from src.tools.atomic.voice_clone_minimax import VoiceCloneMiniMax
 from src.tools.atomic.video_generation_minimax import VideoGenerationMiniMax
 from src.tools.atomic.music_generation_minimax import MusicGenerationMiniMax
+# Prompt模板检索工具
+from src.tools.atomic.prompt_template_tool import PromptTemplateRetriever
 # 云端TTS暂不启用
 # from src.tools.atomic.tts_google import TTSGoogle
 # from src.tools.atomic.tts_azure import TTSAzure
@@ -98,7 +102,7 @@ class AuthBody(BaseModel):
     password: str
 
 
-def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
+def get_or_create_agent(model_name: str = "gpt-5.2") -> MasterAgent:
     """获取或创建Agent实例"""
     if model_name not in agents:
         # 初始化Tool Registry
@@ -114,6 +118,7 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
         tool_registry.register_atomic_tool(VideoGenerationMiniMax(config, conv_manager))
         tool_registry.register_atomic_tool(MusicGenerationMiniMax(config, conv_manager))
         tool_registry.register_atomic_tool(TTSMiniMax(config, conv_manager))
+        tool_registry.register_atomic_tool(VoiceCloneMiniMax(config, conv_manager))  # 音色克隆
 
         # 3. 通用辅助工具
         tool_registry.register_atomic_tool(PlanTool(config))
@@ -122,12 +127,14 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
         tool_registry.register_atomic_tool(FileReader(config))
         tool_registry.register_atomic_tool(FileList(config))
         tool_registry.register_atomic_tool(FileEditor(config))
+        tool_registry.register_atomic_tool(FileWriter(config))
+        tool_registry.register_atomic_tool(PromptTemplateRetriever(config))  # Prompt模板检索
         # 云端TTS暂不注册，按需开启
         # tool_registry.register_atomic_tool(TTSGoogle(config))
         # tool_registry.register_atomic_tool(TTSAzure(config))
 
-        # 创建Agent
-        agent = MasterAgent(config, tool_registry, model_name=model_name)
+        # 创建Agent（传入conv_manager用于路径转换）
+        agent = MasterAgent(config, tool_registry, model_name=model_name, conv_manager=conv_manager)
         agents[model_name] = agent
         logger.info(f"创建新Agent: model={model_name}, tools={len(tool_registry.list_tools())}")
 
@@ -137,7 +144,7 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
 @app.get("/chat")
 async def chat(
     message: str = Query(..., description="用户消息"),
-    model: str = Query("gpt-5", description="模型名称"),
+    model: str = Query("gpt-5.2", description="模型名称"),
     conversation_id: str = Query(..., description="对话ID"),
     client_msg_id: Optional[str] = Query(None, description="前端幂等ID"),
     user: str = Depends(require_user())
@@ -152,7 +159,7 @@ async def chat(
                 raise ValueError(f"对话不存在: {conversation_id}")
 
             # 模型选择策略：若前端传入与会话保存的模型不同，则更新会话绑定模型
-            saved_model = conv.get("model", "gpt-5")
+            saved_model = conv.get("model", "gpt-5.2")
             effective_model = (model or saved_model) if model else saved_model
             if effective_model and effective_model != saved_model:
                 try:
@@ -166,10 +173,22 @@ async def chat(
 
             conversation_history = conv.get("messages", [])
 
-            # 将对话历史设置到Agent内部状态（使用副本，避免Agent修改影响原数据）
+            # 详细日志：检查从数据库加载的历史
+            logger.info(f"=== 对话历史加载调试 ===")
+            logger.info(f"从数据库加载的消息数: {len(conversation_history)}")
+            if conversation_history:
+                logger.info(f"最后5条消息roles: {[msg.get('role') for msg in conversation_history[-5:]]}")
+                for i, msg in enumerate(conversation_history[-3:], start=max(0, len(conversation_history)-3)):
+                    role = msg.get('role')
+                    content_preview = msg.get('content', '')[:100] if msg.get('content') else '(empty)'
+                    logger.info(f"  [{i}] {role}: {content_preview}")
+            else:
+                logger.info("⚠️  conversation_history为空！")
+
+            # 每次都从数据库加载最新的完整对话历史，确保上下文完整性
             agent.conversation_history = list(conversation_history)
             agent.current_conversation_id = conversation_id
-            logger.info(f"设置对话历史: {len(conversation_history)}条消息")
+            logger.info(f"已设置Agent.conversation_history: {len(agent.conversation_history)}条消息")
 
             # 添加用户消息（带幂等ID）
             conv_manager.add_message(conversation_id, "user", message, username=user, client_msg_id=client_msg_id, status="completed")
@@ -270,6 +289,19 @@ async def chat(
                 except Exception as e:
                     logger.warning(f"更新generated_files失败: {e}")
 
+                # 🔧 关键修复：发送files_generated事件通知前端加载预览
+                # 这个兜底机制会捕获那些工具没有正确报告的文件（如覆盖写、延迟生成等）
+                try:
+                    if merged:
+                        files_event = {
+                            "type": "files_generated",
+                            "files": merged,
+                            "iter": None  # 兜底扫描，不属于特定iter
+                        }
+                        yield f"data: {json.dumps(files_event, ensure_ascii=False)}\n\n"
+                        logger.info(f"已发送兜底files_generated事件: {merged}")
+                except Exception as e:
+                    logger.warning(f"发送files_generated事件失败: {e}")
 
             # 发送结束标记
             yield "data: [DONE]\n\n"
@@ -504,6 +536,14 @@ async def upload_files(
             await uf.close()
 
             saved.append(target.name)
+
+            # 检测是否为图片文件，自动添加到pending_images
+            image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
+            if target.suffix.lower() in image_extensions:
+                # 添加到pending_images（使用相对路径：output_dir_name/filename）
+                relative_path = f"{output_dir_name}/{target.name}"
+                conv_manager.add_pending_image(conversation_id, relative_path, username=user)
+                logger.info(f"检测到图片文件，已添加到pending_images: {relative_path}")
 
             # 可选加入Workspace列表
             try:
@@ -792,7 +832,8 @@ async def preview_excel_scoped(
 async def list_models():
     """获取可用模型列表"""
     models = [
-        {"name": "gpt-5", "display_name": "OpenAI GPT-5", "default": True},
+        {"name": "gpt-5.2", "display_name": "OpenAI GPT-5.2", "default": True},
+        {"name": "gpt-5", "display_name": "OpenAI GPT-5", "default": False},
         {"name": "ernie-5.0-thinking-preview", "display_name": "百度 EB5 思考模型", "default": False},
         {"name": "glm-4.5", "display_name": "智谱GLM-4.5", "default": False},
         {"name": "doubao-seed-1-6-thinking-250615", "display_name": "豆包Thinking模型", "default": False},
@@ -815,14 +856,14 @@ async def list_conversations(model: str = Query(None, description="模型名称�
 
 
 class CreateConversationBody(BaseModel):
-    model: str = "gpt-5"
+    model: str = "gpt-5.2"
 
 @app.post("/conversations")
 async def create_conversation(body: CreateConversationBody = None, user: str = Depends(require_user())):
     """创建新对话"""
     try:
         # 兼容两种方式：如果有body则使用body.model，否则使用默认值
-        model = body.model if body else "gpt-5"
+        model = body.model if body else "gpt-5.2"
         conv_id = conv_manager.create_conversation(model, username=user)
         logger.info(f"创建新对话: conv_id={conv_id}, model={model}, user={user}")
         return JSONResponse(content={"conversation_id": conv_id})
@@ -845,7 +886,7 @@ async def get_conversation(conversation_id: str, user: str = Depends(require_use
         # 计算当前对话的context使用情况
         if conv.get("messages") and len(conv["messages"]) > 0:
             try:
-                model_name = conv.get("model", "gpt-5")
+                model_name = conv.get("model", "gpt-5.2")
                 agent = get_or_create_agent(model_name)
                 context_stats = agent.context_manager.calculate_usage(conv["messages"])
                 conv["context_stats"] = context_stats

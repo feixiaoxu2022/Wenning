@@ -6,7 +6,7 @@
 // 初始化
 const sseClient = new SSEClient();
 const ui = new UI();
-let currentModel = 'gpt-5';
+let currentModel = 'gpt-5.2';
 let currentConversationId = null;
 let isSending = false; // 防止重复发送
 let stopBtnEl = null;
@@ -76,6 +76,11 @@ async function initAppAfterAuth() {
     // 主题和侧栏
     initThemeToggle();
     initSidebarToggles();
+    // 初始化Showcase
+    if (typeof ShowcaseManager !== 'undefined') {
+        window.showcaseManager = new ShowcaseManager(ui);
+        console.log('[App] Showcase已初始化');
+    }
     console.log('[App] 应用就绪');
 }
 
@@ -225,7 +230,7 @@ async function loadModels() {
                 option.selected = true;
                 // 仅在 currentModel 还是初始值时才设置默认模型
                 // 如果用户已经选择了模型，不要覆盖
-                if (currentModel === 'gpt-5') {
+                if (currentModel === 'gpt-5.2') {
                     currentModel = model.name;
                 }
             }
@@ -337,12 +342,43 @@ function createConversationItem(conv) {
  */
 async function ensureConversation() {
     try {
-        // 优先获取与当前模型匹配的对话（若存在）
+        // 优先尝试从localStorage恢复上次的对话
+        let lastConvId = null;
+        try {
+            lastConvId = localStorage.getItem('cf-last-conv');
+        } catch (_) {}
+
+        if (lastConvId) {
+            // 验证该对话是否还存在
+            try {
+                const checkResp = await fetch(`/conversation/${encodeURIComponent(lastConvId)}`);
+                if (checkResp.ok) {
+                    console.log('[App] 从localStorage恢复上次对话:', lastConvId);
+                    currentConversationId = lastConvId;
+                    await loadConversation(currentConversationId);
+
+                    // 恢复成功后设置输出路径
+                    if (currentConversationId) {
+                        ui.setOutputsBase(currentConversationId);
+                    }
+
+                    // 刷新左侧History列表
+                    try { await loadConversationsList(); } catch (_) {}
+
+                    console.log('[App] 当前对话ID:', currentConversationId);
+                    return; // 恢复成功，直接返回
+                }
+            } catch (e) {
+                console.warn('[App] 恢复上次对话失败，将使用默认逻辑:', e);
+            }
+        }
+
+        // 如果没有保存的对话或恢复失败，查询与当前模型匹配的对话
         const response = await fetch(`/conversations?model=${encodeURIComponent(currentModel)}`);
         const data = await response.json();
 
         if (data.conversations && data.conversations.length > 0) {
-            // 选取 updated_at 最大的作为“最新”
+            // 选取 updated_at 最大的作为"最新"
             let latest = null;
             try {
                 latest = data.conversations.reduce((best, cur) => {
@@ -366,7 +402,7 @@ async function ensureConversation() {
             ui.setOutputsBase(currentConversationId);
         }
 
-        // 刷新左侧History列表，修复首次进入页面时先加载列表再创建会话导致的“暂无对话”显示问题
+        // 刷新左侧History列表，修复首次进入页面时先加载列表再创建会话导致的"暂无对话"显示问题
         try { await loadConversationsList(); } catch (_) {}
 
     } catch (err) {
@@ -436,10 +472,35 @@ async function loadConversation(convId) {
 
             console.log(`[App] 加载对话 ${convId}: 原始${conv.messages.length}条，去重后${deduped.length}条`);
 
+            // 追踪当前迭代轮次（每次assistant调用工具时递增）
+            let currentIter = 0;
+
             deduped.forEach(msg => {
                 if (msg.role === 'user') {
                     ui.addUserMessage(msg.content);
                 } else if (msg.role === 'assistant') {
+                    // 检查是否有工具调用 - 如果有，说明开始新的迭代轮次
+                    if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+                        currentIter++; // 开始新的迭代轮次
+
+                        // 有工具调用：显示执行过程（历史加载时不显示参数，保持UI简洁）
+                        msg.tool_calls.forEach(toolCall => {
+                            const toolName = toolCall.function?.name || 'unknown';
+
+                            // 显示工具执行（不传args_preview，避免占用过多空间）
+                            ui.appendExec(currentIter, {
+                                phase: 'start',
+                                tool: toolName
+                            });
+
+                            // 标记完成（从历史中加载都是已完成的）
+                            ui.appendExec(currentIter, {
+                                phase: 'done',
+                                tool: toolName
+                            });
+                        });
+                    }
+
                     // 历史列表中，LLM在调用工具时会产生一条content为空的assistant占位（仅包含tool_calls）
                     // 这类占位会在UI上渲染成一块空白。这里对空内容进行跳过，仅保留有实际文本的assistant消息。
                     const content = (msg.content || '').trim();
@@ -448,10 +509,15 @@ async function loadConversation(convId) {
                     if (Array.isArray(msg.generated_files) && msg.generated_files.length > 0) {
                         console.log(`[App] 加载历史消息的文件:`, msg.generated_files);
                         ui.loadMultipleFiles(msg.generated_files);
+                        // 显示生成的文件（使用当前迭代轮次，如果没有工具调用则为0）
+                        ui.appendExec(currentIter || 1, {
+                            phase: 'files',
+                            files: msg.generated_files
+                        });
                     }
 
                     if (!content) {
-                        // 纯函数调用占位，跳过渲染文本，避免出现“大块空白”
+                        // 纯函数调用占位，跳过渲染文本，避免出现"大块空白"
                         return;
                     }
 
@@ -493,7 +559,7 @@ async function loadConversation(convId) {
                 const data = await listResp.json();
                 if (data && Array.isArray(data.files) && data.files.length) {
                     const shown = new Set((ui.files || []).map(f => f.filename));
-                    const previewables = data.files.filter(fn => /\.(png|jpg|jpeg|xlsx|csv|html|pdf|json|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log)$/i.test(fn));
+                    const previewables = data.files.filter(fn => /\.(png|jpg|jpeg|xlsx|pptx|csv|html|pdf|json|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log)$/i.test(fn));
                     const missing = previewables.filter(fn => !shown.has(fn));
                     if (missing.length) {
                         console.log('[App] 兜底补充会话文件:', missing);
@@ -752,20 +818,67 @@ function initSidebarToggles() {
  * 配置SSE回调
  */
 function setupSSECallbacks() {
-    // 思考过程更新
-    sseClient.onIterStart = (iter) => { try { ui.ensureIterContainer(iter); } catch (_) {} };
-    sseClient.onIterDone = (iter, status) => { try { ui.finishIter(iter, status); } catch (_) {} };
+    // 思考过程更新（映射后端iter为前端显示iter）
+    sseClient.onIterStart = (iter) => {
+        try {
+            console.log('[SSE] onIterStart received iter:', iter);
+            const frontendIter = ui._mapSSEIter(iter);
+            console.log('[SSE] Mapped to frontendIter:', frontendIter);
+            ui.ensureIterContainer(frontendIter);
+        } catch (e) {
+            console.error('[SSE] onIterStart error:', e);
+        }
+    };
+    sseClient.onIterDone = (iter, status) => {
+        try {
+            const frontendIter = ui._mapSSEIter(iter);
+            ui.finishIter(frontendIter, status);
+        } catch (e) {
+            console.error('[SSE] onIterDone error:', e);
+        }
+    };
     sseClient.onThinking = (content, iter) => {
-        ui.appendThinking(content, iter);
+        try {
+            const frontendIter = ui._mapSSEIter(iter);
+            ui.appendThinking(content, frontendIter);
+        } catch (e) {
+            console.error('[SSE] onThinking error:', e);
+        }
     };
 
     // 工具调用时的accompanying text（打字机效果）
-    sseClient.onNote = (delta, iter) => { ui.appendNote(delta, iter); };
+    sseClient.onNote = (delta, iter) => {
+        try {
+            const frontendIter = ui._mapSSEIter(iter);
+            ui.appendNote(delta, frontendIter);
+        } catch (e) {
+            console.error('[SSE] onNote error:', e);
+        }
+    };
 
     // 进度更新
-    sseClient.onExec = (evt) => { ui.appendExec(evt.iter, evt); };
+    sseClient.onExec = (evt) => {
+        console.log('[App] onExec回调被调用, evt:', evt);
+        try {
+            const frontendIter = ui._mapSSEIter(evt.iter);
+            console.log('[App] 映射后frontendIter:', frontendIter);
+            ui.appendExec(frontendIter, evt);
+            console.log('[App] appendExec完成');
+        } catch (e) {
+            console.error('[SSE] onExec error:', e);
+            console.error('[SSE] onExec error stack:', e.stack);
+        }
+    };
+    console.log('[App] onExec已设置, 类型:', typeof sseClient.onExec);
     // 兼容旧progress：按轮追加信息行（不会重复显示）
-    sseClient.onProgress = (message, status, iter) => { ui.showProgress(message, status, iter); };
+    sseClient.onProgress = (message, status, iter) => {
+        try {
+            const frontendIter = ui._mapSSEIter(iter);
+            ui.showProgress(message, status, frontendIter);
+        } catch (e) {
+            console.error('[SSE] onProgress error:', e);
+        }
+    };
 
     // 最终结果
     sseClient.onFinal = (result) => {
@@ -813,13 +926,19 @@ function setupSSECallbacks() {
 
     // Context压缩开始
     sseClient.onCompressionStart = (message, stats) => {
-        ui.showProgress(message, 'start');
+        // 将💾 emoji替换为SVG图标
+        const svgIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+        const displayMessage = message.replace(/💾\s*/, svgIcon);
+        ui.showProgress(displayMessage, 'start');
         ui.setInputEnabled(false);
     };
 
     // Context压缩完成
     sseClient.onCompressionDone = (message, oldStats, newStats) => {
-        ui.showProgress(message, 'done');
+        // 将✓替换为SVG对勾图标
+        const svgIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>';
+        const displayMessage = message.replace(/✓\s*/, svgIcon);
+        ui.showProgress(displayMessage, 'done');
         updateContextIndicator(newStats);
     };
 
@@ -828,7 +947,8 @@ function setupSSECallbacks() {
         console.log('[App] 收到生成文件列表:', files);
         // 兜底：确保文件预览以当前会话为作用域
         try { if (currentConversationId) ui.setOutputsBase(currentConversationId); } catch (_) {}
-        try { ui.appendFilesGenerated(iter, files); } catch (_) {}
+        const frontendIter = ui._mapSSEIter(iter);
+        try { ui.appendFilesGenerated(frontendIter, files); } catch (_) {}
         ui.loadMultipleFiles(files);
         // 覆盖写时强制刷新已存在的预览（带cache bust）
         try { ui.refreshFiles(files); } catch (e) { console.warn('refreshFiles failed', e); }

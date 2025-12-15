@@ -77,6 +77,7 @@ class MediaFFmpeg(BaseAtomicTool):
         try:
             mode = kwargs.get("mode")
             conv_id = kwargs.get("conversation_id")
+            output_dir_name = kwargs.get("_output_dir_name")  # 由master_agent统一注入
             out_name = kwargs.get("out")
             ensure_420 = bool(kwargs.get("ensure_yuv420p", True))
             faststart = bool(kwargs.get("faststart", True))
@@ -86,13 +87,16 @@ class MediaFFmpeg(BaseAtomicTool):
 
             if not conv_id:
                 return {"status": "failed", "error": "conversation_id缺失"}
+            if not output_dir_name:
+                return {"status": "failed", "error": "缺少_output_dir_name参数（应由master_agent自动注入）"}
             if not out_name or not out_name.lower().endswith(".mp4"):
                 return {"status": "failed", "error": "out必须以.mp4结尾"}
 
             # 规范化会话ID（避免传入 'outputs/<id>' 或路径）
             from pathlib import Path as _P
             conv_id = _P(str(conv_id)).name
-            work_dir = self.output_dir / conv_id
+
+            work_dir = self.output_dir / output_dir_name
             work_dir.mkdir(parents=True, exist_ok=True)
 
             cmd: List[str] = ["ffmpeg", "-y"]

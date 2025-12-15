@@ -38,13 +38,18 @@ class FileList(BaseAtomicTool):
 
     def execute(self, **kwargs) -> Dict[str, Any]:
         conv: str = kwargs.get("conversation_id")
+        output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
         ext: Optional[str] = kwargs.get("ext")
         pattern: Optional[str] = kwargs.get("pattern")
         limit: int = int(kwargs.get("limit") or 200)
         sort: str = (kwargs.get("sort") or "mtime").lower()
         order: str = (kwargs.get("order") or "desc").lower()
 
-        base = self.output_dir / conv
+        if not output_dir_name:
+            raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
+
+        base = self.output_dir / output_dir_name
+
         if not base.exists():
             return {"files": []}
 

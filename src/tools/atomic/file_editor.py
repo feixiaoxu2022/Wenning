@@ -92,12 +92,18 @@ class FileEditor(BaseAtomicTool):
         super().__init__(config)
         self.output_dir = config.output_dir
 
-    def _safe_path(self, conv: str, filename: str) -> Path:
-        """安全路径检查：防止路径穿越"""
+    def _safe_path(self, output_dir_name: str, filename: str) -> Path:
+        """安全路径检查：防止路径穿越
+
+        Args:
+            output_dir_name: 完整输出目录名（由master_agent统一注入）
+            filename: 文件名
+        """
         p = Path(filename)
         if p.is_absolute() or ".." in p.parts or "/" in filename or "\\" in filename:
             raise ValueError("仅允许文件名，不允许路径")
-        return (self.output_dir / conv / filename)
+
+        return self.output_dir / output_dir_name / filename
 
     def _detect_mode(self, kwargs: Dict[str, Any]) -> str:
         """检测编辑模式"""
@@ -243,10 +249,14 @@ class FileEditor(BaseAtomicTool):
         """执行文件编辑"""
         filename: str = kwargs.get("filename")
         conversation_id: str = kwargs.get("conversation_id")
+        output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
         encoding: str = kwargs.get("encoding") or "utf-8"
 
+        if not output_dir_name:
+            raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
+
         # 获取文件路径
-        path = self._safe_path(conversation_id, filename)
+        path = self._safe_path(output_dir_name, filename)
         if not path.exists():
             raise FileNotFoundError(f"文件不存在: {filename}")
 
@@ -290,4 +300,9 @@ class FileEditor(BaseAtomicTool):
             "file_size": path.stat().st_size
         })
 
-        return result
+        # 🔧 关键修复：返回generated_files（表示被修改的文件），让前端能刷新预览
+        return {
+            "status": "success",
+            "data": result,
+            "generated_files": [filename]  # 编辑后的文件也需要刷新预览
+        }

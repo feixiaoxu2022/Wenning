@@ -102,18 +102,21 @@ class ShellExecutor(BaseAtomicTool):
     def execute(self, **kwargs) -> Dict[str, Any]:
         cmd: str = kwargs.get("cmd", "").strip()
         conversation_id: Optional[str] = kwargs.get("conversation_id")
+        output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
         timeout: int = kwargs.get("timeout") or self.timeout
 
         if not cmd:
             raise ValueError("缺少cmd参数")
         if not conversation_id:
             raise ValueError("缺少conversation_id参数")
+        if not output_dir_name:
+            raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
 
         danger = self._is_dangerous(cmd)
         if danger:
             raise RuntimeError(f"命令包含受限模式: {danger}")
 
-        work_dir: Path = self.output_dir / conversation_id
+        work_dir = self.output_dir / output_dir_name
         work_dir.mkdir(parents=True, exist_ok=True)
 
         try:

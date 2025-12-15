@@ -42,6 +42,10 @@ class UI {
         this._progressByIter = new Map();
         this._toolTextByIter = new Map();
         this._execLastByTool = new Map(); // iter -> Map(tool -> rowEl)
+
+        // SSE iter重新编号机制
+        this._sseIterBase = null;  // 记录本次用户消息开始时的后端iter
+        this._sseIterMap = new Map();  // 后端iter -> 前端显示iter
     }
 
     /** 创建通用的复制图标SVG */
@@ -430,6 +434,7 @@ class UI {
     openFileByName(filename) {
         const lower = (filename || '').toLowerCase();
         if (lower.endsWith('.xlsx') || lower.endsWith('.csv')) return this.addFileTab(filename, 'excel');
+        if (lower.endsWith('.pptx')) return this.addFileTab(filename, 'pptx');
         if (/(\.png|\.jpg|\.jpeg|\.svg|\.gif|\.webp|\.avif)$/.test(lower)) return this.addFileTab(filename, 'image');
         if (/(\.mp3|\.wav|\.m4a|\.aac|\.ogg|\.flac)$/.test(lower)) return this.addFileTab(filename, 'audio');
         if (/(\.mp4|\.webm|\.mov)$/.test(lower)) return this.addFileTab(filename, 'video');
@@ -457,17 +462,48 @@ class UI {
      * 添加用户消息
      */
     addUserMessage(message) {
-        // 清理之前的thinking、progress和tool_call_text盒子的DOM元素
-        // 清理所有迭代相关容器，避免上一轮残留串在一起
+        // 重置SSE iter映射（新用户消息开始）
+        this._sseIterBase = null;
+        this._sseIterMap.clear();
+
+        // 清理未完成的thinking、progress和tool_call_text盒子，但保留已有内容的历史记录
         try {
-            this.chatMessages.querySelectorAll('.iter-box, .thinking-box, .tool-call-text-box, .progress-box').forEach(el => el.remove());
-            this._iterBoxes = new Map();
-            this._thinkingSections = new Map();
-            this._toolTextByIter = new Map();
-            this._progressByIter = new Map();
+            // 策略：只删除最新的、还在执行中的iter-box（空内容或只有spinner）
+            const iterBoxes = Array.from(this.chatMessages.querySelectorAll('.iter-box'));
+
+            // 从后往前检查，只删除最新的未完成的
+            if (iterBoxes.length > 0) {
+                const lastIterBox = iterBoxes[iterBoxes.length - 1];
+                const statusDot = lastIterBox.querySelector('.iter-status-dot');
+
+                // 只有当最后一个iter-box仍在执行中（spinner状态）且内容为空时才删除
+                if (statusDot && statusDot.classList.contains('spinner')) {
+                    // 检查是否有实质内容（thinking、exec-list等）
+                    const hasContent = lastIterBox.querySelector('.thinking-box, .exec-list, .progress-box');
+                    if (!hasContent) {
+                        // 空的执行中iter，删除
+                        lastIterBox.remove();
+                        const key = lastIterBox.dataset.iterKey;
+                        if (key) {
+                            this._iterBoxes.delete(key);
+                            this._thinkingSections.delete(key);
+                            this._toolTextByIter.delete(key);
+                            this._progressByIter.delete(key);
+                        }
+                    }
+                    // 有内容的保留，即使还是spinner状态（被stop的情况）
+                }
+            }
+
+            // 清理独立的thinking-box、tool-call-text-box、progress-box（旧版遗留）
+            this.chatMessages.querySelectorAll('.thinking-box:not(.iter-box .thinking-box), .tool-call-text-box, .progress-box:not(.iter-box .progress-box)').forEach(el => el.remove());
+
             this._lastProgressIter = null;
-        } catch (_) {}
-        // 删除整个progress box（包括按钮），而不是只删除content
+        } catch (e) {
+            console.warn('[UI] 清理未完成容器失败:', e);
+        }
+
+        // 删除独立的progress box（如果有）
         if (this._progress && this._progress.box && this._progress.box.parentElement) {
             this._progress.box.remove();
         }
@@ -476,11 +512,14 @@ class UI {
             if (toolCallContainer) toolCallContainer.remove();
         }
 
-        // 重置thinking和progress状态
+        // 重置thinking和progress状态（但不清空Map，因为已完成的iter还在）
         this.currentThinkingBox = null;
         this.currentProgressBox = null;
         this.currentToolCallTextBox = null;
         this._progress = null;
+
+        // 🔧 重置SSE迭代映射状态，确保新请求的iter从1开始正确映射到新容器
+        this._resetSSEIterMapping();
 
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message user';
@@ -496,18 +535,67 @@ class UI {
         this.scrollToBottom();
     }
 
+    /**
+     * 将后端iter映射为前端显示的iter
+     * 用于SSE实时流，将ReAct循环的累计iter转换为用户轮次
+     */
+    _mapSSEIter(backendIter) {
+        if (!backendIter && backendIter !== 0) return 1;
+
+        // 如果已经映射过，直接返回
+        if (this._sseIterMap.has(backendIter)) {
+            return this._sseIterMap.get(backendIter);
+        }
+
+        // 第一次遇到iter，记录base
+        if (this._sseIterBase === null) {
+            this._sseIterBase = backendIter;
+        }
+
+        // 计算前端显示的iter：从1开始递增
+        const frontendIter = backendIter - this._sseIterBase + 1;
+        this._sseIterMap.set(backendIter, frontendIter);
+        return frontendIter;
+    }
+
+    /**
+     * 重置SSE迭代映射状态（在新请求开始时调用）
+     * 确保每次新请求的后端iter都能正确映射到新的前端iter容器
+     */
+    _resetSSEIterMapping() {
+        console.log('[UI] 重置SSE迭代映射状态');
+        this._sseIterBase = null;
+        this._sseIterMap.clear();
+        // 🔧 关键：也要清空_iterBoxes，否则新请求会复用旧容器
+        // 注意：已append到DOM的容器元素不会被删除，只是Map引用被清空
+        if (this._iterBoxes) {
+            this._iterBoxes.clear();
+        }
+        // 同时清空相关的辅助Map
+        if (this._thinkingSections) {
+            this._thinkingSections.clear();
+        }
+        if (this._execLastByTool) {
+            this._execLastByTool.clear();
+        }
+        if (this._progressByIter) {
+            this._progressByIter.clear();
+        }
+    }
+
     // 获取/创建迭代分组容器
     ensureIterContainer(iter) {
         const key = String(iter || '1');
         if (this._iterBoxes.has(key)) return this._iterBoxes.get(key);
         const wrap = document.createElement('div');
         wrap.className = 'iter-box';
+        wrap.dataset.iterKey = key;  // 添加key标识，用于清理时查找
         const hdr = document.createElement('div');
         hdr.className = 'iter-header';
         hdr.textContent = `第${key}轮`;
         // 状态点（默认spinner）
         const dot = document.createElement('span');
-        dot.className = 'progress-dot spinner';
+        dot.className = 'progress-dot spinner iter-status-dot';  // 添加iter-status-dot class
         dot.style.marginLeft = '8px';
         hdr.appendChild(dot);
         wrap._statusDot = dot;
@@ -577,7 +665,7 @@ class UI {
             toolCallBox.className = 'tool-call-text-box';
             const label = document.createElement('div');
             label.className = 'tool-call-text-label';
-            label.textContent = '💭 思考中';
+            label.textContent = '💭 思考';
             toolCallBox.appendChild(label);
             contentDiv = document.createElement('div');
             contentDiv.className = 'tool-call-text-content';
@@ -598,7 +686,11 @@ class UI {
             const wrap = this.ensureIterContainer(key);
             const box = document.createElement('div');
             box.className = 'tool-call-text-box';
-            const label = document.createElement('div'); label.className = 'tool-call-text-label'; label.textContent = '📎 说明'; box.appendChild(label);
+            const label = document.createElement('div');
+            label.className = 'tool-call-text-label';
+            // 如果本轮还没有任何思考块，则把note也当作“思考”展示，文案统一为“💭 思考”。
+            label.textContent = this._thinkingSections && this._thinkingSections.has(key) ? '📎 说明' : '💭 思考';
+            box.appendChild(label);
             contentDiv = document.createElement('div'); contentDiv.className = 'tool-call-text-content'; box.appendChild(contentDiv);
             wrap.appendChild(box);
             this._toolTextByIter.set(key, contentDiv);
@@ -619,22 +711,29 @@ class UI {
 
         const phase = evt.phase || 'info';
         if (phase === 'start') {
-            const row = document.createElement('div'); row.className = 'progress-line';
-            row.textContent = `🛠 执行工具: ${evt.tool}` + (evt.args_preview ? `\n参数: ${evt.args_preview}` : '');
-            list.appendChild(row); toolMap.set(evt.tool || 'unknown', row);
+            const item = document.createElement('div'); item.className = 'exec-item';
+            const head = document.createElement('div'); head.className = 'exec-head';
+            head.innerHTML = `🛠 执行工具: <span class="exec-tool">${this.escapeHtml(evt.tool || 'unknown')}</span>`;
+            const status = document.createElement('span'); status.className = 'exec-status'; head.appendChild(status);
+            item.appendChild(head);
+            if (evt.args_preview) { const pre=document.createElement('pre'); pre.className='exec-args'; pre.textContent=evt.args_preview; item.appendChild(pre); }
+            item._status = status;
+            list.appendChild(item); toolMap.set(evt.tool || 'unknown', item);
         } else if (phase === 'heartbeat') {
             const k = evt.tool || 'unknown';
-            let row = toolMap.get(k);
-            if (!row) { row = document.createElement('div'); row.className='progress-line'; row.textContent = `⏳ ${k} 执行中...`; list.appendChild(row); toolMap.set(k, row); }
-            row.textContent = row.textContent.replace(/(已等待 .*秒)?$/, '') + ` 已等待 ${evt.elapsed_sec || 0}s`;
+            let item = toolMap.get(k);
+            if (!item) { item=document.createElement('div'); item.className='exec-item'; const head=document.createElement('div'); head.className='exec-head'; head.innerHTML=`⏳ ${this.escapeHtml(k)} 执行中...`; const st=document.createElement('span'); st.className='exec-status'; head.appendChild(st); item._status=st; item.appendChild(head); list.appendChild(item); toolMap.set(k,item);} 
+            const s=item._status || item.querySelector('.exec-status'); if (s) s.textContent=` 已等待 ${evt.elapsed_sec||0}s`;
         } else if (phase === 'done') {
-            const k = evt.tool || 'unknown'; const row = toolMap.get(k);
-            if (row) row.textContent += ' ✓ 完成'; else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✓ ${k} 执行完成`; list.appendChild(r); }
+            const k = evt.tool || 'unknown'; const item = toolMap.get(k);
+            if (item) { const s=item._status || item.querySelector('.exec-status'); if (s) s.textContent=' ✓ 完成'; }
+            else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✓ ${k} 执行完成`; list.appendChild(r); }
             toolMap.delete(k);
         } else if (phase === 'error') {
-            const k = evt.tool || 'unknown'; const row = toolMap.get(k);
-            const msg = evt.message ? `: ${evt.message}` : '';
-            if (row) row.textContent += ` ✗ 失败${msg}`; else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✗ ${k} 执行失败${msg}`; list.appendChild(r); }
+            const k = evt.tool || 'unknown'; const item = toolMap.get(k);
+            // 不显示具体错误信息，避免过长导致UI变形
+            if (item) { const s=item._status || item.querySelector('.exec-status'); if (s) s.textContent=' ✗ 失败'; }
+            else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✗ ${k} 执行失败`; list.appendChild(r); }
             toolMap.delete(k);
         } else if (phase === 'files') {
             const r = document.createElement('div'); r.className='progress-line'; r.textContent = `📄 生成文件: ${(evt.files||[]).join(', ')}`; list.appendChild(r);
@@ -702,7 +801,8 @@ class UI {
         if (message) {
             const line = document.createElement('div');
             line.className = 'progress-line';
-            line.textContent = message;
+            // 使用innerHTML以支持SVG图标等HTML内容
+            line.innerHTML = message;
             rec.content.appendChild(line);
         }
         this.smartScroll();
@@ -979,6 +1079,9 @@ class UI {
                 } else if (filename.endsWith('.xlsx')) {
                     console.log(`[UI] Adding Excel tab: ${filename}`);
                     this.addFileTab(filename, 'excel', key);
+                } else if (filename.toLowerCase().endsWith('.pptx')) {
+                    console.log(`[UI] Adding PPTX tab: ${filename}`);
+                    this.addFileTab(filename, 'pptx', key);
                 } else if (filename.match(/\.(png|jpg|jpeg|svg|gif|webp|avif)$/i)) {
                     console.log(`[UI] Adding Image tab: ${filename}`);
                     this.addFileTab(filename, 'image', key);
@@ -1031,34 +1134,9 @@ class UI {
             filename: filename,
             key: normKey,
             type: type,
-            element: null
+            element: null,
+            tabElement: null  // 标签元素（将在renderFileTabsGrouped中创建）
         };
-
-        // 创建标签
-        const tab = document.createElement('li');
-        tab.className = 'file-tab';
-        tab.dataset.fileIndex = fileIndex;
-
-        // 图标
-        const icon = document.createElement('span');
-        icon.className = 'file-tab-icon';
-        icon.textContent = '';
-
-        // 文件名
-        const name = document.createElement('span');
-        name.className = 'file-tab-name';
-        name.textContent = filename;
-        name.title = filename; // tooltip显示完整文件名
-
-        tab.appendChild(icon);
-        tab.appendChild(name);
-
-        // 点击事件
-        tab.addEventListener('click', () => {
-            this.switchToFile(fileIndex);
-        });
-
-        this.fileTabs.appendChild(tab);
 
         // 创建内容容器
         const contentDiv = document.createElement('div');
@@ -1090,6 +1168,8 @@ class UI {
         // 加载文件内容
         if (type === 'excel') {
             this.loadExcelIntoContainer(filename, contentDiv);
+        } else if (type === 'pptx') {
+            this.loadPptxIntoContainer(filename, contentDiv);
         } else if (type === 'image') {
             this.loadImageIntoContainer(filename, contentDiv);
         } else if (type === 'audio') {
@@ -1112,6 +1192,9 @@ class UI {
             this.loadMarkdownIntoContainer(filename, contentDiv);
         }
 
+        // 重新渲染分组视图
+        this.renderFileTabsGrouped();
+
         console.log(`[UI] 添加文件标签: ${filename}`);
     }
 
@@ -1124,7 +1207,8 @@ class UI {
         // 更新标签激活状态
         const tabs = this.fileTabs.querySelectorAll('.file-tab');
         tabs.forEach((tab, index) => {
-            if (index === fileIndex) {
+            const tabFileIndex = parseInt(tab.dataset.fileIndex);
+            if (tabFileIndex === fileIndex) {
                 tab.classList.add('active');
             } else {
                 tab.classList.remove('active');
@@ -1138,6 +1222,89 @@ class UI {
                 content.classList.add('active');
             } else {
                 content.classList.remove('active');
+            }
+        });
+    }
+
+    /**
+     * 按文件类型分组渲染文件标签
+     */
+    renderFileTabsGrouped() {
+        // 清空现有标签
+        this.fileTabs.innerHTML = '';
+
+        // 定义文件分组配置
+        const groups = {
+            image: { label: '📷 图片', types: ['image'], files: [] },
+            video: { label: '🎬 视频', types: ['video'], files: [] },
+            audio: { label: '🎵 音频', types: ['audio'], files: [] },
+            document: { label: '📊 文档', types: ['excel', 'pptx', 'pdf'], files: [] },
+            webpage: { label: '🌐 网页', types: ['webpage', 'html'], files: [] },
+            text: { label: '📝 文本/代码', types: ['text', 'json', 'jsonl', 'markdown'], files: [] }
+        };
+
+        // 将文件分类到各个分组
+        this.files.forEach((file, index) => {
+            file.index = index;  // 保存原始索引
+            for (const groupKey in groups) {
+                if (groups[groupKey].types.includes(file.type)) {
+                    groups[groupKey].files.push(file);
+                    break;
+                }
+            }
+        });
+
+        // 渲染各个分组
+        for (const groupKey in groups) {
+            const group = groups[groupKey];
+            if (group.files.length === 0) continue;
+
+            // 创建分组标题
+            const groupHeader = document.createElement('div');
+            groupHeader.className = 'file-group-header';
+            groupHeader.innerHTML = `
+                <span class="file-group-title">${group.label}</span>
+                <span class="file-group-count">${group.files.length}</span>
+            `;
+            this.fileTabs.appendChild(groupHeader);
+
+            // 创建该分组的文件列表容器
+            const groupList = document.createElement('div');
+            groupList.className = 'file-group-list';
+
+            // 创建文件标签
+            group.files.forEach(file => {
+                const tab = document.createElement('div');
+                tab.className = 'file-tab';
+                tab.dataset.fileIndex = file.index;
+
+                const name = document.createElement('span');
+                name.className = 'file-tab-name';
+                name.textContent = file.filename;
+                name.title = file.filename;
+
+                tab.appendChild(name);
+
+                // 点击事件
+                tab.addEventListener('click', () => {
+                    this.switchToFile(file.index);
+                });
+
+                // 保存tab元素引用
+                file.tabElement = tab;
+
+                groupList.appendChild(tab);
+            });
+
+            this.fileTabs.appendChild(groupList);
+        }
+
+        // 更新当前激活的标签样式
+        const tabs = this.fileTabs.querySelectorAll('.file-tab');
+        tabs.forEach((tab) => {
+            const tabFileIndex = parseInt(tab.dataset.fileIndex);
+            if (tabFileIndex === this.currentFileIndex) {
+                tab.classList.add('active');
             }
         });
     }
@@ -1205,14 +1372,17 @@ class UI {
      */
     async loadExcelIntoContainer(filename, container) {
         try {
+            // 强制要求会话ID，不允许兜底
+            if (!this.currentConvId) {
+                container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">错误: 当前无会话ID，无法加载文件</div>';
+                console.error('[UI] 无会话ID，无法加载Excel:', filename);
+                return;
+            }
+
             const encodedFilename = encodeURIComponent(filename);
-            // 如果前端未加载SheetJS, 使用后端预览接口兜底
+            // 如果前端未加载SheetJS, 使用后端预览接口
             if (typeof XLSX === 'undefined') {
-                const convId = this.currentConvId;
-                let previewUrl = convId
-                    ? `/preview/excel/${encodeURIComponent(convId)}/${encodedFilename}`
-                    : `/preview/excel/${encodedFilename}`;
-                previewUrl += (previewUrl.includes('?') ? '&' : '?') + `t=${Date.now()}`;
+                const previewUrl = `/preview/excel/${encodeURIComponent(this.currentConvId)}/${encodedFilename}?t=${Date.now()}`;
                 const preview = await fetch(previewUrl);
                 if (!preview.ok) throw new Error(`HTTP ${preview.status}`);
                 const data = await preview.json();
@@ -1450,11 +1620,16 @@ class UI {
 
     /** 加载音频到指定容器 */
     loadAudioIntoContainer(filename, container) {
+        // 强制要求会话ID，不允许兜底
+        if (!this.currentConvId) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">错误: 当前无会话ID，无法加载文件</div>';
+            console.error('[UI] 无会话ID，无法加载音频:', filename);
+            return;
+        }
+
         const encoded = encodeURIComponent(filename);
         const bust = `?t=${Date.now()}`;
-        const streamSrc = this.currentConvId
-            ? `/stream/${encodeURIComponent(this.currentConvId)}/${encoded}${bust}`
-            : `/stream/${encoded}${bust}`;
+        const streamSrc = `/stream/${encodeURIComponent(this.currentConvId)}/${encoded}${bust}`;
         const directSrc = `${this.outputsBaseUrl}/${encoded}${bust}`;
 
         // 根据文件扩展名确定MIME类型
@@ -1502,10 +1677,15 @@ class UI {
 
     /** 加载视频到指定容器 */
     loadVideoIntoContainer(filename, container) {
+        // 强制要求会话ID，不允许兜底
+        if (!this.currentConvId) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">错误: 当前无会话ID，无法加载文件</div>';
+            console.error('[UI] 无会话ID，无法加载视频:', filename);
+            return;
+        }
+
         const encoded = encodeURIComponent(filename);
-        const streamSrc = this.currentConvId
-            ? `/stream/${encodeURIComponent(this.currentConvId)}/${encoded}?t=${Date.now()}`
-            : `/stream/${encoded}?t=${Date.now()}`;
+        const streamSrc = `/stream/${encodeURIComponent(this.currentConvId)}/${encoded}?t=${Date.now()}`;
         container.innerHTML = `
             <div class="image-preview-container">
                 <div class="preview-info">
@@ -1523,6 +1703,58 @@ class UI {
                 </div>
             </div>
         `;
+        const saveBtn = container.querySelector('.workspace-save');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', (e) => { e.preventDefault(); this.workspaceSave(filename, saveBtn); });
+        }
+        const delBtn = container.querySelector('.file-delete');
+        if (delBtn) {
+            delBtn.addEventListener('click', async (e) => { e.preventDefault(); await this.deleteFile(filename); });
+        }
+    }
+
+    /** 加载PPTX到指定容器（下载预览） */
+    loadPptxIntoContainer(filename, container) {
+        // 强制要求会话ID，不允许兜底
+        if (!this.currentConvId) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">错误: 当前无会话ID，无法加载文件</div>';
+            console.error('[UI] 无会话ID，无法加载PPTX:', filename);
+            return;
+        }
+
+        const encoded = encodeURIComponent(filename);
+        const downloadUrl = `${this.outputsBaseUrl}/${encoded}`;
+
+        container.innerHTML = `
+            <div class="pptx-preview-container">
+                <div class="preview-info">
+                    <div style="display:flex; justify-content: space-between; align-items:center;">
+                        <h4>${filename}</h4>
+                        <div style="display:flex; gap:12px; align-items:center;">
+                            <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
+                            <a href="${downloadUrl}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+                            <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:60px 40px; text-align:center; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-top:16px;">
+                    <div style="font-size:64px; margin-bottom:24px;">📊</div>
+                    <div style="font-size:18px; font-weight:500; margin-bottom:12px; color:var(--text);">${filename}</div>
+                    <div style="font-size:14px; color:var(--muted); margin-bottom:32px;">PowerPoint 演示文稿</div>
+                    <a href="${downloadUrl}" download="${filename}"
+                       style="display:inline-block; padding:14px 32px; background:#007bff; color:white;
+                              text-decoration:none; border-radius:6px; font-size:15px; font-weight:500;
+                              transition: background 0.2s;">
+                        📥 下载查看
+                    </a>
+                    <div style="margin-top:24px; font-size:13px; color:var(--muted); line-height:1.6;">
+                        PowerPoint 文件需要下载后使用 Microsoft PowerPoint、<br>
+                        LibreOffice Impress 或其他兼容软件查看
+                    </div>
+                </div>
+            </div>
+        `;
+
         const saveBtn = container.querySelector('.workspace-save');
         if (saveBtn) {
             saveBtn.addEventListener('click', (e) => { e.preventDefault(); this.workspaceSave(filename, saveBtn); });
@@ -2559,7 +2791,7 @@ class UI {
             const listResp = await fetch(`/outputs/list/${encodeURIComponent(convId)}`);
             if (!listResp.ok) return;
             const data = await listResp.json();
-            const previewables = (data.files || []).filter(fn => /\.(png|jpg|jpeg|svg|gif|webp|avif|xlsx|html|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log|yaml|yml|toml|ini|cfg|conf|xml|py|js|ts|tsx|jsx|java|go|rs|c|cpp|h|cs|rb|php|sh|bash|zsh|sql)$/i.test(fn));
+            const previewables = (data.files || []).filter(fn => /\.(png|jpg|jpeg|svg|gif|webp|avif|xlsx|pptx|html|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log|yaml|yml|toml|ini|cfg|conf|xml|py|js|ts|tsx|jsx|java|go|rs|c|cpp|h|cs|rb|php|sh|bash|zsh|sql)$/i.test(fn));
             this.clearAllFiles();
             if (previewables.length) this.loadMultipleFiles(previewables);
         } catch (e) {

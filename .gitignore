@@ -88,3 +88,4 @@ move_tests.sh
 *.md
 !README.md
 !requirements.txt
+.cache/

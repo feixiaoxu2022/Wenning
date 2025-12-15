@@ -42,8 +42,9 @@ class TTSMiniMax(BaseAtomicTool):
     name = "tts_minimax"
     description = (
         "MiniMax 语音合成（中文优化）: 将文本转换为自然流畅的语音，支持多种情感表达（开心happy、悲伤sad、愤怒angry等）。"
+        "支持使用预设音色或自定义复刻音色（如 feixiaoxu_voice_001）。"
         "适用场景：中文有声内容、需要情感色彩的语音场景、高质量配音。"
-        "参数: text(必填文本), conversation_id(必填), voice_id(音色), emotion(情感), speed(语速), format(格式)"
+        "参数: text(必填文本), conversation_id(必填), voice_id(音色，支持自定义), emotion(情感), speed(语速), format(格式)"
     )
 
     parameters_schema = {
@@ -58,7 +59,7 @@ class TTSMiniMax(BaseAtomicTool):
             },
             "voice_id": {
                 "type": "string",
-                "description": "音色ID (如 male-qn-qingse, female-tianmei-jingpin)",
+                "description": "音色ID。预设音色如：male-qn-qingse, female-tianmei-jingpin；自定义音色如：feixiaoxu_voice_001（用户复刻的音色）",
                 "default": "male-qn-qingse"
             },
             "speed": {"type": "number", "description": "语速(0.5~2.0)", "default": 1.0},

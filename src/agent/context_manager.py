@@ -15,19 +15,72 @@ logger = get_logger(__name__)
 class ContextManager:
     """对话上下文管理器"""
 
-    def __init__(self, model_name: str = "gpt-4", max_tokens: int = 128000):
+    def __init__(self, model_name: str = "gpt-4", max_tokens: int = None):
         """初始化Context Manager
 
         Args:
             model_name: 模型名称,用于token计数
-            max_tokens: 最大context window大小
+            max_tokens: 最大context window大小（None则自动根据模型推断）
         """
         self.model_name = model_name
+
+        # 自动识别模型的context window大小
+        if max_tokens is None:
+            max_tokens = self._infer_max_tokens(model_name)
+
         self.max_tokens = max_tokens
-        self.compression_threshold = 0.80  # 80%触发压缩
-        self.recent_turns_to_keep = 1  # 保留最近1轮不压缩
+        self.compression_threshold = 0.85  # 85%触发压缩（充分利用200K context）
+        self.recent_turns_to_keep = 3  # 保留最近3轮不压缩（参考Anthropic建议）
 
         logger.info(f"ContextManager初始化: model={model_name}, max_tokens={max_tokens}, threshold={self.compression_threshold}")
+
+    def _infer_max_tokens(self, model_name: str) -> int:
+        """根据模型名称推断context window大小
+
+        Args:
+            model_name: 模型名称
+
+        Returns:
+            推断的max_tokens大小
+        """
+        model_lower = model_name.lower()
+
+        # Claude 系列（3.x, 4.5, Opus, Sonnet, Haiku等）- 200K tokens
+        if 'claude' in model_lower:
+            return 200000
+
+        # Gemini 1.5/3.0 系列 - 1M tokens
+        if 'gemini' in model_lower and (any(x in model_lower for x in ['1.5', '3', 'pro', 'flash'])):
+            return 1000000
+
+        # GPT-5 - 请确认具体的context window大小
+        if 'gpt-5' in model_lower:
+            # TODO: 确认GPT-5的实际context window大小
+            return 200000  # 临时使用200K，需要根据官方文档调整
+
+        # GPT-4 Turbo / GPT-4o - 128K tokens
+        if any(x in model_lower for x in ['gpt-4-turbo', 'gpt-4o', 'gpt-4-0125', 'gpt-4-1106']):
+            return 128000
+
+        # GPT-4-32K - 32K tokens
+        if 'gpt-4-32k' in model_lower:
+            return 32000
+
+        # GPT-4 基础版 - 8K tokens
+        if 'gpt-4' in model_lower:
+            return 8000
+
+        # GLM-4 系列 - 128K tokens
+        if 'glm-4' in model_lower:
+            return 128000
+
+        # Deepseek 系列 - 128K tokens
+        if 'deepseek' in model_lower:
+            return 128000
+
+        # 默认128K（保守估计，对未知模型如GPT-5可手动指定max_tokens）
+        logger.warning(f"未识别的模型 {model_name}，使用默认128K context window。如需自定义，请在初始化时指定max_tokens参数")
+        return 128000
 
     def calculate_usage(self, messages: List[Dict]) -> Dict[str, Any]:
         """计算context使用情况
@@ -39,34 +92,12 @@ class ContextManager:
             使用情况统计
         """
         try:
-            import tiktoken
-            import socket
+            # 方案1：尝试使用tiktoken（仅当已缓存时）
+            total_tokens = self._calculate_tokens_tiktoken(messages)
 
-            # 设置更短的超时时间，避免长时间等待
-            original_timeout = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(5.0)  # 5秒超时
-
-            try:
-                encoder = tiktoken.encoding_for_model(self.model_name)
-            except KeyError:
-                # 如果模型不在tiktoken中,使用默认编码
-                logger.warning(f"模型{self.model_name}不在tiktoken中,使用cl100k_base编码")
-                encoder = tiktoken.get_encoding("cl100k_base")
-            finally:
-                # 恢复默认超时
-                socket.setdefaulttimeout(original_timeout)
-
-            # 计算总token数
-            total_tokens = 0
-            for msg in messages:
-                content = str(msg.get("content", ""))
-                # Function calling相关的也要计算
-                if msg.get("tool_calls"):
-                    content += str(msg["tool_calls"])
-                if msg.get("name"):
-                    content += msg["name"]
-
-                total_tokens += len(encoder.encode(content))
+            if total_tokens is None:
+                # 方案2：降级到简单估算（避免网络超时）
+                total_tokens = self._calculate_tokens_simple(messages)
 
             usage_percent = (total_tokens / self.max_tokens) * 100
             should_compress = usage_percent >= (self.compression_threshold * 100)
@@ -96,6 +127,113 @@ class ContextManager:
                 "compression_threshold": self.compression_threshold * 100
             }
 
+    def _calculate_tokens_tiktoken(self, messages: List[Dict]) -> int:
+        """使用tiktoken计算token数（使用项目本地缓存，避免网络下载）
+
+        Args:
+            messages: 消息列表
+
+        Returns:
+            token总数，如果失败返回None
+        """
+        try:
+            import tiktoken
+            import socket
+            import os
+
+            # 优先使用项目本地缓存目录（从.env加载）
+            tiktoken_cache_dir = os.environ.get("TIKTOKEN_CACHE_DIR")
+            if tiktoken_cache_dir:
+                # 相对路径转绝对路径
+                if not os.path.isabs(tiktoken_cache_dir):
+                    from pathlib import Path
+                    tiktoken_cache_dir = str(Path.cwd() / tiktoken_cache_dir)
+                os.environ["TIKTOKEN_CACHE_DIR"] = tiktoken_cache_dir
+                logger.debug(f"使用tiktoken缓存目录: {tiktoken_cache_dir}")
+            else:
+                # 回退到默认用户目录
+                tiktoken_cache_dir = os.path.expanduser("~/.cache/tiktoken")
+
+            # 检查缓存是否存在
+            cache_exists = os.path.exists(tiktoken_cache_dir) and any(
+                os.path.isfile(os.path.join(tiktoken_cache_dir, f))
+                for f in os.listdir(tiktoken_cache_dir)
+            ) if os.path.exists(tiktoken_cache_dir) else False
+
+            if not cache_exists:
+                logger.info(f"tiktoken缓存不存在({tiktoken_cache_dir})，使用简单估算")
+                logger.info("提示: 运行 'python scripts/download_tiktoken_cache.py' 下载编码文件")
+                return None
+
+            # 设置更短的超时时间（防止意外网络请求）
+            original_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(2.0)  # 2秒超时
+
+            try:
+                try:
+                    encoder = tiktoken.encoding_for_model(self.model_name)
+                    logger.debug(f"使用模型专属编码: {self.model_name}")
+                except KeyError:
+                    # 模型不在tiktoken中，使用默认编码（静默处理，这是正常情况）
+                    encoder = tiktoken.get_encoding("cl100k_base")
+                    logger.debug(f"模型{self.model_name}使用cl100k_base编码")
+            finally:
+                socket.setdefaulttimeout(original_timeout)
+
+            # 计算总token数
+            total_tokens = 0
+            for msg in messages:
+                content = str(msg.get("content", ""))
+                # Function calling相关的也要计算
+                if msg.get("tool_calls"):
+                    content += str(msg["tool_calls"])
+                if msg.get("name"):
+                    content += msg["name"]
+
+                total_tokens += len(encoder.encode(content))
+
+            logger.debug(f"使用tiktoken计算: {total_tokens} tokens")
+            return total_tokens
+
+        except Exception as e:
+            logger.warning(f"tiktoken计算失败，降级到简单估算: {str(e)}")
+            return None
+
+    def _calculate_tokens_simple(self, messages: List[Dict]) -> int:
+        """简单token估算（不依赖tiktoken）
+
+        使用经验公式：英文约4字符=1token，中文约1.5字符=1token
+
+        Args:
+            messages: 消息列表
+
+        Returns:
+            估算的token总数
+        """
+        total_chars = 0
+        chinese_chars = 0
+
+        for msg in messages:
+            content = str(msg.get("content", ""))
+
+            # Function calling相关的也要计算
+            if msg.get("tool_calls"):
+                content += str(msg["tool_calls"])
+            if msg.get("name"):
+                content += msg["name"]
+
+            total_chars += len(content)
+
+            # 统计中文字符
+            chinese_chars += sum(1 for char in content if '\u4e00' <= char <= '\u9fff')
+
+        # 估算公式：中文1.5字符≈1token，英文4字符≈1token
+        # 简化为：total_tokens ≈ chinese_chars / 1.5 + (total_chars - chinese_chars) / 4
+        estimated_tokens = int(chinese_chars / 1.5 + (total_chars - chinese_chars) / 4)
+
+        logger.debug(f"使用简单估算: {estimated_tokens} tokens (chars={total_chars}, chinese={chinese_chars})")
+        return estimated_tokens
+
     def should_compress(self, messages: List[Dict]) -> bool:
         """判断是否需要压缩
 
@@ -111,13 +249,15 @@ class ContextManager:
     def compress_conversation_history(
         self,
         conversation_history: List[Dict],
-        llm_client
+        llm_client,
+        merge_recent_tools: bool = False  # 是否也合并最近对话的tool调用
     ) -> List[Dict]:
         """压缩对话历史
 
         Args:
             conversation_history: 完整对话历史
             llm_client: LLM客户端,用于生成摘要
+            merge_recent_tools: 是否也合并最近对话中的连续tool调用（默认False，保留详细信息）
 
         Returns:
             压缩后的对话历史
@@ -141,8 +281,22 @@ class ContextManager:
         logger.info(f"开始压缩对话历史: {len(old)}条旧对话 + {len(recent)}条最近对话")
 
         try:
-            # 生成压缩摘要
-            summary = self._generate_summary(old, llm_client)
+            # 第零步：合并连续的同类tool调用（特别是web_search）
+            old_merged = self._merge_consecutive_tool_calls(old)
+            logger.info(f"Tool调用合并(旧对话): {len(old)}条 → {len(old_merged)}条消息")
+
+            # 可选：也合并最近对话的tool调用（激进模式）
+            if merge_recent_tools:
+                recent_merged = self._merge_consecutive_tool_calls(recent)
+                logger.info(f"Tool调用合并(最近对话): {len(recent)}条 → {len(recent_merged)}条消息")
+                recent = recent_merged
+
+            # 第一步：清理旧对话中的tool结果（Anthropic推荐的低成本优化）
+            old_cleaned = self._clear_tool_results(old_merged)
+            logger.info(f"Tool结果清理: {len(old_merged)}条 → {len(old_cleaned)}条非空消息")
+
+            # 第二步：生成压缩摘要
+            summary = self._generate_summary(old_cleaned, llm_client)
 
             if not summary:
                 logger.error("⚠️  摘要生成失败或为空,保留原始历史")
@@ -178,6 +332,172 @@ class ContextManager:
             traceback.print_exc()
             return conversation_history
 
+    def _merge_consecutive_tool_calls(self, messages: List[Dict]) -> List[Dict]:
+        """合并连续的同类tool调用（特别是web_search）
+
+        策略：
+        - web_search：3次以上合并为摘要（只保留"搜了N次+成功率"）
+        - code_executor：保留最后1次完整记录
+        - 其他工具：不合并
+
+        Args:
+            messages: 原始消息列表
+
+        Returns:
+            合并后的消息列表
+        """
+        merged = []
+        buffer = []  # 缓存连续的同类tool消息
+
+        for msg in messages:
+            if msg.get('role') == 'tool':
+                tool_name = msg.get('name', '')
+
+                # 如果buffer为空或同类工具，加入buffer
+                if not buffer or buffer[0].get('name') == tool_name:
+                    buffer.append(msg)
+                else:
+                    # 不同类工具，处理buffer
+                    merged.extend(self._process_tool_buffer(buffer))
+                    buffer = [msg]
+            else:
+                # 非tool消息，先处理buffer
+                if buffer:
+                    merged.extend(self._process_tool_buffer(buffer))
+                    buffer = []
+                merged.append(msg)
+
+        # 处理最后的buffer
+        if buffer:
+            merged.extend(self._process_tool_buffer(buffer))
+
+        return merged
+
+    def _process_tool_buffer(self, buffer: List[Dict]) -> List[Dict]:
+        """处理tool buffer：决定保留、合并还是删除
+
+        Args:
+            buffer: 连续的同类tool消息
+
+        Returns:
+            处理后的消息列表
+        """
+        if not buffer:
+            return []
+
+        if len(buffer) < 3:
+            return buffer  # 少于3次，不合并
+
+        tool_name = buffer[0].get('name', '')
+
+        # Web Search：合并为摘要
+        if tool_name == 'web_search':
+            import json
+
+            # 统计成功率
+            success_count = 0
+            total_count = len(buffer)
+
+            for msg in buffer:
+                try:
+                    content = msg.get('content', '')
+                    data = json.loads(content)
+                    if data.get('status') == 'success':
+                        success_count += 1
+                except:
+                    pass
+
+            # 生成摘要消息
+            summary_msg = {
+                'role': 'tool',
+                'tool_call_id': buffer[-1]['tool_call_id'],  # 用最后一次的ID
+                'name': tool_name,
+                'content': json.dumps({
+                    'status': 'summary',
+                    'data': {
+                        'tool': 'web_search',
+                        'total_calls': total_count,
+                        'successful': success_count,
+                        'failed': total_count - success_count,
+                        'note': f'执行了{total_count}次搜索，成功{success_count}次。详细结果已压缩以节省context。'
+                    }
+                }, ensure_ascii=False)
+            }
+
+            logger.info(f"[Tool合并] web_search: {total_count}次调用 → 1条摘要消息")
+            return [summary_msg]
+
+        # Code Executor：保留最后1次
+        elif tool_name == 'code_executor':
+            logger.info(f"[Tool合并] code_executor: {len(buffer)}次调用 → 保留最后1次")
+            return [buffer[-1]]
+
+        # 其他工具：保持原样
+        else:
+            return buffer
+
+    def _clear_tool_results(self, messages: List[Dict]) -> List[Dict]:
+        """清理tool结果以节省context（Anthropic推荐的tool result clearing）
+
+        策略：
+        1. 保留tool调用本身（assistant的tool_calls）
+        2. 压缩冗长的tool结果（只保留摘要）
+        3. 完全移除纯状态反馈的tool消息
+
+        Args:
+            messages: 消息列表
+
+        Returns:
+            清理后的消息列表
+        """
+        cleaned = []
+        for msg in messages:
+            if msg.get('role') == 'tool':
+                content = msg.get('content', '')
+
+                # 如果是短消息（<200字符），直接保留
+                if len(content) < 200:
+                    cleaned.append(msg)
+                    continue
+
+                # 对于长消息，压缩为摘要
+                try:
+                    # 尝试解析JSON结构
+                    import json
+                    data = json.loads(content)
+
+                    # 构建简洁摘要
+                    summary_parts = []
+                    if data.get('status'):
+                        summary_parts.append(f"Status: {data['status']}")
+                    if data.get('generated_files'):
+                        files = data['generated_files']
+                        summary_parts.append(f"Files: {', '.join(files[:3])}")
+                    if data.get('error'):
+                        summary_parts.append(f"Error: {data['error'][:100]}")
+
+                    summary = " | ".join(summary_parts) if summary_parts else content[:150]
+
+                    cleaned.append({
+                        'role': 'tool',
+                        'tool_call_id': msg.get('tool_call_id'),
+                        'name': msg.get('name'),
+                        'content': f"[Compressed: {len(content)} chars] {summary}"
+                    })
+                except:
+                    # 如果不是JSON，直接截断
+                    cleaned.append({
+                        'role': 'tool',
+                        'tool_call_id': msg.get('tool_call_id'),
+                        'name': msg.get('name'),
+                        'content': f"[Compressed: {len(content)} chars] {content[:200]}..."
+                    })
+            else:
+                # 非tool消息，保持原样
+                cleaned.append(msg)
+
+        return cleaned
+
     def _generate_summary(self, old_conversation: List[Dict], llm_client) -> str:
         """生成对话摘要
 
@@ -203,7 +523,7 @@ class ContextManager:
                     {"role": "user", "content": compression_prompt}
                 ],
                 tools=None,  # 不使用工具
-                model_override=None
+                stream=False
             )
 
             # 检查响应格式
@@ -257,7 +577,7 @@ class ContextManager:
         return "\n".join(lines)
 
     def _build_compression_prompt(self, conversation_text: str) -> str:
-        """构建压缩提示词
+        """构建压缩提示词（基于Anthropic的context engineering最佳实践）
 
         Args:
             conversation_text: 对话文本
@@ -265,94 +585,71 @@ class ContextManager:
         Returns:
             压缩提示词
         """
-        return f"""你是一个专业的对话历史总结助手。请将以下历史对话压缩为简洁的摘要,用于保留关键上下文信息。
+        return f"""你是一个专业的对话历史压缩助手。请将以下历史对话压缩为高信号密度的摘要。
 
-# 📋 总结要求
+# 🎯 压缩原则（参考Anthropic Context Engineering）
 
-## ✅ 必须保留的信息 (按优先级排序)
+找到**最小的高信号token集合**来保留关键上下文，丢弃冗余信息。
 
-### 1. **任务计划和执行进度** ⭐ 最高优先级
-   - 用户的整体任务目标
-   - 已完成的步骤和结果
-   - 进行中的步骤和状态
-   - 待执行的步骤
-   - 计划变更记录
+## ✅ 必须保留 (Critical Elements)
 
-### 2. **生成的文件和内容**
-   - 文件名称、类型、用途
-   - 文件的关键参数(如:尺寸、格式、主题)
-   - 文件之间的关联关系
+### 1. 架构决策 (Architectural Decisions)
+   - 用户选择的技术方案、工具、方法
+   - 明确拒绝的方案和原因
 
-### 3. **用户需求和偏好**
-   - 明确表达的需求和目标
-   - 风格和格式偏好(颜色、字体、布局等)
+### 2. 未解决的问题 (Unresolved Issues)
+   - 遇到的bug和错误
+   - 待解决的技术难题
+   - 需要后续关注的问题
+
+### 3. 实现细节 (Implementation Details)
+   - 关键参数和配置（尺寸、格式、风格）
+   - 文件名和文件关系
+   - 代码实现的重要约束
+
+### 4. 用户偏好和明确指令
    - 质量标准和约束条件
-   - 拒绝或不喜欢的方案
+   - 风格偏好（颜色、字体等）
+   - 明确的"要"和"不要"
 
-### 4. **重要决策和结论**
-   - 用户的选择和确认
-   - 明确的指令和修改要求
-   - 重要的反馈意见
+## ❌ 可以丢弃 (Redundant Content)
 
-### 5. **数据和知识**
-   - 搜索获取的重要信息
-   - 分析得出的关键结论
-   - 用户提供的原始数据
-
-## ❌ 可以大幅压缩或省略的信息
-
-1. 工具调用的详细参数和执行过程
-2. 中间步骤的详细思考过程
-3. 错误尝试和调试细节(除非影响最终方案)
-4. 重复性的确认和礼貌用语
-5. 已被后续操作替代的临时内容
+1. 冗余的tool输出（已被清理为摘要）
+2. 中间的思考过程和尝试
+3. 重复的确认和礼貌用语
+4. 已被后续操作替代的临时内容
 
 ## 📝 输出格式
 
-使用简洁的结构化格式,突出任务进展:
+使用简洁的结构化格式：
 
 ```
-【任务计划】
-整体目标: [一句话描述]
-✅ 已完成:
-  - 步骤1: 结果概要
-  - 步骤2: 结果概要
-🔄 进行中:
-  - 步骤3: 当前状态
-⏳ 待执行:
-  - 步骤4: 计划说明
+【核心任务】
+[一句话总结用户的整体目标]
 
-【生成文件】
-- 文件1.xlsx: 用途 | 关键参数 | 相关文件
-- 文件2.png: 用途 | 关键参数 | 相关文件
+【已完成】
+- 任务1: 结果（文件名、关键参数）
+- 任务2: 结果
 
-【用户偏好】
-- 风格: 具体描述
-- 格式: 具体要求
-- 约束: 限制条件
+【进行中/待解决】
+- 问题A: 状态描述
+- 任务B: 计划说明
 
-【关键数据】
-- 数据来源1: 核心内容摘要
-- 结论1: 重要发现
+【关键决策】
+- 技术选择: 原因
+- 用户偏好: 具体要求
 
-【待办事项】
-- [ ] 任务1: 具体说明
-- [ ] 任务2: 具体说明
+【重要文件】
+- file1.ext: 用途 | 参数
+- file2.ext: 用途 | 关联
 ```
 
-# 📚 待总结的历史对话
+---
+
+# 📋 需要压缩的对话内容
 
 {conversation_text}
 
-# ⚠️ 注意事项
+---
 
-1. **任务计划是最重要的上下文**,必须详细保留每个步骤的完成情况
-2. 总结长度控制在原对话的15-25%以内
-3. 保持客观中立,不添加推测和解释
-4. 使用第三人称叙述("用户要求...", "系统生成了...")
-5. 保留具体的数值、名称、路径等关键细节
-6. 如果某个文件被多次修改,只保留最终版本的信息
-7. 按时间顺序组织,但同类信息可以合并
-8. **直接输出摘要内容,不要添加任何前缀或解释**
-
-请开始总结:"""
+**请生成压缩摘要（200-500 tokens为佳）**："""

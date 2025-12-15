@@ -68,6 +68,7 @@ class Config:
             "ernie-5.0-thinking-preview",  # EB5（默认）
             "glm-4.5",
             "gpt-5",
+            "gpt-5.2",
             "doubao-seed-1-6-thinking-250615",
             "gemini-2.5-pro",
             "gemini-3-pro-preview",

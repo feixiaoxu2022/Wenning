@@ -189,10 +189,54 @@ class LLMClient:
                         })
 
             elif role == "user":
-                contents.append({
-                    "role": "user",
-                    "parts": [{"text": str(content)}]
-                })
+                # User消息：支持纯文本和multimodal
+                if isinstance(content, str):
+                    # 纯文本
+                    contents.append({
+                        "role": "user",
+                        "parts": [{"text": str(content)}]
+                    })
+                elif isinstance(content, list):
+                    # Multimodal消息
+                    parts = []
+                    for part in content:
+                        if not isinstance(part, dict):
+                            continue
+
+                        part_type = part.get("type")
+                        if part_type == "text":
+                            # 文本部分
+                            parts.append({"text": part.get("text", "")})
+                        elif part_type == "image_url":
+                            # 图片部分：转换OpenAI格式到Gemini格式
+                            # OpenAI: {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+                            # Gemini: {"inline_data": {"mime_type": "image/jpeg", "data": "..."}}
+                            image_url_obj = part.get("image_url", {})
+                            data_url = image_url_obj.get("url", "")
+
+                            # 解析data URL
+                            if data_url.startswith("data:"):
+                                try:
+                                    header, base64_data = data_url.split(",", 1)
+                                    mime_type = header.split(":")[1].split(";")[0]
+
+                                    parts.append({
+                                        "inline_data": {
+                                            "mime_type": mime_type,
+                                            "data": base64_data
+                                        }
+                                    })
+                                except Exception as e:
+                                    logger.warning(f"解析Gemini图片data URL失败: {e}")
+
+                    if parts:
+                        contents.append({"role": "user", "parts": parts})
+                else:
+                    # 其他类型，转为文本
+                    contents.append({
+                        "role": "user",
+                        "parts": [{"text": str(content)}]
+                    })
 
             elif role == "tool":
                 # tool结果转换为functionResponse
@@ -310,8 +354,53 @@ class LLMClient:
                 continue
 
             # 默认按user处理
-            text = content if isinstance(content, str) and content.strip() else "…"
-            anth_msgs.append({"role": "user", "content": [{"type": "text", "text": text}]})
+            if isinstance(content, str):
+                # 纯文本消息
+                text = content if content.strip() else "…"
+                anth_msgs.append({"role": "user", "content": [{"type": "text", "text": text}]})
+            elif isinstance(content, list):
+                # Multimodal消息（包含文本和图片）
+                blocks: List[Dict[str, Any]] = []
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+
+                    part_type = part.get("type")
+                    if part_type == "text":
+                        # 文本部分
+                        blocks.append({"type": "text", "text": part.get("text", "")})
+                    elif part_type == "image_url":
+                        # 图片部分：转换OpenAI格式到Claude格式
+                        # OpenAI: {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+                        # Claude: {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "..."}}
+                        image_url_obj = part.get("image_url", {})
+                        data_url = image_url_obj.get("url", "")
+
+                        # 解析data URL: data:image/jpeg;base64,<base64_data>
+                        if data_url.startswith("data:"):
+                            try:
+                                # 提取media_type和base64数据
+                                header, base64_data = data_url.split(",", 1)
+                                media_type = header.split(":")[1].split(";")[0]  # image/jpeg
+
+                                blocks.append({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": base64_data
+                                    }
+                                })
+                            except Exception as e:
+                                logger.warning(f"解析图片data URL失败: {e}")
+
+                if not blocks:
+                    blocks = [{"type": "text", "text": "…"}]
+                anth_msgs.append({"role": "user", "content": blocks})
+            else:
+                # 其他类型，转为文本
+                text = str(content) if content else "…"
+                anth_msgs.append({"role": "user", "content": [{"type": "text", "text": text}]})
 
         payload = {
             "model": self.model_config["model"],
@@ -890,15 +979,45 @@ class LLMClient:
         # 记录请求日志（脱敏）
         if self.config.agent_enable_request_logging:
             try:
-                msg_preview = [
-                    {"role": m.get("role"), "len": len(m.get("content", ""))}
-                    for m in (messages or [])
-                ]
+                msg_preview = []
+                for m in (used_messages or []):
+                    role = m.get("role")
+                    content = m.get("content", "")
+
+                    # 详细记录multimodal消息结构
+                    if isinstance(content, list):
+                        # Multimodal消息：记录每个part的类型和大小
+                        parts_info = []
+                        for part in content:
+                            if isinstance(part, dict):
+                                part_type = part.get("type")
+                                if part_type == "text":
+                                    text_len = len(part.get("text", ""))
+                                    parts_info.append(f"text({text_len}chars)")
+                                elif part_type == "image_url":
+                                    image_url = part.get("image_url", {}).get("url", "")
+                                    if image_url.startswith("data:"):
+                                        # 提取mime type和base64长度
+                                        try:
+                                            header, base64_data = image_url.split(",", 1)
+                                            mime = header.split(":")[1].split(";")[0]
+                                            base64_len = len(base64_data)
+                                            parts_info.append(f"image({mime},{base64_len}chars_base64)")
+                                        except:
+                                            parts_info.append("image(unknown)")
+                                    else:
+                                        parts_info.append(f"image({image_url[:50]}...)")
+                        msg_preview.append({"role": role, "content": parts_info})
+                    elif isinstance(content, str):
+                        msg_preview.append({"role": role, "content_len": len(content)})
+                    else:
+                        msg_preview.append({"role": role, "content_type": type(content).__name__})
+
                 logger.debug(
                     f"LLM流式请求: model={self.model_name}, stream=True, messages={msg_preview}, tools={len(tools) if tools else 0}, tool_choice={tool_choice}"
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"记录请求日志失败: {e}")
 
         last_error = None
         for attempt in range(1, self.max_retries + 1):

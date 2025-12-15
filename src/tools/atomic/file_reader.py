@@ -57,11 +57,18 @@ class FileReader(BaseAtomicTool):
         super().__init__(config)
         self.output_dir = config.output_dir
 
-    def _safe_path(self, conv: str, filename: str) -> Path:
+    def _safe_path(self, output_dir_name: str, filename: str) -> Path:
+        """安全路径检查：防止路径穿越
+
+        Args:
+            output_dir_name: 完整输出目录名（由master_agent统一注入）
+            filename: 文件名
+        """
         p = Path(filename)
         if p.is_absolute() or ".." in p.parts or "/" in filename or "\\" in filename:
             raise ValueError("仅允许文件名，不允许路径")
-        return (self.output_dir / conv / filename)
+
+        return self.output_dir / output_dir_name / filename
 
     def _infer_mode(self, filename: str) -> str:
         ext = Path(filename).suffix.lower()
@@ -165,7 +172,7 @@ class FileReader(BaseAtomicTool):
 
     def execute(self, **kwargs) -> Dict[str, Any]:
         filename: str = kwargs.get("filename")
-        conversation_id: str = kwargs.get("conversation_id")
+        output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
         mode: str = (kwargs.get("mode") or "auto").lower()
         encoding: str = kwargs.get("encoding") or "utf-8"
         max_bytes: int = int(kwargs.get("max_bytes") or 200_000)
@@ -173,7 +180,10 @@ class FileReader(BaseAtomicTool):
         rows: int = int(kwargs.get("rows") or 100)
         sheet: str = str(kwargs.get("sheet") or "0")
 
-        path = self._safe_path(conversation_id, filename)
+        if not output_dir_name:
+            raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
+
+        path = self._safe_path(output_dir_name, filename)
         if not path.exists():
             raise FileNotFoundError(f"文件不存在: {filename}")
 

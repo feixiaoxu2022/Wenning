@@ -94,12 +94,16 @@ class PlanTool(BaseAtomicTool):
             task_description = kwargs.get("task_description", "")
             steps = kwargs.get("steps", [])
             conversation_id = kwargs.get("conversation_id")
+            output_dir_name = kwargs.get("_output_dir_name")  # 由master_agent统一注入
 
             if not task_description:
                 raise ValueError("缺少task_description参数")
 
             if not conversation_id:
                 raise ValueError("缺少conversation_id参数")
+
+            if not output_dir_name:
+                raise ValueError("缺少_output_dir_name参数（应由master_agent自动注入）")
 
             if not isinstance(steps, list):
                 raise ValueError("steps必须是列表类型")
@@ -131,7 +135,7 @@ class PlanTool(BaseAtomicTool):
             }
 
             # 持久化到文件
-            plan_dir = self.output_dir / conversation_id
+            plan_dir = self.output_dir / output_dir_name
             plan_dir.mkdir(parents=True, exist_ok=True)
             plan_file = plan_dir / "plan.json"
 
@@ -146,11 +150,16 @@ class PlanTool(BaseAtomicTool):
             logger.info(f"任务计划已创建/更新: {task_description}")
             logger.info(f"总步骤: {len(steps)}, 已完成: {self.current_plan['completed_steps']}")
 
+            # 🔧 关键修复：返回generated_files，让前端能实时预览生成的plan.json
             return {
-                "summary": summary,
-                "plan": self.current_plan,
-                "saved_to": "plan.json",
-                "plan_file_path": str(plan_file)
+                "status": "success",
+                "data": {
+                    "summary": summary,
+                    "plan": self.current_plan,
+                    "saved_to": "plan.json",
+                    "plan_file_path": str(plan_file)
+                },
+                "generated_files": ["plan.json"]
             }
 
         except Exception as e:
