@@ -614,13 +614,14 @@ class ConversationManagerV2:
         return True
 
     # ===== 视觉控制：图片查看列表管理 =====
-    # 存储格式: [{"path": "xxx.png", "detail": "auto"}, ...]
+    # 存储格式: [{"path": "xxx.png", "detail": "auto", "remaining_views": 1}, ...]
 
     def add_images_to_view(
         self,
         conv_id: str,
         image_paths: List[str],
         detail: str = "auto",
+        view_count: int = 1,
         username: str | None = None
     ) -> bool:
         """添加图片到LLM查看列表
@@ -629,6 +630,7 @@ class ConversationManagerV2:
             conv_id: 对话ID
             image_paths: 图片文件路径列表（相对于outputs目录）
             detail: 图片细节级别 ("low"/"high"/"auto")
+            view_count: 查看次数限制（默认1次，查看后自动移除）
             username: 用户名（权限校验）
 
         Returns:
@@ -642,17 +644,26 @@ class ConversationManagerV2:
         if "pending_images" not in conv:
             conv["pending_images"] = []
 
-        # 转换为新格式（如果是旧格式）
+        # 转换为新格式（兼容旧数据）
         if conv["pending_images"] and isinstance(conv["pending_images"][0], str):
             conv["pending_images"] = [
-                {"path": p, "detail": "auto"} for p in conv["pending_images"]
+                {"path": p, "detail": "auto", "remaining_views": 1} for p in conv["pending_images"]
             ]
+        elif conv["pending_images"] and "remaining_views" not in conv["pending_images"][0]:
+            # 旧格式但有dict结构，补充remaining_views
+            for img in conv["pending_images"]:
+                if "remaining_views" not in img:
+                    img["remaining_views"] = 1
 
         # 添加图片（去重）
         existing_paths = {img["path"] for img in conv["pending_images"]}
         for path in image_paths:
             if path not in existing_paths:
-                conv["pending_images"].append({"path": path, "detail": detail})
+                conv["pending_images"].append({
+                    "path": path,
+                    "detail": detail,
+                    "remaining_views": max(1, view_count)  # 至少1次
+                })
 
         # 保存对话文件
         conv_path = self._get_conv_path(conv_id)
@@ -668,7 +679,7 @@ class ConversationManagerV2:
             username: 用户名（权限校验）
 
         Returns:
-            图片列表 [{"path": "xxx.png", "detail": "auto"}, ...]
+            图片列表 [{"path": "xxx.png", "detail": "auto", "remaining_views": 1}, ...]
         """
         conv = self.get_conversation(conv_id, username=username)
         if not conv:
@@ -678,9 +689,61 @@ class ConversationManagerV2:
 
         # 兼容旧格式（纯字符串列表）
         if pending and isinstance(pending[0], str):
-            return [{"path": p, "detail": "auto"} for p in pending]
+            return [{"path": p, "detail": "auto", "remaining_views": 1} for p in pending]
+
+        # 兼容旧dict格式（缺少remaining_views）
+        if pending and "remaining_views" not in pending[0]:
+            return [{"path": img["path"], "detail": img.get("detail", "auto"), "remaining_views": 1} for img in pending]
 
         return pending
+
+    def decrement_views_and_cleanup(self, conv_id: str, username: str | None = None) -> int:
+        """递减查看次数并移除已消耗的图片
+
+        Args:
+            conv_id: 对话ID
+            username: 用户名（权限校验）
+
+        Returns:
+            移除的图片数量
+        """
+        conv = self.get_conversation(conv_id, username=username)
+        if not conv:
+            return 0
+
+        pending = conv.get("pending_images", [])
+        if not pending:
+            return 0
+
+        # 兼容性处理
+        if isinstance(pending[0], str):
+            conv["pending_images"] = []
+            self._save_conversation_file(self._get_conv_path(conv_id), conv)
+            return len(pending)
+
+        # 递减并过滤
+        remaining = []
+        removed_count = 0
+
+        for img in pending:
+            if "remaining_views" not in img:
+                img["remaining_views"] = 1
+
+            img["remaining_views"] -= 1
+
+            if img["remaining_views"] > 0:
+                remaining.append(img)
+            else:
+                removed_count += 1
+
+        # 更新列表
+        conv["pending_images"] = remaining
+
+        # 保存对话文件
+        conv_path = self._get_conv_path(conv_id)
+        self._save_conversation_file(conv_path, conv)
+
+        return removed_count
 
     def clear_images_to_view(self, conv_id: str, username: str | None = None) -> bool:
         """清空LLM查看列表

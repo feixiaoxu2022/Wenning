@@ -396,9 +396,15 @@ class MasterAgent:
                 messages.append(image_message)
                 logger.info(f"已在消息列表末尾添加图片消息")
 
-        # 注意：这里不清空列表，允许多轮查看
-        # LLM可以通过manage_images_view工具主动清空
-        logger.info(f"图片已注入到messages，列表保持不变（共{len(pending_images)}张）")
+            # ⭐ 关键：注入后递减查看次数并移除已消耗的图片
+            removed_count = self.conv_manager.decrement_views_and_cleanup(self.current_conversation_id)
+            if removed_count > 0:
+                logger.info(f"✓ 已自动移除 {removed_count} 张查看次数用尽的图片")
+
+            remaining_count = len(pending_images) - removed_count
+            logger.info(f"图片已注入，剩余 {remaining_count} 张图片在列表中（待下次查看）")
+        else:
+            logger.info(f"图片列表非空（{len(pending_images)}张），但无有效内容可注入")
 
         return messages
 
@@ -1109,15 +1115,16 @@ class MasterAgent:
                             image_detail = getattr(tool_result, 'image_detail', 'auto')
                             logger.info(f"工具请求注入{len(tool_result.inject_images)}张图片 (detail={image_detail})")
 
-                            # 自动添加到conversation state
+                            # 自动添加到conversation state（默认查看1次）
                             if self.conv_manager and self.current_conversation_id:
                                 success = self.conv_manager.add_images_to_view(
                                     self.current_conversation_id,
                                     tool_result.inject_images,
-                                    image_detail
+                                    image_detail,
+                                    view_count=1  # 默认1次后自动移除
                                 )
                                 if success:
-                                    logger.info(f"  - 已自动添加{len(tool_result.inject_images)}张图片到查看列表")
+                                    logger.info(f"  - 已自动添加{len(tool_result.inject_images)}张图片到查看列表（查看1次后移除）")
                                 else:
                                     logger.warning(f"  - 自动添加图片到查看列表失败")
 

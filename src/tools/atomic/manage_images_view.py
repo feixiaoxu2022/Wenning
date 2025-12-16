@@ -27,10 +27,15 @@ class ManageImagesViewTool(BaseAtomicTool):
 - list: 查看当前列表中有哪些图片
 - clear: 清空所有图片（如开始新任务）
 
-重要：
-- 添加的图片会在下一轮对话时自动注入给你查看
-- 列表会在多轮对话中保留，除非主动移除或清空
-- 根据需要选择detail级别：low(节省token)/high(详细分析)/auto(推荐)"""
+重要机制 - 查看次数限制：
+- 默认情况下，每张图片只查看1次后自动移除（避免token浪费）
+- 如需多轮查看同一图片，使用view_count参数指定次数（如对比分析时设为2-3）
+- 每次注入到LLM后，remaining_views会自动递减，归零后自动移除
+
+detail级别选择：
+- low: 节省token，适合快速判断/预览
+- high: 详细分析，适合OCR/细节识别（消耗更多token）
+- auto: 自动平衡（推荐）"""
 
     parameters_schema = {
         "type": "object",
@@ -44,6 +49,13 @@ class ManageImagesViewTool(BaseAtomicTool):
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "图片文件名列表（add/remove操作时必填）"
+            },
+            "view_count": {
+                "type": "integer",
+                "default": 1,
+                "minimum": 1,
+                "maximum": 10,
+                "description": "查看次数限制（仅add操作生效）。默认1次后自动移除，如需多轮对比可设为2-3"
             },
             "detail": {
                 "type": "string",
@@ -73,6 +85,7 @@ class ManageImagesViewTool(BaseAtomicTool):
         self,
         action: Literal["add", "remove", "list", "clear"],
         image_paths: List[str] = None,
+        view_count: int = 1,
         detail: str = "auto",
         conversation_id: str = None,
         **kwargs
@@ -82,6 +95,7 @@ class ManageImagesViewTool(BaseAtomicTool):
         Args:
             action: 操作类型
             image_paths: 图片文件名列表
+            view_count: 查看次数限制（默认1）
             detail: 细节级别
             conversation_id: 对话ID
 
@@ -129,6 +143,11 @@ class ManageImagesViewTool(BaseAtomicTool):
 
         # === add 操作：添加图片 ===
         if action == "add":
+            # 验证view_count参数
+            if not isinstance(view_count, int) or view_count < 1:
+                view_count = 1
+            view_count = min(view_count, 10)  # 最多10次
+
             # 验证detail参数
             if detail not in ["low", "high", "auto"]:
                 detail = "auto"
@@ -159,7 +178,8 @@ class ManageImagesViewTool(BaseAtomicTool):
             success = self.conv_manager.add_images_to_view(
                 conversation_id,
                 valid_paths,
-                detail
+                detail,
+                view_count  # 传递查看次数
             )
 
             if not success:
@@ -171,7 +191,8 @@ class ManageImagesViewTool(BaseAtomicTool):
                 "added_count": len(valid_paths),
                 "added_images": valid_paths,
                 "detail_level": detail,
-                "message": f"已添加 {len(valid_paths)} 张图片到查看列表（detail={detail}），你将在下一轮对话中看到它们"
+                "view_count": view_count,
+                "message": f"已添加 {len(valid_paths)} 张图片到查看列表（detail={detail}, 查看{view_count}次后自动移除）"
             }
 
             if invalid_paths:
@@ -201,12 +222,20 @@ class ManageImagesViewTool(BaseAtomicTool):
             # 更新列表（先清空再添加）
             self.conv_manager.clear_images_to_view(conversation_id)
             if remaining:
-                paths = [img["path"] for img in remaining]
-                details = [img["detail"] for img in remaining]
-                # 按detail分组批量添加
-                for detail_level in set(details):
-                    group_paths = [p for p, d in zip(paths, details) if d == detail_level]
-                    self.conv_manager.add_images_to_view(conversation_id, group_paths, detail_level)
+                # 按(detail, view_count)分组批量添加
+                from collections import defaultdict
+                groups = defaultdict(list)
+                for img in remaining:
+                    key = (img.get("detail", "auto"), img.get("remaining_views", 1))
+                    groups[key].append(img["path"])
+
+                for (detail_level, view_count), paths in groups.items():
+                    self.conv_manager.add_images_to_view(
+                        conversation_id,
+                        paths,
+                        detail_level,
+                        view_count
+                    )
 
             result = {
                 "success": True,
