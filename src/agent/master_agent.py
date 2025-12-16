@@ -57,6 +57,9 @@ class MasterAgent:
         self.message_callback = None  # 消息保存回调函数
         self.conv_manager = conv_manager  # 对话管理器
 
+        # === 多模态支持：待注入图片队列 ===
+        self._pending_images = []  # List[(image_path, detail_level)]
+
         # 初始化Context Manager（自动识别模型context window大小）
         self.context_manager = ContextManager(
             model_name=model_name
@@ -309,6 +312,87 @@ class MasterAgent:
 
         logger.info(f"[消息验证] 验证完成: 原始{len(messages)}条 → 修复后{len(fixed)}条 (移除{len(messages)-len(fixed)}条)")
         return fixed
+
+    def _inject_pending_images_to_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """将待注入的图片添加到消息列表
+
+        Args:
+            messages: 原始消息列表
+
+        Returns:
+            添加了图片的消息列表
+        """
+        if not self._pending_images:
+            return messages
+
+        from src.utils.image_processor import ImageProcessor
+        from pathlib import Path as _Path
+
+        # 构造multimodal content
+        content_parts = []
+
+        for img_path, detail_level in self._pending_images:
+            try:
+                # 构造完整路径
+                full_path = _Path(self.config.output_dir) / img_path
+                if not full_path.exists():
+                    logger.warning(f"待注入图片不存在: {full_path}")
+                    continue
+
+                # 根据当前使用的模型选择合适的格式
+                model_name = self.llm.model_name.lower()
+
+                if 'claude' in model_name or 'anthropic' in model_name:
+                    # Anthropic格式
+                    img_content = ImageProcessor.build_anthropic_content([str(full_path)], detail_level)
+                    content_parts.extend(img_content)
+                    logger.info(f"  - 已转换图片(Anthropic格式): {img_path} (detail={detail_level})")
+                elif 'gemini' in model_name:
+                    # Gemini格式
+                    img_content = ImageProcessor.build_gemini_content([str(full_path)], detail_level)
+                    content_parts.extend(img_content)
+                    logger.info(f"  - 已转换图片(Gemini格式): {img_path} (detail={detail_level})")
+                else:
+                    # OpenAI格式（默认）
+                    img_content = ImageProcessor.build_openai_content([str(full_path)], detail_level)
+                    content_parts.extend(img_content)
+                    logger.info(f"  - 已转换图片(OpenAI格式): {img_path} (detail={detail_level})")
+
+            except Exception as e:
+                logger.error(f"处理待注入图片失败: {img_path}, error={e}")
+                import traceback
+                traceback.print_exc()
+
+        if content_parts:
+            # 在最后一条tool消息之后插入图片消息
+            # 策略：如果最后一条消息是tool，在后面插入；否则在最后插入
+            last_tool_idx = -1
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i].get('role') == 'tool':
+                    last_tool_idx = i
+                    break
+
+            # 构造图片消息（作为user消息）
+            image_message = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"以下是工具生成的{len(content_parts)}张图片，请查看并分析："}
+                ] + content_parts
+            }
+
+            # 插入到合适的位置
+            if last_tool_idx >= 0:
+                messages.insert(last_tool_idx + 1, image_message)
+                logger.info(f"已在tool消息#{last_tool_idx}后插入图片消息")
+            else:
+                messages.append(image_message)
+                logger.info(f"已在消息列表末尾添加图片消息")
+
+        # 清空待注入队列
+        self._pending_images = []
+        logger.info("待注入图片队列已清空")
+
+        return messages
 
     def _react_loop(self, user_input: str) -> str:
         """ReAct循环: Reason → Act → Observe
@@ -684,6 +768,11 @@ class MasterAgent:
             # 验证并修复消息格式（防止tool_calls没有对应响应导致API错误）
             messages = self._validate_and_fix_messages(messages)
 
+            # === 多模态支持：将待注入图片添加到messages ===
+            if self._pending_images:
+                logger.info(f"准备注入{len(self._pending_images)}张图片到下一轮LLM请求")
+                messages = self._inject_pending_images_to_messages(messages)
+
             stream = self.llm.chat(
                 messages=messages,
                 tools=tools,
@@ -1008,6 +1097,26 @@ class MasterAgent:
                                     "files": previewable,
                                     "ts": time.time()
                                 }
+
+                        # === 多模态支持：检查是否需要将图片注入给LLM ===
+                        if hasattr(tool_result, 'inject_images') and tool_result.inject_images:
+                            image_detail = getattr(tool_result, 'image_detail', 'auto')
+                            logger.info(f"工具请求注入{len(tool_result.inject_images)}张图片 (detail={image_detail})")
+
+                            # 将图片添加到待注入队列
+                            for img_path in tool_result.inject_images:
+                                self._pending_images.append((img_path, image_detail))
+                                logger.info(f"  - 添加待注入图片: {img_path}")
+
+                            # 发送files事件，让前端知道这些图片会被LLM查看
+                            yield {
+                                "type": "exec",
+                                "iter": iteration + 1,
+                                "phase": "files",
+                                "files": tool_result.inject_images,
+                                "message": f"已准备{len(tool_result.inject_images)}张图片供LLM查看",
+                                "ts": time.time()
+                            }
                     else:
                         logger.warning(f"工具执行失败: {tool_name}")
                         logger.warning(f"  错误类型: {tool_result.error_type}")
