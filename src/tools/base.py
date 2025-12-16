@@ -32,6 +32,10 @@ class BaseAtomicTool(ABC):
     description: str = ""
     parameters_schema: Dict[str, Any] = {}  # Function Calling参数schema
 
+    # === 多模态支持配置 ===
+    # 如果工具输出可以包含图片，并且支持LLM直接查看，设置为True
+    supports_image_injection: bool = False
+
     def __init__(self, config):
         """初始化工具
 
@@ -49,7 +53,10 @@ class BaseAtomicTool(ABC):
             **kwargs: 工具参数
 
         Returns:
-            执行结果字典
+            执行结果字典，可以包含以下特殊字段：
+            - inject_images: List[str] - 需要注入给LLM查看的图片路径列表
+            - image_detail: str - 图片细节级别 ("low"/"high"/"auto")
+            - generated_files: List[str] - 生成的文件列表
         """
         pass
 
@@ -89,14 +96,14 @@ class BaseAtomicTool(ABC):
                 return False
         return True
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> ToolResult:
         """带状态管理和错误处理的执行入口
 
         Args:
             **kwargs: 工具参数
 
         Returns:
-            执行结果
+            ToolResult对象，永远不抛异常
         """
         self.status = ToolStatus.RUNNING
         logger.info(f"{self.name}: 开始执行, params={kwargs}")
@@ -105,11 +112,12 @@ class BaseAtomicTool(ABC):
             # 参数校验
             if not self.validate_params(**kwargs):
                 self.status = ToolStatus.FAILED
-                return {
-                    "status": "failed",
-                    "error": "参数校验失败",
-                    "tool": self.name
-                }
+                return create_failure_result(
+                    tool_name=self.name,
+                    tool_type="atomic",
+                    error_type=ErrorType.PARAMETER_VALIDATION_ERROR,
+                    error_message="参数校验失败"
+                )
 
             # 执行核心逻辑
             result = self.execute(**kwargs)
@@ -118,21 +126,31 @@ class BaseAtomicTool(ABC):
             self.status = ToolStatus.SUCCESS
             logger.info(f"{self.name}: 执行成功")
 
-            return {
-                "status": "success",
-                "data": result,
-                "tool": self.name
-            }
+            # 提取特殊字段
+            inject_images = result.pop("inject_images", None) if isinstance(result, dict) else None
+            image_detail = result.pop("image_detail", "auto") if isinstance(result, dict) else "auto"
+            generated_files = result.pop("generated_files", None) if isinstance(result, dict) else None
+
+            # 构造ToolResult
+            return create_success_result(
+                tool_name=self.name,
+                tool_type="atomic",
+                data=result,
+                inject_images=inject_images,
+                image_detail=image_detail,
+                generated_files=generated_files or []
+            )
 
         except Exception as e:
             self.status = ToolStatus.FAILED
             logger.error(f"{self.name}: 执行失败, error={str(e)}")
 
-            return {
-                "status": "failed",
-                "error": str(e),
-                "tool": self.name
-            }
+            return create_failure_result(
+                tool_name=self.name,
+                tool_type="atomic",
+                error_type=ErrorType.TOOL_EXECUTION_ERROR,
+                error_message=str(e)
+            )
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name}, status={self.status.value})"
