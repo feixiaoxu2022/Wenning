@@ -57,9 +57,6 @@ class MasterAgent:
         self.message_callback = None  # 消息保存回调函数
         self.conv_manager = conv_manager  # 对话管理器
 
-        # === 多模态支持：待注入图片队列 ===
-        self._pending_images = []  # List[(image_path, detail_level)]
-
         # 初始化Context Manager（自动识别模型context window大小）
         self.context_manager = ContextManager(
             model_name=model_name
@@ -314,7 +311,7 @@ class MasterAgent:
         return fixed
 
     def _inject_pending_images_to_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """将待注入的图片添加到消息列表
+        """将待注入的图片添加到消息列表（从conversation state读取）
 
         Args:
             messages: 原始消息列表
@@ -322,7 +319,13 @@ class MasterAgent:
         Returns:
             添加了图片的消息列表
         """
-        if not self._pending_images:
+        if not self.conv_manager or not self.current_conversation_id:
+            return messages
+
+        # 从conversation state读取图片列表
+        pending_images = self.conv_manager.get_images_to_view(self.current_conversation_id)
+
+        if not pending_images:
             return messages
 
         from src.utils.image_processor import ImageProcessor
@@ -331,10 +334,15 @@ class MasterAgent:
         # 构造multimodal content
         content_parts = []
 
-        for img_path, detail_level in self._pending_images:
+        for img_data in pending_images:
             try:
+                img_path = img_data["path"]
+                detail_level = img_data.get("detail", "auto")
+
                 # 构造完整路径
-                full_path = _Path(self.config.output_dir) / img_path
+                output_dir_name = self.conv_manager.get_output_dir_name(self.current_conversation_id)
+                full_path = _Path("outputs") / output_dir_name / img_path
+
                 if not full_path.exists():
                     logger.warning(f"待注入图片不存在: {full_path}")
                     continue
@@ -359,7 +367,7 @@ class MasterAgent:
                     logger.info(f"  - 已转换图片(OpenAI格式): {img_path} (detail={detail_level})")
 
             except Exception as e:
-                logger.error(f"处理待注入图片失败: {img_path}, error={e}")
+                logger.error(f"处理待注入图片失败: {img_data}, error={e}")
                 import traceback
                 traceback.print_exc()
 
@@ -376,7 +384,7 @@ class MasterAgent:
             image_message = {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": f"以下是工具生成的{len(content_parts)}张图片，请查看并分析："}
+                    {"type": "text", "text": f"以下是待查看的{len(content_parts)}张图片，请查看并分析："}
                 ] + content_parts
             }
 
@@ -388,9 +396,9 @@ class MasterAgent:
                 messages.append(image_message)
                 logger.info(f"已在消息列表末尾添加图片消息")
 
-        # 清空待注入队列
-        self._pending_images = []
-        logger.info("待注入图片队列已清空")
+        # 注意：这里不清空列表，允许多轮查看
+        # LLM可以通过manage_images_view工具主动清空
+        logger.info(f"图片已注入到messages，列表保持不变（共{len(pending_images)}张）")
 
         return messages
 
@@ -768,10 +776,8 @@ class MasterAgent:
             # 验证并修复消息格式（防止tool_calls没有对应响应导致API错误）
             messages = self._validate_and_fix_messages(messages)
 
-            # === 多模态支持：将待注入图片添加到messages ===
-            if self._pending_images:
-                logger.info(f"准备注入{len(self._pending_images)}张图片到下一轮LLM请求")
-                messages = self._inject_pending_images_to_messages(messages)
+            # === 视觉控制：从conversation state读取并注入图片 ===
+            messages = self._inject_pending_images_to_messages(messages)
 
             stream = self.llm.chat(
                 messages=messages,
@@ -1098,15 +1104,22 @@ class MasterAgent:
                                     "ts": time.time()
                                 }
 
-                        # === 多模态支持：检查是否需要将图片注入给LLM ===
+                        # === 兼容性支持：工具返回inject_images时自动添加到conversation state ===
                         if hasattr(tool_result, 'inject_images') and tool_result.inject_images:
                             image_detail = getattr(tool_result, 'image_detail', 'auto')
                             logger.info(f"工具请求注入{len(tool_result.inject_images)}张图片 (detail={image_detail})")
 
-                            # 将图片添加到待注入队列
-                            for img_path in tool_result.inject_images:
-                                self._pending_images.append((img_path, image_detail))
-                                logger.info(f"  - 添加待注入图片: {img_path}")
+                            # 自动添加到conversation state
+                            if self.conv_manager and self.current_conversation_id:
+                                success = self.conv_manager.add_images_to_view(
+                                    self.current_conversation_id,
+                                    tool_result.inject_images,
+                                    image_detail
+                                )
+                                if success:
+                                    logger.info(f"  - 已自动添加{len(tool_result.inject_images)}张图片到查看列表")
+                                else:
+                                    logger.warning(f"  - 自动添加图片到查看列表失败")
 
                             # 发送files事件，让前端知道这些图片会被LLM查看
                             yield {

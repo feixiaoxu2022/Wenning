@@ -35,6 +35,8 @@ from src.tools.atomic.tts_minimax import TTSMiniMax
 from src.tools.atomic.voice_clone_minimax import VoiceCloneMiniMax
 # from src.tools.atomic.video_generation_minimax import VideoGenerationMiniMax  # 视频生成暂时禁用
 from src.tools.atomic.music_generation_minimax import MusicGenerationMiniMax
+# 视觉控制工具
+from src.tools.atomic.manage_images_view import ManageImagesViewTool
 # Prompt模板检索工具
 from src.tools.atomic.prompt_template_tool import PromptTemplateRetriever
 # 云端TTS暂不启用
@@ -112,6 +114,7 @@ def get_or_create_agent(model_name: str = "gpt-5.2") -> MasterAgent:
         tool_registry.register_atomic_tool(WebSearchTool(config))
         tool_registry.register_atomic_tool(URLFetchTool(config))
         tool_registry.register_atomic_tool(CodeExecutor(config, conv_manager))
+        tool_registry.register_atomic_tool(ManageImagesViewTool(config, conv_manager))  # 视觉控制
 
         # 2. 专用多模态生成工具（优先级高）
         tool_registry.register_atomic_tool(ImageGeneration(config, conv_manager))  # 通用图像生成
