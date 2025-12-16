@@ -955,10 +955,23 @@ class UI {
             else { const r=document.createElement('div'); r.className='progress-line exec-line-error'; r.innerHTML=`<svg class="exec-icon exec-icon-error" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> ${k} 执行失败`; list.appendChild(r); }
             toolMap.delete(k);
         } else if (phase === 'files') {
-            const r = document.createElement('div');
-            r.className='progress-line exec-line-files';
-            r.innerHTML = `<svg class="exec-icon exec-icon-files" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12V7z"/><path d="M14 3v4h4"/></svg> 生成文件: ${(evt.files||[]).join(', ')}`;
-            list.appendChild(r);
+            // 去重：检查是否已经显示过相同的文件列表
+            const filesKey = (evt.files || []).sort().join(',');
+            const existingFilesLines = Array.from(list.querySelectorAll('.exec-line-files'));
+            const isDuplicate = existingFilesLines.some(line => {
+                const text = line.textContent || '';
+                const match = text.match(/生成文件:\s*(.+)$/);
+                if (!match) return false;
+                const existingFiles = match[1].split(',').map(f => f.trim()).sort().join(',');
+                return existingFiles === filesKey;
+            });
+
+            if (!isDuplicate) {
+                const r = document.createElement('div');
+                r.className='progress-line exec-line-files';
+                r.innerHTML = `<svg class="exec-icon exec-icon-files" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12V7z"/><path d="M14 3v4h4"/></svg> 生成文件: ${(evt.files||[]).join(', ')}`;
+                list.appendChild(r);
+            }
         } else if (phase === 'info') {
             if (evt.message) { const r=document.createElement('div'); r.className='progress-line'; r.textContent = evt.message; list.appendChild(r); }
         }

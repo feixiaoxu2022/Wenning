@@ -10,7 +10,9 @@
     <!-- Header -->
     <header class="header">
         <div class="header-content">
-            <h1 class="title">Wenning</h1>
+            <div class="logo-container">
+                <img src="/static/logo.png" alt="Wenning" class="logo">
+            </div>
 
             <!-- Showcase Buttons -->
             <div class="showcase-buttons" id="showcase-buttons">
@@ -252,10 +254,13 @@
     <!-- SheetJS for Excel Preview -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
+    <!-- docx-preview for Word Preview -->
+    <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.0/dist/docx-preview.min.js"></script>
+
     <!-- Scripts -->
     <script src="/static/js/sse.js?v=20251212-fix"></script>
     <script src="/static/js/ui.js?v=20251216-loading"></script>
-    <script src="/static/js/showcase.js?v=20251212"></script>
+    <script src="/static/js/showcase.js?v=20251216-docx"></script>
     <script src="/static/js/app.js?v=20251216-loading"></script>
 </body>
 </html>

@@ -924,6 +924,47 @@ async def preview_word_legacy(filename: str):
         return JSONResponse(status_code=500, content={"error": f"预览失败: {str(e)}"})
 
 
+@app.get("/preview/showcase/word/{filename}")
+async def preview_showcase_word(filename: str):
+    """Showcase Word文件预览接口"""
+    file_path = Path("static/showcase") / filename
+
+    if not file_path.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Showcase文件不存在: {filename}"}
+        )
+
+    try:
+        import mammoth
+
+        # 使用mammoth转换Word为HTML
+        with open(file_path, "rb") as docx_file:
+            result = mammoth.convert_to_html(docx_file)
+            html_content = result.value
+            messages = result.messages
+
+        # 记录转换警告
+        if messages:
+            for msg in messages:
+                logger.warning(f"Showcase Word转换警告: {msg}")
+
+        return JSONResponse(content={
+            "html": html_content,
+            "warnings": [str(msg) for msg in messages] if messages else []
+        })
+
+    except ImportError:
+        logger.error("mammoth库未安装，无法预览Word文档")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "服务器缺少Word预览支持，请联系管理员"}
+        )
+    except Exception as e:
+        logger.error(f"Showcase Word预览失败: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"预览失败: {str(e)}"})
+
+
 @app.get("/models")
 async def list_models():
     """获取可用模型列表"""

@@ -87,6 +87,22 @@ body {
     margin: 0 auto;
 }
 
+.logo-container {
+    display: flex;
+    align-items: center;
+}
+
+.logo {
+    height: 80px;
+    width: auto;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+.logo:hover {
+    transform: scale(1.05);
+}
+
 .title {
     font-size: 18px;
     font-weight: 700;
@@ -1898,6 +1914,8 @@ body {
     white-space: pre-wrap;
     word-wrap: break-word;
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: calc(100vh - 280px);
     margin: 0;
 }
 
