@@ -1073,6 +1073,48 @@ async def delete_conversation(conversation_id: str, user: str = Depends(require_
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+class MessageFeedbackBody(BaseModel):
+    message_id: str
+    feedback: str  # "positive" / "neutral" / "negative"
+
+
+@app.post("/conversations/{conversation_id}/feedback")
+async def submit_message_feedback(
+    conversation_id: str,
+    body: MessageFeedbackBody,
+    user: str = Depends(require_user())
+):
+    """提交消息反馈"""
+    try:
+        # 验证反馈值
+        if body.feedback not in ["positive", "neutral", "negative"]:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "无效的反馈类型"}
+            )
+
+        # 更新反馈
+        success = conv_manager.update_message_feedback(
+            conversation_id,
+            body.message_id,
+            body.feedback,
+            username=user
+        )
+
+        if not success:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "消息不存在或无权限"}
+            )
+
+        logger.info(f"用户 {user} 对消息 {body.message_id} 提交反馈: {body.feedback}")
+        return JSONResponse(content={"success": True, "message": "感谢您的反馈！"})
+
+    except Exception as e:
+        logger.error(f"提交反馈失败: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

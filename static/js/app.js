@@ -578,7 +578,12 @@ async function loadConversation(convId) {
                         return;
                     }
 
-                    ui.showResult({ status: 'success', result: content }, false); // 禁用打字机效果
+                    const resultBox = ui.showResult({ status: 'success', result: content }, false); // 禁用打字机效果
+
+                    // 为历史assistant消息添加反馈按钮
+                    if (msg.id && resultBox) {
+                        ui.attachFeedbackButtons(resultBox, msg.id, msg.feedback);
+                    }
 
                 } else if (msg.role === 'tool') {
                     // 提取tool消息content中的generated_files
@@ -1056,7 +1061,11 @@ function setupSSECallbacks() {
     // 最终结果
     sseClient.onFinal = (result) => {
         ui.hideLoadingIndicator();
-        ui.showResult(result);
+        const resultBox = ui.showResult(result);
+
+        // 保存resultBox引用，用于onDone时添加反馈按钮
+        window._lastResultBox = resultBox;
+
         // 结果完成后兜底刷新一次会话文件，确保像 mp4/wav 等在未收到 files_generated 时也能展示
         (async () => {
             try {
@@ -1094,11 +1103,34 @@ function setupSSECallbacks() {
     };
 
     // 完成
-    sseClient.onDone = () => {
+    sseClient.onDone = async () => {
         ui.hideLoadingIndicator();
         ui.setInputEnabled(true);
         isSending = false;
         toggleStop(false);
+
+        // 为刚生成的assistant消息添加反馈按钮
+        try {
+            if (currentConversationId && window._lastResultBox) {
+                // 获取对话信息，找到最后一条assistant消息的id
+                const conv = await fetch(`/conversations/${currentConversationId}`).then(r => r.json());
+                if (conv && conv.messages && conv.messages.length > 0) {
+                    // 找到最后一条assistant消息
+                    for (let i = conv.messages.length - 1; i >= 0; i--) {
+                        const msg = conv.messages[i];
+                        if (msg.role === 'assistant' && msg.id) {
+                            // 添加反馈按钮
+                            ui.attachFeedbackButtons(window._lastResultBox, msg.id, msg.feedback);
+                            break;
+                        }
+                    }
+                }
+                // 清除引用
+                window._lastResultBox = null;
+            }
+        } catch (e) {
+            console.error('[App] 添加反馈按钮失败:', e);
+        }
     };
 
     // Context统计更新

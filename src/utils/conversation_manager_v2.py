@@ -556,6 +556,63 @@ class ConversationManagerV2:
         self._save_index()
         return True
 
+    def update_message_feedback(
+        self,
+        conv_id: str,
+        message_id: str,
+        feedback: str,
+        username: str | None = None
+    ) -> bool:
+        """更新消息的用户反馈
+
+        Args:
+            conv_id: 对话ID
+            message_id: 消息ID
+            feedback: 反馈内容 ("positive" / "neutral" / "negative")
+            username: 用户名（权限校验）
+
+        Returns:
+            是否成功
+        """
+        # 权限校验
+        if conv_id not in self.index:
+            return False
+        if username is not None and self.index[conv_id].get("user") not in (None, username):
+            return False
+
+        # 加载对话
+        conv_path = self._get_conv_path(conv_id)
+        conv = self._load_conversation_file(conv_path)
+        if not conv:
+            return False
+
+        # 查找目标消息
+        msgs = conv.get("messages", [])
+        target = None
+        for msg in msgs:
+            if msg.get("id") == message_id:
+                target = msg
+                break
+
+        if not target:
+            return False
+
+        # 更新反馈
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        target["feedback"] = feedback
+        target["feedback_time"] = now
+        target["updated_at"] = now
+        conv["updated_at"] = now
+
+        # 保存对话文件
+        self._save_conversation_file(conv_path, conv)
+
+        # 更新索引
+        self.index[conv_id]["updated_at"] = now
+        self._save_index()
+
+        return True
+
     # ===== Pending Images Management =====
 
     def add_pending_image(self, conv_id: str, image_path: str, username: str | None = None) -> bool:

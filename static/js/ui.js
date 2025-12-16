@@ -1177,6 +1177,122 @@ class UI {
         });
 
         this.scrollToBottom();
+
+        // 返回resultBox供外部添加反馈按钮
+        return resultBox;
+    }
+
+    /**
+     * 为assistant消息添加反馈按钮
+     * @param {HTMLElement} messageBox - 消息容器元素
+     * @param {string} messageId - 消息ID
+     * @param {string} existingFeedback - 已有的反馈("positive"/"neutral"/"negative")
+     */
+    attachFeedbackButtons(messageBox, messageId, existingFeedback = null) {
+        if (!messageBox || !messageId) return;
+
+        // 检查是否已经有反馈按钮
+        if (messageBox.querySelector('.message-feedback')) return;
+
+        // 创建反馈容器
+        const feedbackDiv = document.createElement('div');
+        feedbackDiv.className = 'message-feedback';
+        feedbackDiv.dataset.messageId = messageId;
+
+        // 添加标签
+        const label = document.createElement('span');
+        label.className = 'message-feedback-label';
+        label.textContent = '这次回答对您有帮助吗？';
+        feedbackDiv.appendChild(label);
+
+        // 创建三个反馈按钮
+        const buttons = [
+            { value: 'positive', label: '😊 满意', class: 'positive' },
+            { value: 'neutral', label: '😐 一般', class: 'neutral' },
+            { value: 'negative', label: '😞 不满意', class: 'negative' }
+        ];
+
+        buttons.forEach(btn => {
+            const button = document.createElement('button');
+            button.className = `feedback-btn ${btn.class}`;
+            button.dataset.feedback = btn.value;
+            button.textContent = btn.label;
+
+            // 如果有已存在的反馈，标记选中状态并禁用
+            if (existingFeedback && existingFeedback === btn.value) {
+                button.classList.add('selected');
+                button.disabled = true;
+            }
+
+            button.addEventListener('click', async () => {
+                await this.handleFeedbackClick(feedbackDiv, messageId, btn.value);
+            });
+
+            feedbackDiv.appendChild(button);
+        });
+
+        // 添加感谢消息（初始隐藏）
+        const thanks = document.createElement('span');
+        thanks.className = 'feedback-thanks';
+        thanks.textContent = '✓ 感谢您的反馈！';
+        feedbackDiv.appendChild(thanks);
+
+        // 添加到消息框
+        messageBox.appendChild(feedbackDiv);
+    }
+
+    /**
+     * 处理反馈按钮点击
+     */
+    async handleFeedbackClick(feedbackDiv, messageId, feedbackValue) {
+        try {
+            // 禁用所有按钮
+            const buttons = feedbackDiv.querySelectorAll('.feedback-btn');
+            buttons.forEach(btn => btn.disabled = true);
+
+            // 发送反馈到后端
+            const conversationId = window.currentConversationId || '';
+            const response = await fetch(`/conversations/${conversationId}/feedback`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message_id: messageId,
+                    feedback: feedbackValue
+                })
+            });
+
+            if (response.ok) {
+                // 标记选中的按钮
+                buttons.forEach(btn => {
+                    if (btn.dataset.feedback === feedbackValue) {
+                        btn.classList.add('selected');
+                    }
+                });
+
+                // 显示感谢消息
+                const thanks = feedbackDiv.querySelector('.feedback-thanks');
+                if (thanks) {
+                    thanks.classList.add('show');
+                    // 3秒后隐藏感谢消息
+                    setTimeout(() => {
+                        thanks.classList.remove('show');
+                    }, 3000);
+                }
+
+                console.log(`[UI] 反馈已提交: ${feedbackValue}`);
+            } else {
+                // 失败时重新启用按钮
+                buttons.forEach(btn => btn.disabled = false);
+                console.error('[UI] 提交反馈失败');
+            }
+        } catch (error) {
+            console.error('[UI] 提交反馈出错:', error);
+            // 重新启用按钮
+            const buttons = feedbackDiv.querySelectorAll('.feedback-btn');
+            buttons.forEach(btn => btn.disabled = false);
+        }
     }
 
     /**
