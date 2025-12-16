@@ -58,6 +58,18 @@ class UI {
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg>';
     }
 
+    /** 创建思考图标SVG */
+    _thinkingSvg() {
+        // message-circle icon (思考气泡)
+        return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+    }
+
+    /** 创建说明图标SVG */
+    _noteSvg() {
+        // paperclip icon (回形针)
+        return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+    }
+
     /** 复制文本到剪贴板（带fallback） */
     async copyText(text) {
         try {
@@ -791,7 +803,7 @@ class UI {
         thinkingBox.className = 'thinking-box';
         const label = document.createElement('span');
         label.className = 'thinking-label';
-        label.textContent = `💭 思考（第${key}轮）：`;
+        label.innerHTML = `${this._thinkingSvg()}思考（第${key}轮）：`;
         thinkingBox.appendChild(label);
         const contentDiv = document.createElement('div');
         contentDiv.className = 'thinking-content';
@@ -836,7 +848,7 @@ class UI {
             toolCallBox.className = 'tool-call-text-box';
             const label = document.createElement('div');
             label.className = 'tool-call-text-label';
-            label.textContent = '💭 思考';
+            label.innerHTML = `${this._thinkingSvg()}思考`;
             toolCallBox.appendChild(label);
             contentDiv = document.createElement('div');
             contentDiv.className = 'tool-call-text-content';
@@ -859,8 +871,9 @@ class UI {
             box.className = 'tool-call-text-box';
             const label = document.createElement('div');
             label.className = 'tool-call-text-label';
-            // 如果本轮还没有任何思考块，则把note也当作“思考”展示，文案统一为“💭 思考”。
-            label.textContent = this._thinkingSections && this._thinkingSections.has(key) ? '📎 说明' : '💭 思考';
+            // 如果本轮还没有任何思考块，则把note也当作"思考"展示，文案统一为"思考"。
+            const hasThinking = this._thinkingSections && this._thinkingSections.has(key);
+            label.innerHTML = hasThinking ? `${this._noteSvg()}说明` : `${this._thinkingSvg()}思考`;
             box.appendChild(label);
             contentDiv = document.createElement('div'); contentDiv.className = 'tool-call-text-content'; box.appendChild(contentDiv);
             wrap.appendChild(box);
