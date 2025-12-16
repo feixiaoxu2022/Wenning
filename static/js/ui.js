@@ -1205,18 +1205,34 @@ class UI {
         label.textContent = '这次回答对您有帮助吗？';
         feedbackDiv.appendChild(label);
 
-        // 创建三个反馈按钮
+        // 创建三个反馈按钮（使用SVG图标）
         const buttons = [
-            { value: 'positive', label: '😊 满意', class: 'positive' },
-            { value: 'neutral', label: '😐 一般', class: 'neutral' },
-            { value: 'negative', label: '😞 不满意', class: 'negative' }
+            {
+                value: 'positive',
+                label: '满意',
+                class: 'positive',
+                icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
+            },
+            {
+                value: 'neutral',
+                label: '一般',
+                class: 'neutral',
+                icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
+            },
+            {
+                value: 'negative',
+                label: '不满意',
+                class: 'negative',
+                icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
+            }
         ];
 
         buttons.forEach(btn => {
             const button = document.createElement('button');
             button.className = `feedback-btn ${btn.class}`;
             button.dataset.feedback = btn.value;
-            button.textContent = btn.label;
+            button.title = btn.label; // tooltip
+            button.innerHTML = btn.icon;
 
             // 如果有已存在的反馈，标记选中状态并禁用
             if (existingFeedback && existingFeedback === btn.value) {

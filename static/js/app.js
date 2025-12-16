@@ -532,7 +532,8 @@ async function loadConversation(convId) {
             // 追踪当前迭代轮次（每次assistant调用工具时递增）
             let currentIter = 0;
 
-            deduped.forEach(msg => {
+            // 使用for...of替代forEach，支持async/await
+            for (const msg of deduped) {
                 if (msg.role === 'user') {
                     ui.addUserMessage(msg.content);
                 } else if (msg.role === 'assistant') {
@@ -575,10 +576,11 @@ async function loadConversation(convId) {
 
                     if (!content) {
                         // 纯函数调用占位，跳过渲染文本，避免出现"大块空白"
-                        return;
+                        continue;
                     }
 
-                    const resultBox = ui.showResult({ status: 'success', result: content }, false); // 禁用打字机效果
+                    // 关键修复：等待async方法完成
+                    const resultBox = await ui.showResult({ status: 'success', result: content }, false); // 禁用打字机效果
 
                     // 为历史assistant消息添加反馈按钮
                     if (msg.id && resultBox) {
@@ -597,7 +599,7 @@ async function loadConversation(convId) {
                         // content不是JSON或没有generated_files字段，忽略
                     }
                 }
-            });
+            }
         }
 
         // 更新激活状态
