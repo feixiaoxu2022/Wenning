@@ -199,6 +199,27 @@ function updateAccountUI(username) {
     const nameEl = document.getElementById('account-username');
     if (btn) btn.textContent = username ? `@${username}` : '👤';
     if (nameEl) nameEl.textContent = username ? `Signed in as ${username}` : 'Not signed in';
+
+    // 同时更新欢迎消息的用户名
+    const welcomeUsername = document.getElementById('welcome-username');
+    if (welcomeUsername) {
+        welcomeUsername.textContent = username || 'User';
+    }
+}
+
+// 显示/隐藏欢迎消息的辅助函数
+function updateWelcomeMessage() {
+    const welcomeMsg = document.getElementById('welcome-message');
+    if (!welcomeMsg) return;
+
+    // 检查是否有消息
+    const hasMessages = ui.chatMessages.querySelectorAll('.message').length > 0;
+
+    if (hasMessages) {
+        welcomeMsg.style.display = 'none';
+    } else {
+        welcomeMsg.style.display = 'block';
+    }
 }
 
 // 账户菜单交互与登出
@@ -614,6 +635,9 @@ async function loadConversation(convId) {
             console.warn('[App] 加载Workspace失败:', e);
         }
 
+        // 更新欢迎消息显示状态
+        updateWelcomeMessage();
+
     } catch (err) {
         console.error('[App] 加载对话失败:', err);
     }
@@ -702,6 +726,9 @@ async function createNewConversation() {
                 item.classList.add('active');
             }
         });
+
+        // 更新欢迎消息显示状态
+        updateWelcomeMessage();
 
     } catch (err) {
         console.error('[App] 创建新对话失败:', err);
@@ -824,15 +851,60 @@ function bindEvents() {
         }
     });
 
-    // 模型选择变化：同步并持久化
-    document.getElementById('model-select').addEventListener('change', (e) => {
-        currentModel = e.target.value;
+    // 模型选择变化：同步并持久化，并更新后端对话模型
+    document.getElementById('model-select').addEventListener('change', async (e) => {
+        const newModel = e.target.value;
+        const previousModel = currentModel;
+
+        // 如果当前有对话且对话不为空，阻止切换
+        // 直接检查DOM中的user消息数量，更可靠
+        if (currentConversationId) {
+            const userMessages = ui.chatMessages.querySelectorAll('.message.user');
+            if (userMessages.length > 0) {
+                // 恢复之前的选择
+                e.target.value = previousModel;
+
+                // 提示用户
+                alert('当前对话已有历史消息，无法切换模型。\n\n如需使用其他模型，请点击左上角"New Chat"创建新对话。');
+
+                console.log('[App] 阻止切换模型: 对话已有历史消息');
+                return;
+            }
+        }
+
+        // 更新全局变量
+        currentModel = newModel;
+
         try {
             localStorage.setItem('cf-model', currentModel);
         } catch (_) {
             // Ignore errors
         }
+
         console.log('[App] 用户切换模型:', currentModel);
+
+        // 如果当前有对话（但是空对话），更新后端对话的模型
+        if (currentConversationId) {
+            try {
+                const response = await fetch(`/conversations/${currentConversationId}/model`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: newModel
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('[App] 空对话模型已更新:', newModel);
+                } else {
+                    console.warn('[App] 更新对话模型失败:', await response.text());
+                }
+            } catch (err) {
+                console.error('[App] 更新对话模型请求失败:', err);
+            }
+        }
     });
 
     // 新建对话按钮
@@ -1377,6 +1449,9 @@ function sendMessage() {
 
     // 显示用户消息
     ui.addUserMessage(message);
+
+    // 隐藏欢迎消息（因为现在有消息了）
+    updateWelcomeMessage();
 
     // 显示加载指示器
     ui.showLoadingIndicator();

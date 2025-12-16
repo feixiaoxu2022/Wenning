@@ -33,7 +33,7 @@ from src.tools.atomic.image_generation import ImageGeneration
 # MiniMax多模态工具
 from src.tools.atomic.tts_minimax import TTSMiniMax
 from src.tools.atomic.voice_clone_minimax import VoiceCloneMiniMax
-from src.tools.atomic.video_generation_minimax import VideoGenerationMiniMax
+# from src.tools.atomic.video_generation_minimax import VideoGenerationMiniMax  # 视频生成暂时禁用
 from src.tools.atomic.music_generation_minimax import MusicGenerationMiniMax
 # Prompt模板检索工具
 from src.tools.atomic.prompt_template_tool import PromptTemplateRetriever
@@ -115,7 +115,7 @@ def get_or_create_agent(model_name: str = "gpt-5.2") -> MasterAgent:
 
         # 2. 专用多模态生成工具（优先级高）
         tool_registry.register_atomic_tool(ImageGeneration(config, conv_manager))  # 通用图像生成
-        tool_registry.register_atomic_tool(VideoGenerationMiniMax(config, conv_manager))
+        # tool_registry.register_atomic_tool(VideoGenerationMiniMax(config, conv_manager))  # 视频生成暂时禁用
         tool_registry.register_atomic_tool(MusicGenerationMiniMax(config, conv_manager))
         tool_registry.register_atomic_tool(TTSMiniMax(config, conv_manager))
         tool_registry.register_atomic_tool(VoiceCloneMiniMax(config, conv_manager))  # 音色克隆
@@ -1034,6 +1034,30 @@ async def get_conversation(conversation_id: str, user: str = Depends(require_use
         return JSONResponse(content=conv)
     except Exception as e:
         logger.error(f"获取对话失败: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+class UpdateConversationModelBody(BaseModel):
+    model: str
+
+
+@app.patch("/conversations/{conversation_id}/model")
+async def update_conversation_model(
+    conversation_id: str,
+    body: UpdateConversationModelBody,
+    user: str = Depends(require_user())
+):
+    """更新对话使用的模型"""
+    try:
+        success = conv_manager.update_model(conversation_id, body.model, username=user)
+        if not success:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "对话不存在或无权限"}
+            )
+        return JSONResponse(content={"success": True, "model": body.model})
+    except Exception as e:
+        logger.error(f"更新对话模型失败: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

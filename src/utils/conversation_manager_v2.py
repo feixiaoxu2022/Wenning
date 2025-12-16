@@ -297,6 +297,41 @@ class ConversationManagerV2:
         del self.index[conv_id]
         self._save_index()
 
+    def update_model(self, conv_id: str, model: str, username: Optional[str] = None):
+        """更新对话使用的模型
+
+        Args:
+            conv_id: 对话ID
+            model: 新模型名称
+            username: 可选,用户名(权限校验)
+        """
+        # 检查权限
+        if conv_id not in self.index:
+            return False
+        if username is not None and self.index[conv_id].get("user") not in (None, username):
+            return False
+
+        # 加载对话
+        conv_path = self._get_conv_path(conv_id)
+        conv = self._load_conversation_file(conv_path)
+        if not conv:
+            return False
+
+        # 更新模型
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conv["model"] = model
+        conv["updated_at"] = now
+
+        # 保存对话文件
+        self._save_conversation_file(conv_path, conv)
+
+        # 更新索引
+        self.index[conv_id]["model"] = model
+        self.index[conv_id]["updated_at"] = now
+        self._save_index()
+
+        return True
+
     def add_message(
         self,
         conv_id: str,

@@ -768,6 +768,26 @@ body {
     gap: 15px;
 }
 
+/* 当聊天区域没有消息时，居中显示 */
+.chat-panel:has(.chat-messages:empty) .chat-messages {
+    justify-content: center;
+    align-items: center;
+}
+
+/* 欢迎消息样式 */
+.welcome-message {
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 20px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.welcome-username {
+    font-weight: 600;
+    color: var(--primary);
+}
+
 /* Message Styles */
 .message {
     padding: 10px 14px;
