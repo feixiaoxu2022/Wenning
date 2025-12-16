@@ -1284,10 +1284,24 @@ body {
     border-radius: 8px;
     margin-bottom: 4px;
     margin-top: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.file-group-header:hover {
+    background: var(--bg);
 }
 
 .file-group-header:first-child {
     margin-top: 0;
+}
+
+.file-group-collapse-icon {
+    font-size: 10px;
+    color: var(--muted);
+    margin-right: 6px;
+    transition: transform 0.2s;
+    flex-shrink: 0;
 }
 
 .file-group-title {
@@ -1297,6 +1311,7 @@ body {
     font-size: 13px;
     font-weight: 600;
     color: var(--text);
+    flex: 1;
 }
 
 .file-group-icon {
@@ -1415,8 +1430,35 @@ body {
 /* 文件操作 */
 .workspace-file-actions { display:flex; align-items:center; gap:6px; }
 .workspace-file-size { font-size:10px; color: var(--muted); }
-.workspace-file-btn { background:transparent; border:none; cursor:pointer; padding:4px; font-size:14px; border-radius:4px; transition: all 0.2s; }
-.workspace-file-btn:hover { background: var(--border); transform: scale(1.1); }
+.workspace-file-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+}
+
+.workspace-file-btn:hover {
+    background: var(--border);
+    transform: scale(1.1);
+}
+
+.workspace-file-btn svg {
+    display: block;
+}
+
+.workspace-file-preview:hover {
+    color: var(--primary);
+}
+
+.workspace-file-delete:hover {
+    color: #ef4444;
+}
 
 /* 保留旧样式用于向后兼容 */
 .workspace-item { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border:1px solid var(--border); border-radius:10px; background: var(--panel); }
@@ -1478,11 +1520,37 @@ body {
 .iter-box { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background: var(--panel); margin: 8px 0; }
 .iter-header { font-weight:700; color: var(--text); margin-bottom:6px; font-size: 13px; }
 .exec-list { display:flex; flex-direction:column; gap:6px; }
-.exec-item { padding:6px 8px; border:1px dashed var(--border); border-radius:8px; background: rgba(2,6,23,0.02); font-size: 13px; }
+.exec-item { padding:6px 8px; border:1px dashed var(--border); border-radius:8px; background: rgba(2,6,23,0.02); font-size: 13px; transition: all 0.2s ease; }
 .exec-head { font-weight:500; color: var(--text); display:flex; align-items:center; gap:8px; font-size: 13px; }
 .exec-status { color: var(--muted); font-weight:400; font-size: 12px; }
-.exec-list .progress-line { font-size: 13px; color: var(--muted); }  /* 与exec-head保持一致 */
+.exec-list .progress-line { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; }
 .exec-args { margin-top:6px; white-space: pre-wrap; word-break: break-word; overflow:auto; background: var(--panel); border:1px solid var(--border); border-radius:6px; padding:8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 12px; }
+
+/* Execution status icon styling */
+.exec-icon { flex-shrink: 0; display: inline-flex; align-items: center; vertical-align: middle; }
+
+/* Running state - subtle blue */
+.exec-item-running { background: rgba(59, 130, 246, 0.04); border-color: rgba(59, 130, 246, 0.15); }
+.exec-icon-running { color: #3b82f6; animation: pulse-subtle 2s ease-in-out infinite; }
+
+@keyframes pulse-subtle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Success state - subtle green */
+.exec-item-success { background: rgba(34, 197, 94, 0.04); border-color: rgba(34, 197, 94, 0.15); }
+.exec-icon-success { color: #22c55e; }
+.exec-line-success { background: rgba(34, 197, 94, 0.04); color: #16a34a; }
+
+/* Error state - subtle red */
+.exec-item-error { background: rgba(239, 68, 68, 0.04); border-color: rgba(239, 68, 68, 0.15); }
+.exec-icon-error { color: #ef4444; }
+.exec-line-error { background: rgba(239, 68, 68, 0.04); color: #dc2626; }
+
+/* Files state - subtle purple */
+.exec-icon-files { color: #8b5cf6; }
+.exec-line-files { background: rgba(139, 92, 246, 0.04); color: #7c3aed; }
 
 /* Hover Copy (message left floating icon) */
 .msg-copy-btn {
@@ -1521,7 +1589,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 10px 18px;
     background: var(--panel);
     border: 1.5px solid var(--border);
     border-radius: 12px;
@@ -1540,19 +1608,19 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    opacity: 0;
+    opacity: 1;
     transition: opacity 0.3s ease;
     z-index: 0;
 }
 
 .showcase-chip:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-    border-color: transparent;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    border-color: rgba(0,0,0,0.06);
 }
 
 .showcase-chip:hover::before {
-    opacity: 1;
+    opacity: 0.95;
 }
 
 .showcase-chip:active {
@@ -1560,15 +1628,20 @@ body {
 }
 
 .showcase-chip-icon {
-    font-size: 16px;
     z-index: 1;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.showcase-chip-icon svg {
+    display: block;
+    stroke-width: 2;
 }
 
 .showcase-chip-text {
     z-index: 1;
     font-weight: 600;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 /* Showcase Modal */

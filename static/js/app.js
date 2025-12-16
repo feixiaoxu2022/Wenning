@@ -15,9 +15,19 @@ let stopBtnEl = null;
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[App] 应用初始化');
     await checkAuthAndInit();
-    try { initResizableLayout(); } catch (e) { console.warn('resizable init failed', e); }
+    try {
+        initResizableLayout();
+    } catch (e) {
+        console.warn('resizable init failed', e);
+    }
     // 兜底：无论鉴权状态如何，都绑定一次登录/注册按钮
-    try { if (!authHandlersWired) wireAuthHandlers(); } catch (e) { console.warn('wireAuthHandlers fallback failed', e); }
+    try {
+        if (!authHandlersWired) {
+            wireAuthHandlers();
+        }
+    } catch (e) {
+        console.warn('wireAuthHandlers fallback failed', e);
+    }
 });
 
 let authHandlersWired = false;
@@ -47,8 +57,12 @@ async function checkAuthAndInit() {
                 const regBtn = document.getElementById('auth-register-btn');
                 if (regBtn) regBtn.style.display = allowRegisterCache ? 'inline-block' : 'none';
             } catch {}
-            // 仍然加载模型下拉，避免看起来“空白”
-            try { await loadModels(); } catch (_) {}
+            // 仍然加载模型下拉，避免看起来"空白"
+            try {
+                await loadModels();
+            } catch (_) {
+                // Ignore errors
+            }
         } else {
             // 其他错误，先继续初始化但提示
             console.warn('[Auth] /auth/me 非预期状态:', resp.status);
@@ -201,7 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (logout) {
         logout.addEventListener('click', async () => {
-            try { await fetch('/auth/logout', { method: 'POST' }); } catch {}
+            try {
+                await fetch('/auth/logout', { method: 'POST' });
+            } catch {
+                // Ignore errors
+            }
             currentUser = null;
             updateAccountUI(null);
             showAuthOverlay();
@@ -263,7 +281,11 @@ async function loadConversationsList() {
         const response = await fetch(`/conversations`);
         const conversationsList = document.getElementById('conversations-list');
         let data = { conversations: [] };
-        try { data = await response.json(); } catch (_) {}
+        try {
+            data = await response.json();
+        } catch (_) {
+            // Ignore errors
+        }
 
         conversationsList.innerHTML = '';
 
@@ -279,10 +301,16 @@ async function loadConversationsList() {
                 conversationsList.appendChild(convItem);
             });
         } else {
-            const msg = response.ok
-                ? '暂无对话'
-                : (response.status === 401 ? '未登录或会话过期，请登录' : `加载失败 (HTTP ${response.status})`);
-            conversationsList.innerHTML = `<p style="text-align:center; color:#999; padding:20px; font-size:12px;">${msg}</p>`;
+            let msg;
+            if (response.ok) {
+                msg = '暂无对话';
+            } else if (response.status === 401) {
+                msg = '未登录或会话过期，请登录';
+            } else {
+                msg = `加载失败 (HTTP ${response.status})`;
+            }
+            const style = 'text-align:center; color:#999; padding:20px; font-size:12px;';
+            conversationsList.innerHTML = `<p style="${style}">${msg}</p>`;
         }
 
     } catch (err) {
@@ -363,7 +391,11 @@ async function ensureConversation() {
                     }
 
                     // 刷新左侧History列表
-                    try { await loadConversationsList(); } catch (_) {}
+                    try {
+                        await loadConversationsList();
+                    } catch (_) {
+                        // Ignore errors
+                    }
 
                     console.log('[App] 当前对话ID:', currentConversationId);
                     return; // 恢复成功，直接返回
@@ -403,7 +435,11 @@ async function ensureConversation() {
         }
 
         // 刷新左侧History列表，修复首次进入页面时先加载列表再创建会话导致的"暂无对话"显示问题
-        try { await loadConversationsList(); } catch (_) {}
+        try {
+            await loadConversationsList();
+        } catch (_) {
+            // Ignore errors
+        }
 
     } catch (err) {
         console.error('[App] 确保对话失败:', err);
@@ -447,10 +483,10 @@ async function loadConversation(convId) {
         if (conv.messages && conv.messages.length > 0) {
             // 去重相邻重复（相同role+content），合并文件列表（忽略顺序/去重/兼容undefined与[]）
             const normalize = (txt) => (txt || '')
-                .replace(/\r\n/g, '\n')        // 统一换行
-                .replace(/\u00a0/g, ' ')        // NBSP→空格
-                .replace(/[ \t]+/g, ' ')        // 连续空白折叠
-                .trim();                         // 去首尾空白
+                .replace(/\r\n/g, '\n') // 统一换行
+                .replace(/\u00a0/g, ' ') // NBSP→空格
+                .replace(/[ \t]+/g, ' ') // 连续空白折叠
+                .trim(); // 去首尾空白
             const deduped = [];
             for (const m of conv.messages) {
                 const prev = deduped[deduped.length - 1];
@@ -591,12 +627,22 @@ async function switchConversation(convId) {
 
     // 折叠历史浮层（防止遮挡左侧）
     const overlay = document.getElementById('history-overlay');
-    if (overlay) overlay.classList.remove('active');
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
 
     currentConversationId = convId;
-    try { localStorage.setItem('cf-last-conv', convId); } catch (_) {}
+    try {
+        localStorage.setItem('cf-last-conv', convId);
+    } catch (_) {
+        // Ignore errors
+    }
     await loadConversation(convId);
-    try { await loadConversationsList(); } catch (_) {}
+    try {
+        await loadConversationsList();
+    } catch (_) {
+        // Ignore errors
+    }
 }
 
 // 暴露给全局
@@ -628,7 +674,11 @@ async function createNewConversation() {
         const data = await response.json();
 
         currentConversationId = data.conversation_id;
-        try { localStorage.setItem('cf-last-conv', currentConversationId); } catch (_) {}
+        try {
+            localStorage.setItem('cf-last-conv', currentConversationId);
+        } catch (_) {
+            // Ignore errors
+        }
         console.log('[App] 新对话创建成功:', currentConversationId, 'model:', actualModel);
 
         // 重新加载对话列表
@@ -777,7 +827,11 @@ function bindEvents() {
     // 模型选择变化：同步并持久化
     document.getElementById('model-select').addEventListener('change', (e) => {
         currentModel = e.target.value;
-        try { localStorage.setItem('cf-model', currentModel); } catch (_) {}
+        try {
+            localStorage.setItem('cf-model', currentModel);
+        } catch (_) {
+            // Ignore errors
+        }
         console.log('[App] 用户切换模型:', currentModel);
     });
 
@@ -937,7 +991,13 @@ function setupSSECallbacks() {
                 const previewables = data.files.filter(fn => /\.(png|jpg|jpeg|xlsx|csv|html|pdf|json|mp3|wav|m4a|aac|ogg|flac|mp4|webm|mov|txt|md|log)$/i.test(fn));
                 const missing = previewables.filter(fn => !shown.has(fn));
                 if (missing.length) {
-                    try { if (currentConversationId) ui.setOutputsBase(currentConversationId); } catch (_) {}
+                    try {
+                        if (currentConversationId) {
+                            ui.setOutputsBase(currentConversationId);
+                        }
+                    } catch (_) {
+                        // Ignore errors
+                    }
                     ui.loadMultipleFiles(missing);
                 }
             } catch (e) {
@@ -988,12 +1048,26 @@ function setupSSECallbacks() {
     sseClient.onFilesGenerated = (files, iter) => {
         console.log('[App] 收到生成文件列表:', files);
         // 兜底：确保文件预览以当前会话为作用域
-        try { if (currentConversationId) ui.setOutputsBase(currentConversationId); } catch (_) {}
+        try {
+            if (currentConversationId) {
+                ui.setOutputsBase(currentConversationId);
+            }
+        } catch (_) {
+            // Ignore errors
+        }
         const frontendIter = ui._mapSSEIter(iter);
-        try { ui.appendFilesGenerated(frontendIter, files); } catch (_) {}
+        try {
+            ui.appendFilesGenerated(frontendIter, files);
+        } catch (_) {
+            // Ignore errors
+        }
         ui.loadMultipleFiles(files);
         // 覆盖写时强制刷新已存在的预览（带cache bust）
-        try { ui.refreshFiles(files); } catch (e) { console.warn('refreshFiles failed', e); }
+        try {
+            ui.refreshFiles(files);
+        } catch (e) {
+            console.warn('refreshFiles failed', e);
+        }
     };
 
     // 计划进度更新
@@ -1011,7 +1085,11 @@ async function uploadFiles(fileList) {
         return;
     }
     // 确保文件预览基路径已设置为当前会话
-    try { ui.setOutputsBase(currentConversationId); } catch (_) {}
+    try {
+        ui.setOutputsBase(currentConversationId);
+    } catch (_) {
+        // Ignore errors
+    }
     const fd = new FormData();
     Array.from(fileList).forEach(f => fd.append('files', f));
     // 粘贴/选择上传：默认不加入Workspace，由用户在预览中手动保存
@@ -1032,9 +1110,17 @@ async function uploadFiles(fileList) {
             // 仅添加输入侧缩略图与右侧预览，不自动加入Workspace
             saved.forEach(name => ui.addAttachmentChip(name));
             // 优先统一走列表加载逻辑，确保左侧文件栏状态一致
-            try { ui.loadMultipleFiles(saved); } catch (_) {}
+            try {
+                ui.loadMultipleFiles(saved);
+            } catch (_) {
+                // Ignore errors
+            }
             // 并刷新已存在的同名文件，防止覆盖写后仍显示旧内容
-            try { ui.refreshFiles(saved); } catch (_) {}
+            try {
+                ui.refreshFiles(saved);
+            } catch (_) {
+                // Ignore errors
+            }
         }
     } catch (e) {
         console.error('[Upload] failed:', e);
@@ -1247,7 +1333,9 @@ function sendMessage() {
             const line = `本次输入包含附件：${atts.join(', ')}`;
             message = message ? `${message}\n\n${line}` : line;
         }
-    } catch (_) {}
+    } catch (_) {
+        // Ignore errors
+    }
 
     if (!message) {
         return;
@@ -1300,7 +1388,11 @@ function sendMessage() {
 function stopStreaming() {
     if (sseClient && sseClient.isConnected && sseClient.isConnected()) {
         console.log('[App] 手动停止流式连接');
-        try { sseClient.close(); } catch {}
+        try {
+            sseClient.close();
+        } catch {
+            // Ignore errors
+        }
     }
     ui.setInputEnabled(true);
     isSending = false;

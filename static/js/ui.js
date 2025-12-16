@@ -862,21 +862,59 @@ class UI {
         } else if (phase === 'heartbeat') {
             const k = evt.tool || 'unknown';
             let item = toolMap.get(k);
-            if (!item) { item=document.createElement('div'); item.className='exec-item'; const head=document.createElement('div'); head.className='exec-head'; head.innerHTML=`⏳ ${this.escapeHtml(k)} 执行中...`; const st=document.createElement('span'); st.className='exec-status'; head.appendChild(st); item._status=st; item.appendChild(head); list.appendChild(item); toolMap.set(k,item);} 
+            if (!item) {
+                item=document.createElement('div');
+                item.className='exec-item exec-item-running';
+                const head=document.createElement('div');
+                head.className='exec-head';
+                head.innerHTML=`<svg class="exec-icon exec-icon-running" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${this.escapeHtml(k)} 执行中...`;
+                const st=document.createElement('span');
+                st.className='exec-status';
+                head.appendChild(st);
+                item._status=st;
+                item.appendChild(head);
+                list.appendChild(item);
+                toolMap.set(k,item);
+            }
             const s=item._status || item.querySelector('.exec-status'); if (s) s.textContent=` 已等待 ${evt.elapsed_sec||0}s`;
         } else if (phase === 'done') {
             const k = evt.tool || 'unknown'; const item = toolMap.get(k);
-            if (item) { const s=item._status || item.querySelector('.exec-status'); if (s) s.textContent=' ✓ 完成'; }
-            else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✓ ${k} 执行完成`; list.appendChild(r); }
+            if (item) {
+                item.className='exec-item exec-item-success';
+                const head = item.querySelector('.exec-head');
+                if (head) {
+                    const icon = head.querySelector('.exec-icon');
+                    if (icon) {
+                        icon.outerHTML = '<svg class="exec-icon exec-icon-success" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>';
+                    }
+                }
+                const s=item._status || item.querySelector('.exec-status');
+                if (s) s.textContent=' 完成';
+            }
+            else { const r=document.createElement('div'); r.className='progress-line exec-line-success'; r.innerHTML=`<svg class="exec-icon exec-icon-success" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg> ${k} 执行完成`; list.appendChild(r); }
             toolMap.delete(k);
         } else if (phase === 'error') {
             const k = evt.tool || 'unknown'; const item = toolMap.get(k);
             // 不显示具体错误信息，避免过长导致UI变形
-            if (item) { const s=item._status || item.querySelector('.exec-status'); if (s) s.textContent=' ✗ 失败'; }
-            else { const r=document.createElement('div'); r.className='progress-line'; r.textContent=`✗ ${k} 执行失败`; list.appendChild(r); }
+            if (item) {
+                item.className='exec-item exec-item-error';
+                const head = item.querySelector('.exec-head');
+                if (head) {
+                    const icon = head.querySelector('.exec-icon');
+                    if (icon) {
+                        icon.outerHTML = '<svg class="exec-icon exec-icon-error" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+                    }
+                }
+                const s=item._status || item.querySelector('.exec-status');
+                if (s) s.textContent=' 失败';
+            }
+            else { const r=document.createElement('div'); r.className='progress-line exec-line-error'; r.innerHTML=`<svg class="exec-icon exec-icon-error" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> ${k} 执行失败`; list.appendChild(r); }
             toolMap.delete(k);
         } else if (phase === 'files') {
-            const r = document.createElement('div'); r.className='progress-line'; r.textContent = `📄 生成文件: ${(evt.files||[]).join(', ')}`; list.appendChild(r);
+            const r = document.createElement('div');
+            r.className='progress-line exec-line-files';
+            r.innerHTML = `<svg class="exec-icon exec-icon-files" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12V7z"/><path d="M14 3v4h4"/></svg> 生成文件: ${(evt.files||[]).join(', ')}`;
+            list.appendChild(r);
         } else if (phase === 'info') {
             if (evt.message) { const r=document.createElement('div'); r.className='progress-line'; r.textContent = evt.message; list.appendChild(r); }
         }
@@ -992,7 +1030,11 @@ class UI {
         if (useTypewriter) {
             // 清理thinking box和tool_call_text box的DOM元素
             // 移除所有thinking容器
-            try { this.chatMessages.querySelectorAll('.thinking-box').forEach(el => el.remove()); } catch (_) {}
+            try {
+                this.chatMessages.querySelectorAll('.thinking-box').forEach(el => el.remove());
+            } catch (_) {
+                // Ignore errors
+            }
             this._thinkingSections = new Map();
             if (this.currentToolCallTextBox && this.currentToolCallTextBox.parentElement) {
                 // 找到tool-call-text-box容器并移除
@@ -1460,6 +1502,7 @@ class UI {
             const groupHeader = document.createElement('div');
             groupHeader.className = 'file-group-header';
             groupHeader.innerHTML = `
+                <span class="file-group-collapse-icon">▼</span>
                 <span class="file-group-title">${group.icon}<span>${group.label}</span></span>
                 <span class="file-group-count">${group.files.length}</span>
             `;
@@ -1494,6 +1537,18 @@ class UI {
             });
 
             this.fileTabs.appendChild(groupList);
+
+            // 添加折叠/展开功能
+            groupHeader.addEventListener('click', () => {
+                const icon = groupHeader.querySelector('.file-group-collapse-icon');
+                if (groupList.style.display === 'none') {
+                    groupList.style.display = 'flex';
+                    icon.textContent = '▼';
+                } else {
+                    groupList.style.display = 'none';
+                    icon.textContent = '▶';
+                }
+            });
         }
 
         // 更新当前激活的标签样式
@@ -2972,8 +3027,20 @@ class UI {
                         </div>
                         <div class="workspace-file-actions">
                             <span class="workspace-file-size">${fileInfo.size_str}</span>
-                            <button class="workspace-file-btn workspace-file-preview" title="Preview">👁️</button>
-                            <button class="workspace-file-btn workspace-file-delete" title="Delete">🗑️</button>
+                            <button class="workspace-file-btn workspace-file-preview" title="Preview">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            </button>
+                            <button class="workspace-file-btn workspace-file-delete" title="Delete">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    <line x1="10" y1="11" x2="10" y2="17"/>
+                                    <line x1="14" y1="11" x2="14" y2="17"/>
+                                </svg>
+                            </button>
                         </div>
                     `;
 
@@ -2986,8 +3053,14 @@ class UI {
                             await window.switchConversation(fileInfo.conversation_id);
                         }
                         // 打开并聚焦该文件（若已存在则切换到对应tab）
-                        try { this.openFileByName(fileInfo.name); } catch (e) {
-                            try { this.loadMultipleFiles([fileInfo.name]); } catch(_) {}
+                        try {
+                            this.openFileByName(fileInfo.name);
+                        } catch (e) {
+                            try {
+                                this.loadMultipleFiles([fileInfo.name]);
+                            } catch(_) {
+                                // Ignore errors
+                            }
                         }
                     };
                     nameEl.addEventListener('click', clickHandler);

@@ -22,12 +22,15 @@ python-docx>=1.1.0  # Word文档读取
 mammoth>=1.6.0  # Word文档转HTML
 PyPDF2>=3.0.0  # PDF读取
 pdfplumber>=0.10.0  # PDF文本提取（更强大）
+PyMuPDF>=1.26.0  # PDF图片提取和高级处理
 pyyaml>=6.0  # YAML配置文件解析
 
 # Image Processing (LLM代码生成场景)
 Pillow>=10.0.0
 matplotlib>=3.8.0
 playwright>=1.40.0  # HTML转图片
+svglib>=1.6.0  # SVG转换
+reportlab>=4.0.0  # PDF生成和处理
 
 # Media (optional but recommended for video/audio synthesis)
 # moviepy的TextClip需要系统依赖: brew install imagemagick (macOS) 或 apt-get install imagemagick (Linux)

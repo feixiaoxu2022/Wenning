@@ -35,8 +35,13 @@ class SSEClient {
         this.close();
 
         // 构造URL
-        let url = `/chat?message=${encodeURIComponent(message)}&model=${encodeURIComponent(model)}&conversation_id=${encodeURIComponent(conversationId)}`;
-        if (clientMsgId) url += `&client_msg_id=${encodeURIComponent(clientMsgId)}`;
+        const baseUrl = `/chat?message=${encodeURIComponent(message)}`;
+        const modelParam = `&model=${encodeURIComponent(model)}`;
+        const convParam = `&conversation_id=${encodeURIComponent(conversationId)}`;
+        let url = baseUrl + modelParam + convParam;
+        if (clientMsgId) {
+            url += `&client_msg_id=${encodeURIComponent(clientMsgId)}`;
+        }
 
         // 创建EventSource
         this.eventSource = new EventSource(url);
@@ -93,14 +98,20 @@ class SSEClient {
 
         switch (update.type) {
             case 'iter_start':
-                if (this.onIterStart) this.onIterStart(update.iter);
+                if (this.onIterStart) {
+                    this.onIterStart(update.iter);
+                }
                 break;
             case 'iter_done':
-                if (this.onIterDone) this.onIterDone(update.iter, update.status);
+                if (this.onIterDone) {
+                    this.onIterDone(update.iter, update.status);
+                }
                 break;
             case 'thinking_start':
                 console.log('[SSE] 处理thinking_start:', update.iter);
-                if (this.onIterStart) this.onIterStart(update.iter);
+                if (this.onIterStart) {
+                    this.onIterStart(update.iter);
+                }
                 break;
             case 'thinking':
                 console.log('[SSE] 处理thinking消息:', update.content);
@@ -111,11 +122,15 @@ class SSEClient {
 
             case 'tool_call_text':
                 console.log('[SSE] 处理tool_call_text消息:', update.content);
-                if (this.onNote) this.onNote(update.content || update.delta || '', update.iter);
+                if (this.onNote) {
+                    this.onNote(update.content || update.delta || '', update.iter);
+                }
                 break;
 
             case 'note':
-                if (this.onNote) this.onNote(update.delta || '', update.iter);
+                if (this.onNote) {
+                    this.onNote(update.delta || '', update.iter);
+                }
                 break;
 
             case 'exec':
@@ -132,8 +147,19 @@ class SSEClient {
             case 'progress':
                 console.log('[SSE] 处理progress消息:', update.message);
                 // 兼容旧progress：同时走 exec/info 和 per-iter progress UI
-                if (this.onExec) this.onExec({iter: update.iter, phase: 'info', message: update.message, status: update.status, ts: update.ts});
-                if (this.onProgress) this.onProgress(update.message, update.status, update.iter);
+                if (this.onExec) {
+                    const execUpdate = {
+                        iter: update.iter,
+                        phase: 'info',
+                        message: update.message,
+                        status: update.status,
+                        ts: update.ts
+                    };
+                    this.onExec(execUpdate);
+                }
+                if (this.onProgress) {
+                    this.onProgress(update.message, update.status, update.iter);
+                }
                 break;
 
             case 'final':
@@ -160,13 +186,17 @@ class SSEClient {
             case 'compression_done':
                 console.log('[SSE] 处理compression_done消息');
                 if (this.onCompressionDone) {
-                    this.onCompressionDone(update.message, update.old_stats, update.new_stats);
+                    const oldStats = update.old_stats;
+                    const newStats = update.new_stats;
+                    this.onCompressionDone(update.message, oldStats, newStats);
                 }
                 break;
 
             case 'files_generated':
                 console.log('[SSE] 处理files_generated消息:', update.files);
-                if (this.onFilesGenerated) this.onFilesGenerated(update.files, update.iter);
+                if (this.onFilesGenerated) {
+                    this.onFilesGenerated(update.files, update.iter);
+                }
                 // 注意：不再调用onExec，避免重复显示（onFilesGenerated中已调用appendFilesGenerated）
                 break;
 
