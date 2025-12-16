@@ -194,11 +194,19 @@ body {
 }
 
 /* Center mode下消息和输入框居中显示 */
-.main-container.center-mode .chat-messages,
+.main-container.center-mode .chat-messages {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .main-container.center-mode .chat-input-container {
     max-width: 900px;
     margin-left: auto;
     margin-right: auto;
+    /* 确保左右padding与消息区一致 */
+    padding-left: 20px;
+    padding-right: 20px;
 }
 
 /* Conversations Sidebar (Left) */
