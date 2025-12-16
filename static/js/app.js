@@ -917,6 +917,7 @@ function setupSSECallbacks() {
     // 思考过程更新（映射后端iter为前端显示iter）
     sseClient.onIterStart = (iter) => {
         try {
+            ui.hideLoadingIndicator();
             console.log('[SSE] onIterStart received iter:', iter);
             const frontendIter = ui._mapSSEIter(iter);
             console.log('[SSE] Mapped to frontendIter:', frontendIter);
@@ -935,6 +936,7 @@ function setupSSECallbacks() {
     };
     sseClient.onThinking = (content, iter) => {
         try {
+            ui.hideLoadingIndicator();
             const frontendIter = ui._mapSSEIter(iter);
             ui.appendThinking(content, frontendIter);
         } catch (e) {
@@ -945,6 +947,7 @@ function setupSSECallbacks() {
     // 工具调用时的accompanying text（打字机效果）
     sseClient.onNote = (delta, iter) => {
         try {
+            ui.hideLoadingIndicator();
             const frontendIter = ui._mapSSEIter(iter);
             ui.appendNote(delta, frontendIter);
         } catch (e) {
@@ -956,6 +959,7 @@ function setupSSECallbacks() {
     sseClient.onExec = (evt) => {
         console.log('[App] onExec回调被调用, evt:', evt);
         try {
+            ui.hideLoadingIndicator();
             const frontendIter = ui._mapSSEIter(evt.iter);
             console.log('[App] 映射后frontendIter:', frontendIter);
             ui.appendExec(frontendIter, evt);
@@ -969,6 +973,7 @@ function setupSSECallbacks() {
     // 兼容旧progress：按轮追加信息行（不会重复显示）
     sseClient.onProgress = (message, status, iter) => {
         try {
+            ui.hideLoadingIndicator();
             const frontendIter = ui._mapSSEIter(iter);
             ui.showProgress(message, status, frontendIter);
         } catch (e) {
@@ -978,6 +983,7 @@ function setupSSECallbacks() {
 
     // 最终结果
     sseClient.onFinal = (result) => {
+        ui.hideLoadingIndicator();
         ui.showResult(result);
         // 结果完成后兜底刷新一次会话文件，确保像 mp4/wav 等在未收到 files_generated 时也能展示
         (async () => {
@@ -1008,6 +1014,7 @@ function setupSSECallbacks() {
 
     // 错误处理
     sseClient.onError = (error) => {
+        ui.hideLoadingIndicator();
         ui.showError(error);
         ui.setInputEnabled(true);
         isSending = false;
@@ -1016,6 +1023,7 @@ function setupSSECallbacks() {
 
     // 完成
     sseClient.onDone = () => {
+        ui.hideLoadingIndicator();
         ui.setInputEnabled(true);
         isSending = false;
         toggleStop(false);
@@ -1369,6 +1377,9 @@ function sendMessage() {
 
     // 显示用户消息
     ui.addUserMessage(message);
+
+    // 显示加载指示器
+    ui.showLoadingIndicator();
 
     // 清空输入与附件条
     ui.clearInput();

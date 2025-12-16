@@ -853,6 +853,33 @@ body {
     font-size: 13px;  /* 与exec-head保持一致 */
 }
 
+/* Loading Indicator - Agent推理中 */
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin: 10px 0;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid #3b82f6;
+}
+
+.loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.loading-text {
+    color: #3b82f6;
+    font-size: 13px;
+    font-weight: 500;
+}
+
 /* Result Box */
 .result-box {
     background: transparent;

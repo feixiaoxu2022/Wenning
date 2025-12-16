@@ -47,6 +47,9 @@ class UI {
         // SSE iter重新编号机制
         this._sseIterBase = null;  // 记录本次用户消息开始时的后端iter
         this._sseIterMap = new Map();  // 后端iter -> 前端显示iter
+
+        // 加载指示器
+        this.loadingIndicator = null;
     }
 
     /** 创建通用的复制图标SVG */
@@ -673,6 +676,34 @@ class UI {
 
         // 滚动到底部
         this.scrollToBottom();
+    }
+
+    /**
+     * 显示加载指示器（Agent推理中）
+     */
+    showLoadingIndicator() {
+        // 如果已存在，先移除
+        this.hideLoadingIndicator();
+
+        const indicator = document.createElement('div');
+        indicator.className = 'loading-indicator';
+        indicator.innerHTML = `
+            <div class="loading-spinner"></div>
+            <span class="loading-text">正在思考...</span>
+        `;
+        this.chatMessages.appendChild(indicator);
+        this.loadingIndicator = indicator;
+        this.scrollToBottom();
+    }
+
+    /**
+     * 隐藏加载指示器
+     */
+    hideLoadingIndicator() {
+        if (this.loadingIndicator && this.loadingIndicator.parentElement) {
+            this.loadingIndicator.remove();
+            this.loadingIndicator = null;
+        }
     }
 
     /**
