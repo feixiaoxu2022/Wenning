@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#1E3A8A;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#DC2626;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#EF4444;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+</defs>
+<rect width="1920" height="1080" fill="#F8FAFC"/>
+<rect x="100" y="80" width="1720" height="120" fill="url(#blueGradient)" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="960" y="160" font-family="Arial, Microsoft YaHei, sans-serif" font-size="48" font-weight="bold" fill="#FFFFFF" text-anchor="middle">目录 CONTENTS</text>
+<circle cx="200" cy="330" r="40" fill="#3B82F6" stroke="none" filter="url(#shadow)"/>
+<text x="200" y="340" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">01</text>
+<text x="300" y="330" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E293B" text-anchor="start">出口现状与趋势</text>
+<text x="300" y="370" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">2024-2025年数据分析</text>
+<polyline points="1650,310 1680,325.0 1650,340" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="200" cy="450" r="40" fill="#3B82F6" stroke="none" filter="url(#shadow)"/>
+<text x="200" y="460" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">02</text>
+<text x="300" y="450" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E293B" text-anchor="start">关税壁垒分析</text>
+<text x="300" y="490" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">高关税 vs 零关税市场</text>
+<polyline points="1650,430 1680,445.0 1650,460" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="200" cy="570" r="40" fill="#3B82F6" stroke="none" filter="url(#shadow)"/>
+<text x="200" y="580" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">03</text>
+<text x="300" y="570" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E293B" text-anchor="start">认证成本分析</text>
+<text x="300" y="610" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">WVTA vs ADR vs JIS/KC</text>
+<polyline points="1650,550 1680,565.0 1650,580" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="200" cy="690" r="40" fill="#3B82F6" stroke="none" filter="url(#shadow)"/>
+<text x="200" y="700" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">04</text>
+<text x="300" y="690" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E293B" text-anchor="start">ROI排名TOP8</text>
+<text x="300" y="730" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">最佳投入产出比市场</text>
+<polyline points="1650,670 1680,685.0 1650,700" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="200" cy="810" r="40" fill="#3B82F6" stroke="none" filter="url(#shadow)"/>
+<text x="200" y="820" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">05</text>
+<text x="300" y="810" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E293B" text-anchor="start">低ROI市场警示</text>
+<text x="300" y="850" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">需要谨慎的市场</text>
+<polyline points="1650,790 1680,805.0 1650,820" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="200" cy="930" r="40" fill="#3B82F6" stroke="none" filter="url(#shadow)"/>
+<text x="200" y="940" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">06</text>
+<text x="300" y="930" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E293B" text-anchor="start">战略建议</text>
+<text x="300" y="970" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">四级市场策略</text>
+<polyline points="1650,910 1680,925.0 1650,940" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="960" y="1020" font-family="Arial, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#64748B" text-anchor="middle">2 / 9</text>
+</svg>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#1E3A8A;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#DC2626;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#EF4444;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+</defs>
+<rect width="1920" height="1080" fill="#F8FAFC"/>
+<rect x="100" y="80" width="1720" height="120" fill="url(#blueGradient)" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="960" y="160" font-family="Arial, Microsoft YaHei, sans-serif" font-size="48" font-weight="bold" fill="#FFFFFF" text-anchor="middle">01 出口现状与趋势</text>
+<rect x="120" y="280" width="800" height="650" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<text x="520" y="340" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E3A8A" text-anchor="middle">2024年成绩单</text>
+<rect x="180" y="420" width="680" height="100" fill="#1E3A8A" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="240" y="460" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#FFFFFF" text-anchor="start">汽车总出口</text>
+<text x="840" y="460" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="end">586万辆</text>
+<rect x="180" y="550" width="680" height="100" fill="#10B981" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="240" y="590" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#FFFFFF" text-anchor="start">新能源车出口</text>
+<text x="840" y="590" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="end">200万辆+</text>
+<rect x="180" y="680" width="680" height="100" fill="#F59E0B" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="240" y="720" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#FFFFFF" text-anchor="start">全球排名</text>
+<text x="840" y="720" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="end">第1名</text>
+<rect x="180" y="810" width="680" height="100" fill="#EF4444" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="240" y="850" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#FFFFFF" text-anchor="start">连续领先</text>
+<text x="840" y="850" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="end">2年</text>
+<rect x="1000" y="280" width="800" height="650" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<text x="1400" y="340" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#1E3A8A" text-anchor="middle">2025年1-11月</text>
+<circle cx="1200" cy="530" r="50" fill="#10B981" stroke="none" filter="url(#shadow)"/>
+<text x="1200" y="540" font-family="Arial, Microsoft YaHei, sans-serif" font-size="40" font-weight="bold" fill="#FFFFFF" text-anchor="middle">✓</text>
+<text x="1300" y="525" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="start">新能源车出口</text>
+<text x="1300" y="565" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#10B981" text-anchor="start">215万辆</text>
+<circle cx="1200" cy="690" r="50" fill="#F59E0B" stroke="none" filter="url(#shadow)"/>
+<text x="1200" y="700" font-family="Arial, Microsoft YaHei, sans-serif" font-size="40" font-weight="bold" fill="#FFFFFF" text-anchor="middle">✓</text>
+<text x="1300" y="685" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="start">同比增长</text>
+<text x="1300" y="725" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#F59E0B" text-anchor="start">+82.6%</text>
+<circle cx="1200" cy="850" r="50" fill="#EF4444" stroke="none" filter="url(#shadow)"/>
+<text x="1200" y="860" font-family="Arial, Microsoft YaHei, sans-serif" font-size="40" font-weight="bold" fill="#FFFFFF" text-anchor="middle">✓</text>
+<text x="1300" y="845" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="start">全球增长贡献</text>
+<text x="1300" y="885" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#EF4444" text-anchor="start">70%</text>
+<text x="960" y="1020" font-family="Arial, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#64748B" text-anchor="middle">3 / 9</text>
+</svg>

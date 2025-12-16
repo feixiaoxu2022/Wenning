@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#1E3A8A;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#DC2626;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#EF4444;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+</defs>
+<rect width="1920" height="1080" fill="#F8FAFC"/>
+<rect x="100" y="80" width="1720" height="120" fill="url(#blueGradient)" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="960" y="160" font-family="Arial, Microsoft YaHei, sans-serif" font-size="48" font-weight="bold" fill="#FFFFFF" text-anchor="middle">06 2028年出口战略建议</text>
+<rect x="200" y="260" width="1520" height="140" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<rect x="240" y="290" width="280" height="80" fill="#10B981" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="380" y="345" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">✓ 优先进入</text>
+<text x="600" y="320" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="start">东南亚、中东、澳洲</text>
+<text x="600" y="370" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">零关税 + 认证友好 + 市场潜力大</text>
+<rect x="200" y="430" width="1520" height="140" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<rect x="240" y="460" width="280" height="80" fill="#F59E0B" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="380" y="515" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">✓ 积极布局</text>
+<text x="600" y="490" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="start">拉美、中亚、非洲</text>
+<text x="600" y="540" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">本地化生产 + 政策支持 + 增长潜力</text>
+<rect x="200" y="600" width="1520" height="140" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<rect x="240" y="630" width="280" height="80" fill="#64748B" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="380" y="685" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">△ 谨慎观望</text>
+<text x="600" y="660" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="start">欧盟、加拿大</text>
+<text x="600" y="710" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">评估关税和认证成本</text>
+<rect x="200" y="770" width="1520" height="140" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<rect x="240" y="800" width="280" height="80" fill="#EF4444" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="380" y="855" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">✗ 暂时避开</text>
+<text x="600" y="830" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="start">美国、日韩</text>
+<text x="600" y="880" font-family="Arial, Microsoft YaHei, sans-serif" font-size="24" font-weight="normal" fill="#64748B" text-anchor="start">等待政策环境改善</text>
+<rect x="300" y="950" width="1320" height="80" fill="#1E3A8A" stroke="none" rx="15" filter="url(#shadow)"/>
+<text x="960" y="1005" font-family="Arial, Microsoft YaHei, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF" text-anchor="middle">预计2028年总出口量：400万辆+</text>
+<text x="960" y="1020" font-family="Arial, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#64748B" text-anchor="middle">9 / 9</text>
+</svg>

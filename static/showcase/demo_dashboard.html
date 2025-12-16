@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国新能源车出口2028市场ROI分析 - SVG PPT</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .slide-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            max-width: 1920px;
+            width: 100%;
+        }
+        
+        .slide-viewer {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: #f8f9fa;
+            border-top: 2px solid #e9ecef;
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-prev {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-next {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .slide-info {
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .slide-info .current {
+            color: #667eea;
+            font-size: 24px;
+        }
+        
+        .thumbnail-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+            max-width: 1920px;
+            width: 100%;
+        }
+        
+        .thumbnail {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .thumbnail:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+        
+        .thumbnail.active {
+            border: 4px solid #667eea;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .thumbnail img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .thumbnail-title {
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            color: #495057;
+            background: #f8f9fa;
+        }
+        
+        .view-mode-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .mode-btn {
+            padding: 10px 25px;
+            background: white;
+            color: #667eea;
+            border: 2px solid white;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .presentation-view {
+            display: block;
+        }
+        
+        .grid-view {
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .thumbnail-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚗 中国新能源车出口2028市场ROI分析</h1>
+        <p>关税壁垒 × 认证成本 → 最佳投入产出比</p>
+    </div>
+    
+    <div class="view-mode-toggle">
+        <button class="mode-btn active" onclick="switchMode('presentation')">演示模式</button>
+        <button class="mode-btn" onclick="switchMode('grid')">网格模式</button>
+    </div>
+    
+    <div class="presentation-view">
+        <div class="slide-container">
+            <img id="currentSlide" class="slide-viewer" src="/static/showcase/slide_01_封面.svg" alt="Slide">
+            
+            <div class="controls">
+                <button class="btn btn-prev" onclick="prevSlide()" id="prevBtn">
+                    ← 上一页
+                </button>
+                
+                <div class="slide-info">
+                    <span class="current" id="currentPage">1</span> / <span id="totalPages">9</span>
+                </div>
+                
+                <button class="btn btn-next" onclick="nextSlide()" id="nextBtn">
+                    下一页 →
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="grid-view">
+        <div class="thumbnail-container" id="thumbnailContainer"></div>
+    </div>
+
+    <script>
+        const slides = [
+            { file: '/static/showcase/slide_01_封面.svg', title: '01 封面' },
+            { file: '/static/showcase/slide_02_目录.svg', title: '02 目录' },
+            { file: '/static/showcase/slide_03_出口现状.svg', title: '03 出口现状与趋势' },
+            { file: '/static/showcase/slide_04_高关税市场.svg', title: '04 高关税市场' },
+            { file: '/static/showcase/slide_05_零关税市场.svg', title: '05 零关税市场' },
+            { file: '/static/showcase/slide_06_认证成本.svg', title: '06 认证成本分析' },
+            { file: '/static/showcase/slide_07_ROI排名.svg', title: '07 ROI排名TOP8' },
+            { file: '/static/showcase/slide_08_低ROI警示.svg', title: '08 低ROI市场警示' },
+            { file: '/static/showcase/slide_09_战略建议.svg', title: '09 战略建议' },
+        ];
+        
+        let currentSlideIndex = 0;
+        
+        function updateSlide() {
+            document.getElementById('currentSlide').src = slides[currentSlideIndex].file;
+            document.getElementById('currentPage').textContent = currentSlideIndex + 1;
+            document.getElementById('totalPages').textContent = slides.length;
+            
+            // 更新按钮状态
+            document.getElementById('prevBtn').disabled = currentSlideIndex === 0;
+            document.getElementById('nextBtn').disabled = currentSlideIndex === slides.length - 1;
+            
+            // 更新缩略图激活状态
+            updateThumbnailActive();
+        }
+        
+        function nextSlide() {
+            if (currentSlideIndex < slides.length - 1) {
+                currentSlideIndex++;
+                updateSlide();
+            }
+        }
+        
+        function prevSlide() {
+            if (currentSlideIndex > 0) {
+                currentSlideIndex--;
+                updateSlide();
+            }
+        }
+        
+        function goToSlide(index) {
+            currentSlideIndex = index;
+            updateSlide();
+            switchMode('presentation');
+        }
+        
+        function switchMode(mode) {
+            const presentationView = document.querySelector('.presentation-view');
+            const gridView = document.querySelector('.grid-view');
+            const modeButtons = document.querySelectorAll('.mode-btn');
+            
+            if (mode === 'presentation') {
+                presentationView.style.display = 'block';
+                gridView.style.display = 'none';
+                modeButtons[0].classList.add('active');
+                modeButtons[1].classList.remove('active');
+            } else {
+                presentationView.style.display = 'none';
+                gridView.style.display = 'block';
+                modeButtons[0].classList.remove('active');
+                modeButtons[1].classList.add('active');
+                generateThumbnails();
+            }
+        }
+        
+        function generateThumbnails() {
+            const container = document.getElementById('thumbnailContainer');
+            if (container.children.length > 0) return; // 已生成
+            
+            slides.forEach((slide, index) => {
+                const thumbnail = document.createElement('div');
+                thumbnail.className = 'thumbnail';
+                if (index === currentSlideIndex) {
+                    thumbnail.classList.add('active');
+                }
+                thumbnail.onclick = () => goToSlide(index);
+                
+                thumbnail.innerHTML = `
+                    <img src="${slide.file}" alt="${slide.title}">
+                    <div class="thumbnail-title">${slide.title}</div>
+                `;
+                
+                container.appendChild(thumbnail);
+            });
+        }
+        
+        function updateThumbnailActive() {
+            const thumbnails = document.querySelectorAll('.thumbnail');
+            thumbnails.forEach((thumb, index) => {
+                if (index === currentSlideIndex) {
+                    thumb.classList.add('active');
+                } else {
+                    thumb.classList.remove('active');
+                }
+            });
+        }
+        
+        // 键盘导航
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                prevSlide();
+            } else if (e.key === 'ArrowRight') {
+                nextSlide();
+            }
+        });
+        
+        // 初始化
+        updateSlide();
+    </script>
+</body>
+</html>

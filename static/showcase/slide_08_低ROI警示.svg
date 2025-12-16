@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#1E3A8A;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#DC2626;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#EF4444;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+</defs>
+<rect width="1920" height="1080" fill="#F8FAFC"/>
+<rect x="100" y="80" width="1720" height="120" fill="url(#redGradient)" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="960" y="160" font-family="Arial, Microsoft YaHei, sans-serif" font-size="48" font-weight="bold" fill="#FFFFFF" text-anchor="middle">05 低ROI市场警示</text>
+
+<!-- 美国卡片 -->
+<rect x="200" y="280" width="1520" height="280" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<!-- 美国标志圆圈 -->
+<circle cx="330" cy="350" r="35" fill="#DC2626"/>
+<text x="330" y="365" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">US</text>
+<text x="400" y="360" font-family="Arial, Microsoft YaHei, sans-serif" font-size="48" font-weight="bold" fill="#1E293B" text-anchor="start">美国</text>
+<rect x="1400" y="310" width="200" height="80" fill="#EF4444" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="1500" y="365" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">ROI 1分</text>
+<text x="400" y="430" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="start">• 关税：100%（特朗普政府加征）</text>
+<text x="400" y="480" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="start">• 政治风险：极高</text>
+<text x="400" y="530" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#EF4444" text-anchor="start">• 建议：暂时避开，等待政策环境改善</text>
+
+<!-- 日韩卡片 -->
+<rect x="200" y="600" width="1520" height="280" fill="#FFFFFF" stroke="none" rx="15" filter="url(#shadow)"/>
+<!-- 日本标志圆圈 -->
+<circle cx="310" cy="670" r="35" fill="#DC2626"/>
+<text x="310" y="685" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">JP</text>
+<!-- 韩国标志圆圈 -->
+<circle cx="380" cy="670" r="35" fill="#0047A0"/>
+<text x="380" y="685" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">KR</text>
+<text x="440" y="680" font-family="Arial, Microsoft YaHei, sans-serif" font-size="48" font-weight="bold" fill="#1E293B" text-anchor="start">日本 &amp; 韩国</text>
+<rect x="1400" y="630" width="200" height="80" fill="#F59E0B" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="1500" y="685" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">ROI 3分</text>
+<text x="440" y="750" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="start">• 认证：JIS/KC认证周期长、成本高</text>
+<text x="440" y="800" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="start">• 市场：本土保护强，竞争激烈</text>
+<text x="440" y="850" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#F59E0B" text-anchor="start">• 建议：谨慎评估，非优先市场</text>
+
+<text x="960" y="1020" font-family="Arial, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#64748B" text-anchor="middle">8 / 9</text>
+</svg>

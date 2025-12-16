@@ -59,6 +59,7 @@ temp/
 # Project specific
 outputs/
 data/
+!static/data/  # 例外：提交static目录下的data
 executions/
 history/
 results/
@@ -67,9 +68,8 @@ samples/
 *.pid
 .server.pid
 prompt_templates/
-static/showcase/
+!static/showcase/  # 例外：提交static目录下的showcase
 media/
-static/js/showcase.js
 
 # Development and testing (不提交到GitHub)
 tests/

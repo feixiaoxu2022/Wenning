@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#1E3A8A;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#DC2626;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#EF4444;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+</defs>
+<rect width="1920" height="1080" fill="#F8FAFC"/>
+<rect x="100" y="80" width="1720" height="120" fill="url(#blueGradient)" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="960" y="160" font-family="Arial, Microsoft YaHei, sans-serif" font-size="48" font-weight="bold" fill="#FFFFFF" text-anchor="middle">03 认证成本分析</text>
+<rect x="200" y="280" width="1520" height="80" fill="#1E3A8A" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="350" y="335" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">认证类型</text>
+<text x="650" y="335" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">认证周期</text>
+<text x="1050" y="335" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">成本/难度</text>
+<text x="1500" y="335" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">等级</text>
+<rect x="200" y="380" width="1520" height="120" fill="#FFFFFF" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="350" y="450" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="middle">EU WVTA</text>
+<text x="650" y="450" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">12-18个月</text>
+<text x="1050" y="450" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">数百万欧元</text>
+<rect x="1430" y="410" width="140" height="60" fill="#EF4444" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="1500" y="450" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">高</text>
+<rect x="200" y="520" width="1520" height="120" fill="#FFFFFF" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="350" y="590" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="middle">AU ADR</text>
+<text x="650" y="590" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">6-9个月</text>
+<text x="1050" y="590" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">成本较低</text>
+<rect x="1430" y="550" width="140" height="60" fill="#10B981" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="1500" y="590" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">中</text>
+<rect x="200" y="660" width="1520" height="120" fill="#FFFFFF" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="350" y="730" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="middle">JP JIS</text>
+<text x="650" y="730" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">12个月+</text>
+<text x="1050" y="730" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">本土保护强</text>
+<rect x="1430" y="690" width="140" height="60" fill="#F59E0B" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="1500" y="730" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">高</text>
+<rect x="200" y="800" width="1520" height="120" fill="#FFFFFF" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="350" y="870" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#1E293B" text-anchor="middle">KR KC</text>
+<text x="650" y="870" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">10个月+</text>
+<text x="1050" y="870" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="normal" fill="#1E293B" text-anchor="middle">竞争激烈</text>
+<rect x="1430" y="830" width="140" height="60" fill="#F59E0B" stroke="none" rx="8" filter="url(#shadow)"/>
+<text x="1500" y="870" font-family="Arial, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">高</text>
+<rect x="300" y="900" width="1320" height="80" fill="#10B981" stroke="none" rx="10" filter="url(#shadow)"/>
+<text x="960" y="955" font-family="Arial, Microsoft YaHei, sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF" text-anchor="middle">✓ 澳洲ADR认证周期短、成本低，是友好市场</text>
+<text x="960" y="1020" font-family="Arial, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#64748B" text-anchor="middle">6 / 9</text>
+</svg>
