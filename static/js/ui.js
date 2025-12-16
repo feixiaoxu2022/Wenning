@@ -1616,6 +1616,12 @@ class UI {
         this.fileTabsContainer.classList.remove('has-files');
         this.previewContent = document.getElementById('preview-content'); // 重新获取引用
         this.fileKeys.clear();
+
+        // 恢复center-mode（对话框居中，预览区滑出）
+        const mainContainer = document.querySelector('.main-container');
+        if (mainContainer) {
+            mainContainer.classList.add('center-mode');
+        }
     }
 
     /**

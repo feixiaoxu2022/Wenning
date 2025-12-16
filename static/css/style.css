@@ -152,6 +152,8 @@ body {
     max-width: 1800px;
     margin: 0 auto;
     width: 100%;
+    /* 添加列宽度变化的过渡动画 */
+    transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Vertical Splitter Between Columns */
@@ -169,14 +171,26 @@ body {
 .v-splitter:hover, .v-splitter.active { background-color: rgba(2,6,23,0.04); }
 
 /* Center mode (no files) */
+.main-container.center-mode {
+    /* 隐藏右侧splitter和预览区的列 */
+    grid-template-columns: var(--leftW) 6px 1fr 0px 0px;
+}
+
 .main-container.center-mode .chat-panel {
-    width: 100%;
-    max-width: 900px;
-    margin: 0 auto;
+    /* 对话框占据整个中间区域 */
+    max-width: none;
+}
+
+.main-container.center-mode #splitter-right {
+    /* 隐藏右侧splitter */
+    display: none;
 }
 
 .main-container.center-mode .preview-panel {
-    display: none;
+    /* 预览区移到视口外（右侧） */
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Conversations Sidebar (Left) */
@@ -267,6 +281,11 @@ body {
     display: flex;
     flex-direction: row; /* 左侧文件栏 + 右侧内容 */
     overflow: hidden;
+    /* 添加滑入动画 */
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(0);
+    opacity: 1;
 }
 
 
