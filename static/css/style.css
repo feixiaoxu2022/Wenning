@@ -201,12 +201,20 @@ body {
 }
 
 .main-container.center-mode .chat-input-container {
-    max-width: 900px;
+    /* 输入容器不设max-width，让内部input-row来控制 */
+}
+
+/* 输入行与消息区内容对齐：900px - 左右padding 40px = 860px */
+.main-container.center-mode .input-row {
+    max-width: 860px;
     margin-left: auto;
     margin-right: auto;
-    /* 确保左右padding与消息区一致 */
-    padding-left: 20px;
-    padding-right: 20px;
+}
+
+.main-container.center-mode .context-indicator-bottom {
+    max-width: 860px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* Conversations Sidebar (Left) */
