@@ -76,6 +76,15 @@ class ProductTour {
             // 自定义样式
             popoverClass: 'wenning-tour-popover',
 
+            // 关闭按钮点击回调
+            onCloseClick: (element, step, options) => {
+                console.log('[Tour] 用户点击关闭按钮');
+                this.markTourCompleted();
+                if (this.driver) {
+                    this.driver.destroy();
+                }
+            },
+
             // 完成或跳过时的回调
             onDestroyStarted: () => {
                 console.log('[Tour] 引导销毁开始');
