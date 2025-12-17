@@ -50,17 +50,21 @@ class ProductTour {
      * 初始化Driver实例
      */
     initDriver() {
-        // 检查Driver.js是否加载
-        if (typeof window.driver === 'undefined') {
-            console.error('[Tour] Driver.js未加载，请检查CDN连接');
-            console.error('[Tour] 请尝试访问: https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js');
+        // 检查Driver.js是否加载（IIFE版本暴露为window.driver.js.driver）
+        if (typeof window.driver === 'undefined' ||
+            typeof window.driver.js === 'undefined' ||
+            typeof window.driver.js.driver !== 'function') {
+            console.error('[Tour] Driver.js未正确加载');
+            console.error('[Tour] window.driver:', typeof window.driver);
+            console.error('[Tour] window.driver.js:', typeof (window.driver && window.driver.js));
             return;
         }
 
         console.log('[Tour] Driver.js已加载，开始初始化');
 
         try {
-            this.driver = window.driver({
+            // Driver.js IIFE版本的正确调用方式
+            this.driver = window.driver.js.driver({
             showProgress: true,
             showButtons: ['next', 'previous', 'close'],
             nextBtnText: '下一步',
