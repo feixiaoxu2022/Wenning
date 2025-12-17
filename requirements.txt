@@ -27,6 +27,7 @@ pyyaml>=6.0  # YAML配置文件解析
 
 # Image Processing (LLM代码生成场景)
 Pillow>=10.0.0
+opencv-python>=4.8.0  # 视频帧提取和图像处理
 matplotlib>=3.8.0
 playwright>=1.40.0  # HTML转图片
 svglib>=1.6.0  # SVG转换
@@ -34,7 +35,8 @@ reportlab>=4.0.0  # PDF生成和处理
 
 # Media (optional but recommended for video/audio synthesis)
 # moviepy的TextClip需要系统依赖: brew install imagemagick (macOS) 或 apt-get install imagemagick (Linux)
-moviepy>=1.0.3
+# 注意：moviepy 2.x改变了模块结构(无moviepy.editor)，使用1.x版本保持兼容性
+moviepy>=1.0.3,<2.0
 imageio>=2.34.0
 imageio-ffmpeg>=0.4.8
 pyttsx3>=2.90  # 非macOS离线TTS(可选)

@@ -1365,8 +1365,13 @@ class MasterAgent:
 - **执行模式**:
   - 短代码（<50行）：使用code_executor的code参数直接执行
   - 长代码（≥50行）：建议先用file_writer保存为.py文件，再用code_executor的script_file参数执行（便于调试和迭代修改）
+- **导入规范**:
+  - moviepy必须使用 `from moviepy.editor import ...` 或 `import moviepy.editor`（注意是editor不是edit）
+  - 其他常用库已安装：pandas, numpy, matplotlib, PIL, openpyxl, requests等
 - **视频兼容性**: 生成mp4时使用yuv420p像素格式和libx264编码确保兼容性
-- **中文显示**: matplotlib包含中文时必须先设置字体避免乱码：`matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'Microsoft YaHei']`，moviepy使用 `_MOVIEPY_FONT_CONFIG` 变量
+- **中文显示**:
+  - matplotlib包含中文时必须先设置字体避免乱码：`matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'Microsoft YaHei']`
+  - moviepy的TextClip使用中文时需指定font参数，如：`TextClip("中文", font='/System/Library/Fonts/PingFang.ttc', fontsize=40)`
 - **限制**: 不能使用subprocess/os.system，网络操作通过工具完成
 
 ### 信息获取
