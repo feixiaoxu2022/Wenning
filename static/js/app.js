@@ -1740,4 +1740,23 @@ const feedbackModal = {
 // 页面加载后初始化反馈功能
 document.addEventListener('DOMContentLoaded', () => {
     feedbackModal.init();
+
+    // 绑定帮助导览按钮
+    const helpTourBtn = document.getElementById('help-tour-btn');
+    if (helpTourBtn) {
+        helpTourBtn.addEventListener('click', () => {
+            if (productTour) {
+                productTour.start();
+            } else {
+                console.warn('[Tour] 产品导览未初始化');
+            }
+        });
+    }
+
+    // 首次访问自动启动导览（延迟执行，确保所有DOM准备就绪）
+    setTimeout(() => {
+        if (productTour) {
+            productTour.autoStartForFirstTime();
+        }
+    }, 1500);
 });
