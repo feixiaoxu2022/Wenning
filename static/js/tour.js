@@ -259,7 +259,15 @@ class ProductTour {
                 popover: {
                     title: '准备好了吗？🎉',
                     description: '恭喜您完成新手引导！现在开始与Wenning对话吧。记住：您可以随时通过右上角的帮助按钮重新查看本引导。祝您使用愉快！',
-                    side: 'over'
+                    side: 'over',
+                    // 最后一步的完成按钮回调
+                    onNextClick: (element, step, options) => {
+                        console.log('[Tour] 用户点击完成按钮');
+                        this.markTourCompleted();
+                        if (this.driver) {
+                            this.driver.destroy();
+                        }
+                    }
                 }
             }
         ];
