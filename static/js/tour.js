@@ -78,10 +78,69 @@ class ProductTour {
 
             // 完成或跳过时的回调
             onDestroyStarted: () => {
+                console.log('[Tour] 引导销毁开始');
                 this.markTourCompleted();
-                if (this.driver) {
-                    this.driver.destroy();
-                }
+                // 不要在这里调用destroy()，会导致清理不完全
+                // Driver.js会自动完成销毁流程
+            },
+
+            // 销毁完成后的回调 - 恢复页面状态
+            onDestroyed: () => {
+                console.log('[Tour] 引导销毁完成，恢复页面状态');
+
+                // 强制刷新布局，确保所有元素恢复正常显示
+                setTimeout(() => {
+                    // 移除所有Driver.js可能添加的类名
+                    document.querySelectorAll('.driver-highlighted-element, .driver-active-element, .driver-no-interaction').forEach(el => {
+                        el.classList.remove('driver-highlighted-element', 'driver-active-element', 'driver-no-interaction');
+                    });
+
+                    // 移除Driver.js可能添加的内联样式
+                    document.querySelectorAll('[style]').forEach(el => {
+                        const style = el.getAttribute('style');
+                        if (style) {
+                            // 移除包含driver、transform、z-index等可能由Driver.js添加的样式
+                            const cleaned = style
+                                .split(';')
+                                .filter(s => !s.includes('driver') &&
+                                           !s.includes('pointer-events') &&
+                                           !s.includes('z-index: 10'))
+                                .join(';');
+                            if (cleaned !== style) {
+                                if (cleaned.trim()) {
+                                    el.setAttribute('style', cleaned);
+                                } else {
+                                    el.removeAttribute('style');
+                                }
+                            }
+                        }
+                    });
+
+                    // 确保关键布局元素可见
+                    const sidebar = document.querySelector('.conversations-sidebar');
+                    const preview = document.querySelector('.preview-panel');
+                    const mainContainer = document.querySelector('.main-container');
+
+                    if (sidebar) {
+                        sidebar.style.display = '';
+                        sidebar.style.visibility = '';
+                        sidebar.style.opacity = '';
+                    }
+
+                    if (preview) {
+                        preview.style.display = '';
+                        preview.style.visibility = '';
+                    }
+
+                    if (mainContainer) {
+                        mainContainer.style.display = '';
+                    }
+
+                    // 触发resize事件，让布局重新计算
+                    window.dispatchEvent(new Event('resize'));
+
+                    console.log('[Tour] 页面状态恢复完成');
+                }, 100);
             },
 
             steps: this.getSteps()
