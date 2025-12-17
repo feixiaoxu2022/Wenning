@@ -2300,7 +2300,7 @@ body {
 /* 遮罩层样式 */
 .driver-overlay {
     background-color: rgba(0, 0, 0, 0.7) !important;
-    backdrop-filter: blur(3px);
+    /* 移除backdrop-filter，避免高亮区域边缘模糊 */
 }
 
 /* 高亮元素的样式 */
@@ -2373,6 +2373,14 @@ body {
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     border: none !important;
+    text-shadow: none !important; /* 清除可能的文字阴影 */
+}
+
+/* 清除按钮的伪元素 */
+.driver-popover-btn::before,
+.driver-popover-btn::after {
+    display: none !important;
+    content: none !important;
 }
 
 /* 上一步按钮 */
