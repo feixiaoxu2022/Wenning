@@ -768,10 +768,17 @@ body {
     gap: 15px;
 }
 
-/* 当聊天区域没有消息时，居中显示 */
+/* 当聊天区域没有消息时，整个chat-panel垂直居中 */
+.chat-panel:has(.chat-messages:empty) {
+    justify-content: center;
+}
+
+/* 当聊天为空时，chat-messages不占弹性空间 */
 .chat-panel:has(.chat-messages:empty) .chat-messages {
+    flex: none;
     justify-content: center;
     align-items: center;
+    padding: 0;
 }
 
 /* 欢迎消息样式 */
@@ -1158,6 +1165,11 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+/* 空聊天时移除输入框顶部的边线 */
+.chat-panel:has(.chat-messages:empty) .chat-input-container {
+    border-top: none;
 }
 
 /* Context Indicator */
