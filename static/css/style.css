@@ -1565,16 +1565,6 @@ body {
     cursor: pointer;
     transition: all 0.2s;
     padding: 0;
-    position: relative;
-    z-index: 10;
-}
-
-/* 折叠状态：按钮移到预览区域左上角 */
-.file-tabs-container.collapsed .file-list-collapse-btn {
-    position: fixed;
-    top: 80px;
-    left: 220px;
-    box-shadow: var(--shadow);
 }
 
 .file-list-collapse-btn:hover {
@@ -1589,9 +1579,38 @@ body {
     transition: transform 0.3s ease;
 }
 
-/* 折叠状态：图标旋转180度 */
-.file-tabs-container.collapsed .file-list-collapse-btn svg {
-    transform: rotate(180deg);
+/* 展开按钮（折叠时显示在预览区域左上角） */
+.file-list-expand-btn {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: 6px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+    box-shadow: var(--shadow);
+}
+
+.file-tabs-container.collapsed ~ .file-contents-container .file-list-expand-btn {
+    display: flex;
+}
+
+.file-list-expand-btn:hover {
+    background: var(--bg);
+    border-color: var(--accent);
+}
+
+.file-list-expand-btn svg {
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
 }
 
 .file-tabs-container.has-files {

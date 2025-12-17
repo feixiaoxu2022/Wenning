@@ -995,19 +995,32 @@ function initSidebarToggles() {
  */
 function initFileListCollapse() {
     const fileTabsContainer = document.getElementById('file-tabs-container');
-    const toggleBtn = document.getElementById('file-list-collapse-btn');
+    const collapseBtn = document.getElementById('file-list-collapse-btn');
+    const expandBtn = document.getElementById('file-list-expand-btn');
 
-    if (!fileTabsContainer || !toggleBtn) return;
+    if (!fileTabsContainer || !collapseBtn) return;
 
-    // 切换折叠状态
-    toggleBtn.addEventListener('click', (e) => {
+    // 折叠按钮：添加collapsed类
+    collapseBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const isCollapsed = fileTabsContainer.classList.toggle('collapsed');
+        fileTabsContainer.classList.add('collapsed');
         try {
-            localStorage.setItem('fileListCollapsed', isCollapsed ? 'true' : 'false');
+            localStorage.setItem('fileListCollapsed', 'true');
         } catch (_) {}
     });
+
+    // 展开按钮：移除collapsed类
+    if (expandBtn) {
+        expandBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            fileTabsContainer.classList.remove('collapsed');
+            try {
+                localStorage.setItem('fileListCollapsed', 'false');
+            } catch (_) {}
+        });
+    }
 
     // 恢复折叠状态
     const restoreCollapsedState = () => {

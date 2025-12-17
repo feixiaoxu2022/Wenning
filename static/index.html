@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wenning</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20251217-fixed-btn">
+    <link rel="stylesheet" href="/static/css/style.css?v=20251217-two-btn">
     <!-- Driver.js for Product Tour (本地文件) -->
     <link rel="stylesheet" href="/static/vendor/driver.css">
 </head>
@@ -211,6 +211,12 @@
 
             <!-- File Contents -->
             <div class="file-contents-container" id="file-contents-container">
+                <!-- 展开按钮（折叠时显示） -->
+                <button class="file-list-expand-btn" id="file-list-expand-btn" title="展开文件列表">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
                 <div class="preview-content" id="preview-content">
                     <p class="preview-placeholder">Waiting for files...</p>
                 </div>
@@ -300,6 +306,6 @@
     <script src="/static/js/ui.js?v=20251217-zip"></script>
     <script src="/static/js/showcase.js?v=20251216-docx"></script>
     <script src="/static/js/tour.js?v=20251217-svg"></script>
-    <script src="/static/js/app.js?v=20251217-simple"></script>
+    <script src="/static/js/app.js?v=20251217-two-btn"></script>
 </body>
 </html>
