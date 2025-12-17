@@ -995,60 +995,21 @@ function initSidebarToggles() {
  */
 function initFileListCollapse() {
     const fileTabsContainer = document.getElementById('file-tabs-container');
-    const collapseBtn = document.getElementById('file-list-collapse-btn');
-    const expandBtn = document.getElementById('file-list-expand-btn');
+    const toggleBtn = document.getElementById('file-list-collapse-btn');
 
-    console.log('[FileCollapse] 初始化折叠功能');
-    console.log('[FileCollapse] fileTabsContainer:', fileTabsContainer);
-    console.log('[FileCollapse] collapseBtn:', collapseBtn);
-    console.log('[FileCollapse] expandBtn:', expandBtn);
+    if (!fileTabsContainer || !toggleBtn) return;
 
-    // 至少需要容器和折叠按钮，展开按钮是可选的
-    if (!fileTabsContainer || !collapseBtn) {
-        console.warn('[FileCollapse] 缺少必要元素(容器或折叠按钮)，初始化失败');
-        return;
-    }
-
-    if (!expandBtn) {
-        console.warn('[FileCollapse] 未找到展开按钮，将只启用折叠功能（展开功能暂不可用）');
-    }
-
-    // 折叠按钮点击
-    collapseBtn.addEventListener('click', (e) => {
-        console.log('[FileCollapse] 折叠按钮被点击');
+    // 切换折叠状态
+    toggleBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        fileTabsContainer.classList.add('collapsed');
+        const isCollapsed = fileTabsContainer.classList.toggle('collapsed');
         try {
-            localStorage.setItem('fileListCollapsed', 'true');
+            localStorage.setItem('fileListCollapsed', isCollapsed ? 'true' : 'false');
         } catch (_) {}
-        console.log('[FileCollapse] 已添加collapsed类');
     });
 
-    // 展开按钮点击（使用事件委托，因为按钮可能在折叠后才显示）
-    // 在父容器上监听点击事件，检查是否点击了展开按钮
-    const fileContentsContainer = document.getElementById('file-contents-container');
-    if (fileContentsContainer) {
-        fileContentsContainer.addEventListener('click', (e) => {
-            // 检查点击的是否是展开按钮或其子元素
-            const expandButton = e.target.closest('#file-list-expand-btn');
-            if (expandButton) {
-                console.log('[FileCollapse] 展开按钮被点击（事件委托）');
-                e.preventDefault();
-                e.stopPropagation();
-                fileTabsContainer.classList.remove('collapsed');
-                try {
-                    localStorage.setItem('fileListCollapsed', 'false');
-                } catch (_) {}
-                console.log('[FileCollapse] 已移除collapsed类');
-            }
-        });
-        console.log('[FileCollapse] 展开按钮事件委托已设置');
-    } else {
-        console.warn('[FileCollapse] 未找到file-contents-container，无法设置展开功能');
-    }
-
-    // 恢复折叠状态（仅当有文件时）
+    // 恢复折叠状态
     const restoreCollapsedState = () => {
         try {
             if (fileTabsContainer.classList.contains('has-files')) {
@@ -1060,19 +1021,15 @@ function initFileListCollapse() {
         } catch (_) {}
     };
 
-    // 初始恢复
     restoreCollapsedState();
 
-    // 监听文件列表变化（当添加文件时恢复状态）
     const observer = new MutationObserver(() => {
         if (fileTabsContainer.classList.contains('has-files')) {
             restoreCollapsedState();
-            observer.disconnect(); // 只需要恢复一次
+            observer.disconnect();
         }
     });
     observer.observe(fileTabsContainer, { attributes: true, attributeFilter: ['class'] });
-
-    console.log('[FileCollapse] 折叠功能初始化完成');
 }
 
 /**
