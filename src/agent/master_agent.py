@@ -1028,13 +1028,15 @@ class MasterAgent:
                     # 发送工具执行进度（更现代的图标映射）
                     tool_emoji = {"web_search": "🔎", "url_fetch": "🌐", "code_executor": "🛠"}.get(tool_name, "•")
                     args_preview = str(arguments)[:80] + "..." if len(str(arguments)) > 80 else str(arguments)
+                    tool_start_time = time.time()  # 记录工具开始时间
+                    logger.info(f"⏱️ [工具执行] {tool_name} 开始执行 (ts={tool_start_time})")
                     yield {
                         "type": "exec",
                         "iter": iteration + 1,
                         "phase": "start",
                         "tool": tool_name,
                         "args_preview": args_preview,
-                        "ts": time.time()
+                        "ts": tool_start_time
                     }
 
                     # 执行工具 (带心跳)
@@ -1086,7 +1088,9 @@ class MasterAgent:
 
                     # 记录工具执行结果
                     if tool_result.success:
-                        logger.info(f"工具执行成功: {tool_name}")
+                        tool_end_time = time.time()
+                        elapsed_time = tool_end_time - tool_start_time
+                        logger.info(f"⏱️ [工具执行] {tool_name} 执行成功 (耗时={elapsed_time:.3f}s)")
                         logger.info(f"  返回数据预览: {str(tool_result.data)[:300]}...")
                         result_message = self._format_tool_success_message(tool_result)
 
@@ -1098,7 +1102,8 @@ class MasterAgent:
                             "tool": tool_name,
                             "message": "执行完成",
                             "success": True,
-                            "ts": time.time()
+                            "ts": tool_end_time,
+                            "elapsed": elapsed_time  # 添加耗时信息
                         }
 
                         # 如果工具生成了文件,发送文件列表给前端
@@ -1142,7 +1147,9 @@ class MasterAgent:
                                 "ts": time.time()
                             }
                     else:
-                        logger.warning(f"工具执行失败: {tool_name}")
+                        tool_end_time = time.time()
+                        elapsed_time = tool_end_time - tool_start_time
+                        logger.warning(f"⏱️ [工具执行] {tool_name} 执行失败 (耗时={elapsed_time:.3f}s)")
                         logger.warning(f"  错误类型: {tool_result.error_type}")
                         logger.warning(f"  错误信息: {tool_result.error_message}")
                         result_message = self._format_tool_failure_message(tool_result)
@@ -1155,7 +1162,8 @@ class MasterAgent:
                             "tool": tool_name,
                             "message": tool_result.error_message[:200] if tool_result.error_message else "执行失败",
                             "success": False,
-                            "ts": time.time()
+                            "ts": tool_end_time,
+                            "elapsed": elapsed_time  # 添加耗时信息
                         }
 
                 except Exception as e:

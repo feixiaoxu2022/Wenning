@@ -249,7 +249,9 @@ async def chat(
 
                 # 转发给前端(处理ToolResult等不可序列化对象)
                 serializable_update = make_json_serializable(update)
-                yield f"data: {json.dumps(serializable_update, ensure_ascii=False)}\n\n"
+                sse_data = f"data: {json.dumps(serializable_update, ensure_ascii=False)}\n\n"
+                yield sse_data
+                # 注意：Starlette的StreamingResponse会自动flush，不需要显式flush
 
             # 兜底：更新最后一条assistant消息的generated_files
             # 扫描执行期间新增/覆盖的文件
