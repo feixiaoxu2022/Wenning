@@ -672,7 +672,8 @@ class MasterAgent:
         # 检查是否有待附加的图片
         user_content = user_input  # 默认纯文本
         if self.conv_manager and self.current_conversation_id:
-            pending_images = self.conv_manager.get_pending_images(self.current_conversation_id)
+            images_data = self.conv_manager.get_images_to_view(self.current_conversation_id)
+            pending_images = [img["path"] for img in images_data] if images_data else []
             if pending_images:
                 logger.info(f"检测到{len(pending_images)}张待附加图片，构造multimodal消息")
 
@@ -745,7 +746,7 @@ class MasterAgent:
                     logger.info(f"Multimodal消息构造完成: {len(content_parts)-1}张图片")
 
                 # 清空pending_images
-                self.conv_manager.clear_pending_images(self.current_conversation_id)
+                self.conv_manager.clear_images_to_view(self.current_conversation_id)
 
         # 添加当前用户输入
         messages.append({
@@ -900,11 +901,14 @@ class MasterAgent:
                 for tc in response["tool_calls"]:
                     logger.info(f"  - {tc['function']['name']}({tc['function']['arguments'][:100]}...)")
 
-                # 有tool_calls时，如果有content_buffer，展示为accompanying text
-                if content_buffer:
+                # 🔧 FIX: Claude不会stream content当有tool_calls时，而是作为完整块返回
+                # 优先使用content_buffer（如果有streaming），否则使用response.get("content")
+                accompanying_text = content_buffer or response.get("content", "")
+
+                if accompanying_text:
                     yield {
                         "type": "note",
-                        "delta": content_buffer,
+                        "delta": accompanying_text,
                         "iter": iteration + 1,
                         "ts": time.time()
                     }

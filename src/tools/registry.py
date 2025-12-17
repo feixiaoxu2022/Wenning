@@ -95,33 +95,8 @@ class ToolRegistry:
             return tool.execute(arguments)
 
         elif isinstance(tool, BaseAtomicTool):
-            # Atomic Tool: run()返回Dict,需要转换为ToolResult
-            result_dict = tool.run(**arguments)
-
-            # 转换为ToolResult
-            from src.tools.result import create_success_result, create_failure_result
-
-            if result_dict.get("status") == "success":
-                # 提取generated_files字段(如果有)
-                # 先从顶层找，如果没有再从data里面找（因为execute()返回的dict被包装在data中）
-                generated_files = result_dict.get("generated_files", [])
-                if not generated_files and isinstance(result_dict.get("data"), dict):
-                    generated_files = result_dict["data"].get("generated_files", [])
-
-                return create_success_result(
-                    tool_name=tool_name,
-                    tool_type="atomic",
-                    data=result_dict.get("data"),
-                    generated_files=generated_files
-                )
-            else:
-                from src.tools.result import ErrorType
-                return create_failure_result(
-                    tool_name=tool_name,
-                    tool_type="atomic",
-                    error_type=ErrorType.TOOL_EXECUTION_ERROR,
-                    error_message=result_dict.get("error", "未知错误")
-                )
+            # Atomic Tool: run()已经返回ToolResult对象，直接返回
+            return tool.run(**arguments)
 
         else:
             raise TypeError(f"未知的工具类型: {type(tool)}")
