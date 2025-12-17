@@ -90,6 +90,7 @@ async function initAppAfterAuth() {
     // 主题和侧栏
     initThemeToggle();
     initSidebarToggles();
+    initFileListCollapse();
     // 初始化Showcase
     if (typeof ShowcaseManager !== 'undefined') {
         window.showcaseManager = new ShowcaseManager(ui);
@@ -987,6 +988,41 @@ function initSidebarToggles() {
 
     openBtn.addEventListener('click', () => overlay.classList.add('active'));
     closeBtn.addEventListener('click', () => overlay.classList.remove('active'));
+}
+
+/**
+ * 文件列表折叠/展开功能
+ */
+function initFileListCollapse() {
+    const fileTabsContainer = document.getElementById('file-tabs-container');
+    const collapseBtn = document.getElementById('file-list-collapse-btn');
+    const expandBtn = document.getElementById('file-list-expand-btn');
+
+    if (!fileTabsContainer || !collapseBtn || !expandBtn) return;
+
+    // 折叠按钮点击
+    collapseBtn.addEventListener('click', () => {
+        fileTabsContainer.classList.add('collapsed');
+        try {
+            localStorage.setItem('fileListCollapsed', 'true');
+        } catch (_) {}
+    });
+
+    // 展开按钮点击
+    expandBtn.addEventListener('click', () => {
+        fileTabsContainer.classList.remove('collapsed');
+        try {
+            localStorage.setItem('fileListCollapsed', 'false');
+        } catch (_) {}
+    });
+
+    // 恢复折叠状态
+    try {
+        const collapsed = localStorage.getItem('fileListCollapsed') === 'true';
+        if (collapsed) {
+            fileTabsContainer.classList.add('collapsed');
+        }
+    } catch (_) {}
 }
 
 /**

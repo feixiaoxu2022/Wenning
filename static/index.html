@@ -192,6 +192,12 @@
 
             <!-- File Tabs -->
             <div class="file-tabs-container" id="file-tabs-container">
+                <!-- 折叠按钮 -->
+                <button class="file-list-collapse-btn" id="file-list-collapse-btn" title="折叠文件列表">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
                 <ul class="file-tabs" id="file-tabs">
                     <!-- 文件标签动态生成 -->
                 </ul>
@@ -202,6 +208,12 @@
 
             <!-- File Contents -->
             <div class="file-contents-container" id="file-contents-container">
+                <!-- 展开按钮（折叠时显示） -->
+                <button class="file-list-expand-btn" id="file-list-expand-btn" title="展开文件列表">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
                 <div class="preview-content" id="preview-content">
                     <p class="preview-placeholder">Waiting for files...</p>
                 </div>
