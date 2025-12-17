@@ -701,7 +701,7 @@ class UI {
         indicator.className = 'loading-indicator';
         indicator.innerHTML = `
             <div class="loading-spinner"></div>
-            <span class="loading-text">正在思考...</span>
+            <span class="loading-text">Agent正在执行任务...</span>
         `;
         this.chatMessages.appendChild(indicator);
         this.loadingIndicator = indicator;
