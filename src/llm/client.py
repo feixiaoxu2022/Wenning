@@ -791,6 +791,23 @@ class LLMClient:
                     parts = content_data.get("parts", [])
 
                     for part in parts:
+                        # 调试：记录每个part的结构（用于发现新的思考字段）
+                        logger.debug(f"[Gemini] Part keys: {list(part.keys())}")
+
+                        # 思考过程（Gemini 2.0 Flash Thinking）
+                        # Gemini将思考过程放在单独的part中，检查多种可能的字段名
+                        thought_text = None
+                        if "thought" in part:
+                            thought_text = part.get("thought")
+                        elif "thoughtText" in part:
+                            thought_text = part.get("thoughtText")
+                        elif "thinking" in part:
+                            thought_text = part.get("thinking")
+
+                        if thought_text:
+                            logger.info(f"[Gemini] 发现思考过程: {len(thought_text)} 字符")
+                            yield {"type": "reasoning", "delta": thought_text, "full_reasoning": thought_text}
+
                         # 文本内容
                         if "text" in part:
                             text = part["text"]
