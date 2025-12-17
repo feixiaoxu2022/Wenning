@@ -1003,9 +1003,14 @@ function initFileListCollapse() {
     console.log('[FileCollapse] collapseBtn:', collapseBtn);
     console.log('[FileCollapse] expandBtn:', expandBtn);
 
-    if (!fileTabsContainer || !collapseBtn || !expandBtn) {
-        console.warn('[FileCollapse] 缺少必要元素，初始化失败');
+    // 至少需要容器和折叠按钮，展开按钮是可选的
+    if (!fileTabsContainer || !collapseBtn) {
+        console.warn('[FileCollapse] 缺少必要元素(容器或折叠按钮)，初始化失败');
         return;
+    }
+
+    if (!expandBtn) {
+        console.warn('[FileCollapse] 未找到展开按钮，将只启用折叠功能（展开功能暂不可用）');
     }
 
     // 折叠按钮点击
@@ -1020,17 +1025,19 @@ function initFileListCollapse() {
         console.log('[FileCollapse] 已添加collapsed类');
     });
 
-    // 展开按钮点击
-    expandBtn.addEventListener('click', (e) => {
-        console.log('[FileCollapse] 展开按钮被点击');
-        e.preventDefault();
-        e.stopPropagation();
-        fileTabsContainer.classList.remove('collapsed');
-        try {
-            localStorage.setItem('fileListCollapsed', 'false');
-        } catch (_) {}
-        console.log('[FileCollapse] 已移除collapsed类');
-    });
+    // 展开按钮点击（只在按钮存在时绑定）
+    if (expandBtn) {
+        expandBtn.addEventListener('click', (e) => {
+            console.log('[FileCollapse] 展开按钮被点击');
+            e.preventDefault();
+            e.stopPropagation();
+            fileTabsContainer.classList.remove('collapsed');
+            try {
+                localStorage.setItem('fileListCollapsed', 'false');
+            } catch (_) {}
+            console.log('[FileCollapse] 已移除collapsed类');
+        });
+    }
 
     // 恢复折叠状态（仅当有文件时）
     const restoreCollapsedState = () => {
