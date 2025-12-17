@@ -2297,9 +2297,9 @@ body {
 
 /* ========== Driver.js 新手引导样式定制 ========== */
 
-/* 遮罩层样式 */
+/* 遮罩层样式 - 降低透明度让高亮区域更清晰 */
 .driver-overlay {
-    background-color: rgba(0, 0, 0, 0.7) !important;
+    background-color: rgba(0, 0, 0, 0.45) !important;
     /* 移除backdrop-filter，避免高亮区域边缘模糊 */
 }
 
@@ -2373,12 +2373,18 @@ body {
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     border: none !important;
-    text-shadow: none !important; /* 清除可能的文字阴影 */
+    text-shadow: none !important; /* 清除Driver.css默认的text-shadow */
+    -webkit-font-smoothing: antialiased !important; /* 改善字体渲染 */
+    -moz-osx-font-smoothing: grayscale !important;
 }
 
-/* 清除按钮的伪元素 */
+/* 彻底清除按钮的伪元素和阴影 */
 .driver-popover-btn::before,
-.driver-popover-btn::after {
+.driver-popover-btn::after,
+.driver-popover-next-btn::before,
+.driver-popover-next-btn::after,
+.driver-popover-prev-btn::before,
+.driver-popover-prev-btn::after {
     display: none !important;
     content: none !important;
 }
