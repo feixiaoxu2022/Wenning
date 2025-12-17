@@ -998,22 +998,38 @@ function initFileListCollapse() {
     const collapseBtn = document.getElementById('file-list-collapse-btn');
     const expandBtn = document.getElementById('file-list-expand-btn');
 
-    if (!fileTabsContainer || !collapseBtn || !expandBtn) return;
+    console.log('[FileCollapse] 初始化折叠功能');
+    console.log('[FileCollapse] fileTabsContainer:', fileTabsContainer);
+    console.log('[FileCollapse] collapseBtn:', collapseBtn);
+    console.log('[FileCollapse] expandBtn:', expandBtn);
+
+    if (!fileTabsContainer || !collapseBtn || !expandBtn) {
+        console.warn('[FileCollapse] 缺少必要元素，初始化失败');
+        return;
+    }
 
     // 折叠按钮点击
-    collapseBtn.addEventListener('click', () => {
+    collapseBtn.addEventListener('click', (e) => {
+        console.log('[FileCollapse] 折叠按钮被点击');
+        e.preventDefault();
+        e.stopPropagation();
         fileTabsContainer.classList.add('collapsed');
         try {
             localStorage.setItem('fileListCollapsed', 'true');
         } catch (_) {}
+        console.log('[FileCollapse] 已添加collapsed类');
     });
 
     // 展开按钮点击
-    expandBtn.addEventListener('click', () => {
+    expandBtn.addEventListener('click', (e) => {
+        console.log('[FileCollapse] 展开按钮被点击');
+        e.preventDefault();
+        e.stopPropagation();
         fileTabsContainer.classList.remove('collapsed');
         try {
             localStorage.setItem('fileListCollapsed', 'false');
         } catch (_) {}
+        console.log('[FileCollapse] 已移除collapsed类');
     });
 
     // 恢复折叠状态（仅当有文件时）
@@ -1039,6 +1055,8 @@ function initFileListCollapse() {
         }
     });
     observer.observe(fileTabsContainer, { attributes: true, attributeFilter: ['class'] });
+
+    console.log('[FileCollapse] 折叠功能初始化完成');
 }
 
 /**
