@@ -150,12 +150,14 @@ class ProductTour {
             onNextClick: (element, step, options) => {
                 console.log('[Tour] 用户点击下一步');
                 this.clearAutoAdvanceTimer();
+                // 不阻止默认行为，让Driver.js继续执行moveNext
             },
 
             // 上一步按钮点击回调 - 清除自动切换
             onPrevClick: (element, step, options) => {
                 console.log('[Tour] 用户点击上一步');
                 this.clearAutoAdvanceTimer();
+                // 不阻止默认行为，让Driver.js继续执行movePrevious
             },
 
             // 关闭按钮点击回调
@@ -439,8 +441,15 @@ class ProductTour {
 
         try {
             console.log('[Tour] 开始启动Driver引导');
+            console.log('[Tour] Driver配置:', {
+                stepsCount: this.driver.getConfig().steps.length,
+                hasCallbacks: {
+                    onHighlighted: typeof this.driver.getConfig().onHighlighted === 'function',
+                    onNextClick: typeof this.driver.getConfig().onNextClick === 'function'
+                }
+            });
             this.driver.drive();
-            console.log('[Tour] Driver引导已启动');
+            console.log('[Tour] Driver引导已启动，当前步骤:', this.driver.getActiveIndex());
         } catch (error) {
             console.error('[Tour] 启动引导失败:', error);
             alert('启动引导失败: ' + error.message);
