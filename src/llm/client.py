@@ -1074,8 +1074,9 @@ class LLMClient:
                                 delta = chunk["choices"][0].get("delta", {})
 
                                 # 处理reasoning字段（思考过程）
-                                if "reasoning" in delta and delta["reasoning"]:
-                                    reasoning_delta = delta["reasoning"]
+                                # 兼容多种协议：reasoning（ERNIE-5等）、reasoning_content（OpenAI O系列、Deepseek等）
+                                reasoning_delta = delta.get("reasoning") or delta.get("reasoning_content")
+                                if reasoning_delta:
                                     full_reasoning += reasoning_delta
 
                                     # yield思考过程增量
