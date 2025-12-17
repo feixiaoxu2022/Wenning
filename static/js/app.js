@@ -1025,18 +1025,27 @@ function initFileListCollapse() {
         console.log('[FileCollapse] 已添加collapsed类');
     });
 
-    // 展开按钮点击（只在按钮存在时绑定）
-    if (expandBtn) {
-        expandBtn.addEventListener('click', (e) => {
-            console.log('[FileCollapse] 展开按钮被点击');
-            e.preventDefault();
-            e.stopPropagation();
-            fileTabsContainer.classList.remove('collapsed');
-            try {
-                localStorage.setItem('fileListCollapsed', 'false');
-            } catch (_) {}
-            console.log('[FileCollapse] 已移除collapsed类');
+    // 展开按钮点击（使用事件委托，因为按钮可能在折叠后才显示）
+    // 在父容器上监听点击事件，检查是否点击了展开按钮
+    const fileContentsContainer = document.getElementById('file-contents-container');
+    if (fileContentsContainer) {
+        fileContentsContainer.addEventListener('click', (e) => {
+            // 检查点击的是否是展开按钮或其子元素
+            const expandButton = e.target.closest('#file-list-expand-btn');
+            if (expandButton) {
+                console.log('[FileCollapse] 展开按钮被点击（事件委托）');
+                e.preventDefault();
+                e.stopPropagation();
+                fileTabsContainer.classList.remove('collapsed');
+                try {
+                    localStorage.setItem('fileListCollapsed', 'false');
+                } catch (_) {}
+                console.log('[FileCollapse] 已移除collapsed类');
+            }
         });
+        console.log('[FileCollapse] 展开按钮事件委托已设置');
+    } else {
+        console.warn('[FileCollapse] 未找到file-contents-container，无法设置展开功能');
     }
 
     // 恢复折叠状态（仅当有文件时）
