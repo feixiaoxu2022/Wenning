@@ -8,8 +8,39 @@ class ProductTour {
         console.log('[Tour] ProductTour实例创建中...');
         this.driver = null;
         this.hasSeenTour = this.checkTourStatus();
+        this.autoAdvanceTimer = null; // 自动切换定时器
+        this.autoAdvanceDelay = 5000; // 5秒后自动切换
         console.log('[Tour] 已看过引导:', this.hasSeenTour);
         this.initDriver();
+    }
+
+    /**
+     * 清除自动切换定时器
+     */
+    clearAutoAdvanceTimer() {
+        if (this.autoAdvanceTimer) {
+            clearTimeout(this.autoAdvanceTimer);
+            this.autoAdvanceTimer = null;
+            console.log('[Tour] 清除自动切换定时器');
+        }
+    }
+
+    /**
+     * 启动自动切换定时器
+     */
+    startAutoAdvanceTimer() {
+        // 先清除已有的定时器
+        this.clearAutoAdvanceTimer();
+
+        // 设置新的定时器
+        this.autoAdvanceTimer = setTimeout(() => {
+            if (this.driver) {
+                console.log('[Tour] 自动切换到下一步');
+                this.driver.moveNext();
+            }
+        }, this.autoAdvanceDelay);
+
+        console.log('[Tour] 启动自动切换定时器 (5秒)');
     }
 
     /**
@@ -76,9 +107,40 @@ class ProductTour {
             // 自定义样式
             popoverClass: 'wenning-tour-popover',
 
+            // 步骤高亮后的回调 - 启动自动切换
+            onHighlighted: (element, step, options) => {
+                // 检查是否是最后一步（最后一步有popover但没有element，或者是最后的有element的步骤）
+                const activeIndex = this.driver.getActiveIndex();
+                const totalSteps = this.driver.getConfig().steps.length;
+                const isLastStep = (activeIndex === totalSteps - 1);
+
+                console.log('[Tour] 步骤高亮，当前步骤:', activeIndex + 1, '/', totalSteps);
+
+                // 最后一步不启动自动切换
+                if (!isLastStep) {
+                    console.log('[Tour] 启动自动切换 (5秒)');
+                    this.startAutoAdvanceTimer();
+                } else {
+                    console.log('[Tour] 最后一步，不启动自动切换');
+                }
+            },
+
+            // 下一步按钮点击回调 - 清除自动切换（用户手动控制）
+            onNextClick: (element, step, options) => {
+                console.log('[Tour] 用户点击下一步');
+                this.clearAutoAdvanceTimer();
+            },
+
+            // 上一步按钮点击回调 - 清除自动切换
+            onPrevClick: (element, step, options) => {
+                console.log('[Tour] 用户点击上一步');
+                this.clearAutoAdvanceTimer();
+            },
+
             // 关闭按钮点击回调
             onCloseClick: (element, step, options) => {
                 console.log('[Tour] 用户点击关闭按钮');
+                this.clearAutoAdvanceTimer();
                 this.markTourCompleted();
                 if (this.driver) {
                     this.driver.destroy();
@@ -88,6 +150,7 @@ class ProductTour {
             // 完成或跳过时的回调
             onDestroyStarted: () => {
                 console.log('[Tour] 引导销毁开始');
+                this.clearAutoAdvanceTimer();
                 this.markTourCompleted();
                 // 不要在这里调用destroy()，会导致清理不完全
                 // Driver.js会自动完成销毁流程
@@ -96,6 +159,7 @@ class ProductTour {
             // 销毁完成后的回调 - 恢复页面状态
             onDestroyed: () => {
                 console.log('[Tour] 引导销毁完成，恢复页面状态');
+                this.clearAutoAdvanceTimer(); // 清除可能残留的定时器
 
                 // 强制刷新布局，确保所有元素恢复正常显示
                 setTimeout(() => {
