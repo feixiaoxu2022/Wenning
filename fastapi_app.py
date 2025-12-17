@@ -10,6 +10,7 @@ from pathlib import Path
 import json
 import time
 import pandas as pd
+import zipfile
 from typing import Optional, List
 from dataclasses import asdict, is_dataclass
 from pydantic import BaseModel
@@ -772,6 +773,49 @@ async def list_outputs(conversation_id: str, user: str = Depends(require_user())
     except Exception as e:
         logger.error(f"列出会话文件失败: {e}")
         return JSONResponse(status_code=500, content={"error": "list failed"})
+
+
+@app.get("/outputs/{conversation_id}/zip_list/{filename}")
+async def list_zip_contents(conversation_id: str, filename: str, user: str = Depends(require_user())):
+    """列出ZIP文件的内容（文件名和大小）"""
+    # 权限校验
+    conv = conv_manager.get_conversation(conversation_id, username=user)
+    if not conv:
+        return JSONResponse(status_code=404, content={"error": "会话不存在或无权限"})
+
+    # 获取ZIP文件路径
+    output_dir_name = conv_manager.get_output_dir_name(conversation_id)
+    conv_dir = Path("outputs") / output_dir_name
+    zip_path = conv_dir / filename
+
+    # 检查文件是否存在
+    if not zip_path.exists():
+        return JSONResponse(status_code=404, content={"error": "ZIP文件不存在"})
+
+    # 检查是否为ZIP文件
+    if not str(zip_path).lower().endswith('.zip'):
+        return JSONResponse(status_code=400, content={"error": "不是ZIP文件"})
+
+    try:
+        # 读取ZIP文件内容列表
+        files_info = []
+        with zipfile.ZipFile(zip_path, 'r') as zip_file:
+            for info in zip_file.infolist():
+                # 跳过目录条目
+                if not info.is_dir():
+                    files_info.append({
+                        "name": info.filename,
+                        "size": info.file_size
+                    })
+
+        return JSONResponse(content={"files": files_info})
+
+    except zipfile.BadZipFile:
+        return JSONResponse(status_code=400, content={"error": "无效的ZIP文件"})
+    except Exception as e:
+        logger.error(f"读取ZIP文件失败: {e}")
+        return JSONResponse(status_code=500, content={"error": f"读取ZIP文件失败: {str(e)}"})
+
 
 
 @app.get("/preview/excel/{filename}")

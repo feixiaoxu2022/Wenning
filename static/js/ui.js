@@ -595,6 +595,7 @@ class UI {
         if (/(\.mp4|\.webm|\.mov)$/.test(lower)) return this.addFileTab(filename, 'video');
         if (lower.endsWith('.html')) return this.addFileTab(filename, 'html');
         if (lower.endsWith('.pdf')) return this.addFileTab(filename, 'pdf');
+        if (lower.endsWith('.zip')) return this.addFileTab(filename, 'zip');
         if (lower.endsWith('.jsonl')) return this.addFileTab(filename, 'jsonl');
         if (lower.endsWith('.json')) return this.addFileTab(filename, 'json');
         if (lower.endsWith('.md')) return this.addFileTab(filename, 'markdown');
@@ -1586,6 +1587,8 @@ class UI {
             this.loadTextIntoContainer(filename, contentDiv);
         } else if (type === 'pdf') {
             this.loadPdfIntoContainer(filename, contentDiv);
+        } else if (type === 'zip') {
+            this.loadZipIntoContainer(filename, contentDiv);
         } else if (type === 'jsonl') {
             this.loadJsonlIntoContainer(filename, contentDiv);
         } else if (type === 'json') {
@@ -2548,6 +2551,108 @@ class UI {
         if (saveBtn) saveBtn.addEventListener('click', (e)=>{ e.preventDefault(); this.workspaceSave(filename, saveBtn); });
         const delBtn = container.querySelector('.file-delete');
         if (delBtn) delBtn.addEventListener('click', async (e)=>{ e.preventDefault(); await this.deleteFile(filename); });
+    }
+
+    /** 加载ZIP到指定容器 */
+    async loadZipIntoContainer(filename, container) {
+        const encoded = encodeURIComponent(filename);
+
+        // 先显示基本信息和加载提示
+        container.innerHTML = `
+            <div class="preview-info">
+                <div style="display:flex; justify-content: space-between; align-items: center;">
+                    <h4>${filename}</h4>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <a href="#" class="link-button workspace-save" title="Save to Workspace"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 3v6h6"/><path d="M9 18h6"/></svg></span><span class="btn-text">Save</span></a>
+                        <a href="${this.outputsBaseUrl}/${encoded}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+                        <a href="#" class="link-button file-delete" title="Delete"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span><span class="btn-text">Delete</span></a>
+                    </div>
+                </div>
+            </div>
+            <div id="zip-content-area" style="padding: 20px;">
+                <div style="text-align:center; color: var(--muted); padding: 40px;">正在加载ZIP文件内容...</div>
+            </div>
+        `;
+
+        // 绑定按钮
+        const saveBtn = container.querySelector('.workspace-save');
+        if (saveBtn) saveBtn.addEventListener('click', (e)=>{ e.preventDefault(); this.workspaceSave(filename, saveBtn); });
+        const delBtn = container.querySelector('.file-delete');
+        if (delBtn) delBtn.addEventListener('click', async (e)=>{ e.preventDefault(); await this.deleteFile(filename); });
+
+        // 获取ZIP文件内容列表
+        try {
+            const listUrl = `${this.outputsBaseUrl}/zip_list/${encoded}`;
+            const resp = await fetch(listUrl);
+
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+
+            const data = await resp.json();
+            const contentArea = container.querySelector('#zip-content-area');
+
+            if (!data.files || data.files.length === 0) {
+                contentArea.innerHTML = '<div style="text-align:center; color: var(--muted); padding: 40px;">ZIP文件为空</div>';
+                return;
+            }
+
+            // 格式化文件大小
+            const formatSize = (bytes) => {
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            };
+
+            // 渲染文件列表
+            let html = `
+                <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <div style="padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg); font-weight: 600; color: var(--text);">
+                        ZIP文件内容（共 ${data.files.length} 个文件）
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="background: var(--bg); border-bottom: 1px solid var(--border);">
+                            <tr>
+                                <th style="padding: 10px 16px; text-align: left; font-size: 13px; color: var(--muted); font-weight: 600;">文件名</th>
+                                <th style="padding: 10px 16px; text-align: right; font-size: 13px; color: var(--muted); font-weight: 600; width: 120px;">大小</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            data.files.forEach((file, index) => {
+                const bgColor = index % 2 === 0 ? 'var(--panel)' : 'var(--bg)';
+                html += `
+                    <tr style="background: ${bgColor}; border-bottom: 1px solid var(--border);">
+                        <td style="padding: 10px 16px; font-size: 13px; color: var(--text); font-family: monospace;">
+                            ${this.escapeHtml(file.name)}
+                        </td>
+                        <td style="padding: 10px 16px; text-align: right; font-size: 13px; color: var(--muted); font-family: monospace;">
+                            ${formatSize(file.size)}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            contentArea.innerHTML = html;
+
+        } catch (err) {
+            console.error('[UI] 加载ZIP内容失败:', err);
+            const contentArea = container.querySelector('#zip-content-area');
+            contentArea.innerHTML = `
+                <div class="error-box">
+                    <span class="error-label">错误:</span>
+                    <div>无法加载ZIP文件内容: ${err.message}</div>
+                    <div style="margin-top: 8px; font-size: 12px;">请下载文件后使用本地工具查看</div>
+                </div>
+            `;
+        }
     }
 
     /** 加载JSON到指定容器 */
