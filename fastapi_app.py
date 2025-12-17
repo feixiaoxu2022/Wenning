@@ -35,6 +35,8 @@ from src.tools.atomic.tts_minimax import TTSMiniMax
 from src.tools.atomic.voice_clone_minimax import VoiceCloneMiniMax
 # from src.tools.atomic.video_generation_minimax import VideoGenerationMiniMax  # 视频生成暂时禁用
 from src.tools.atomic.music_generation_minimax import MusicGenerationMiniMax
+# 视觉控制工具
+from src.tools.atomic.manage_images_view import ManageImagesViewTool
 # Prompt模板检索工具
 from src.tools.atomic.prompt_template_tool import PromptTemplateRetriever
 # 云端TTS暂不启用
@@ -102,7 +104,7 @@ class AuthBody(BaseModel):
     password: str
 
 
-def get_or_create_agent(model_name: str = "gpt-5.2") -> MasterAgent:
+def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
     """获取或创建Agent实例"""
     if model_name not in agents:
         # 初始化Tool Registry
@@ -112,6 +114,7 @@ def get_or_create_agent(model_name: str = "gpt-5.2") -> MasterAgent:
         tool_registry.register_atomic_tool(WebSearchTool(config))
         tool_registry.register_atomic_tool(URLFetchTool(config))
         tool_registry.register_atomic_tool(CodeExecutor(config, conv_manager))
+        tool_registry.register_atomic_tool(ManageImagesViewTool(config, conv_manager))  # 视觉控制
 
         # 2. 专用多模态生成工具（优先级高）
         tool_registry.register_atomic_tool(ImageGeneration(config, conv_manager))  # 通用图像生成
@@ -144,7 +147,7 @@ def get_or_create_agent(model_name: str = "gpt-5.2") -> MasterAgent:
 @app.get("/chat")
 async def chat(
     message: str = Query(..., description="用户消息"),
-    model: str = Query("gpt-5.2", description="模型名称"),
+    model: str = Query("gpt-5", description="模型名称"),
     conversation_id: str = Query(..., description="对话ID"),
     client_msg_id: Optional[str] = Query(None, description="前端幂等ID"),
     user: str = Depends(require_user())
@@ -159,7 +162,7 @@ async def chat(
                 raise ValueError(f"对话不存在: {conversation_id}")
 
             # 模型选择策略：若前端传入与会话保存的模型不同，则更新会话绑定模型
-            saved_model = conv.get("model", "gpt-5.2")
+            saved_model = conv.get("model", "gpt-5")
             effective_model = (model or saved_model) if model else saved_model
             if effective_model and effective_model != saved_model:
                 try:
@@ -540,10 +543,16 @@ async def upload_files(
             # 检测是否为图片文件，自动添加到pending_images
             image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
             if target.suffix.lower() in image_extensions:
-                # 添加到pending_images（使用相对路径：output_dir_name/filename）
+                # 添加到图片查看列表（使用相对路径：output_dir_name/filename）
                 relative_path = f"{output_dir_name}/{target.name}"
-                conv_manager.add_pending_image(conversation_id, relative_path, username=user)
-                logger.info(f"检测到图片文件，已添加到pending_images: {relative_path}")
+                conv_manager.add_images_to_view(
+                    conversation_id,
+                    [relative_path],  # 需要传递列表
+                    detail="auto",
+                    view_count=1,
+                    username=user
+                )
+                logger.info(f"检测到图片文件，已添加到图片查看列表: {relative_path}")
 
             # 可选加入Workspace列表
             try:
@@ -969,8 +978,8 @@ async def preview_showcase_word(filename: str):
 async def list_models():
     """获取可用模型列表"""
     models = [
-        {"name": "gpt-5.2", "display_name": "OpenAI GPT-5.2", "default": True},
-        {"name": "gpt-5", "display_name": "OpenAI GPT-5", "default": False},
+        {"name": "gpt-5", "display_name": "OpenAI GPT-5", "default": True},
+        {"name": "gpt-5.2", "display_name": "OpenAI GPT-5.2", "default": False},
         {"name": "ernie-5.0-thinking-preview", "display_name": "百度 EB5 思考模型", "default": False},
         {"name": "glm-4.5", "display_name": "智谱GLM-4.5", "default": False},
         {"name": "doubao-seed-1-6-thinking-250615", "display_name": "豆包Thinking模型", "default": False},
@@ -993,14 +1002,14 @@ async def list_conversations(model: str = Query(None, description="模型名称�
 
 
 class CreateConversationBody(BaseModel):
-    model: str = "gpt-5.2"
+    model: str = "gpt-5"
 
 @app.post("/conversations")
 async def create_conversation(body: CreateConversationBody = None, user: str = Depends(require_user())):
     """创建新对话"""
     try:
         # 兼容两种方式：如果有body则使用body.model，否则使用默认值
-        model = body.model if body else "gpt-5.2"
+        model = body.model if body else "gpt-5"
         conv_id = conv_manager.create_conversation(model, username=user)
         logger.info(f"创建新对话: conv_id={conv_id}, model={model}, user={user}")
         return JSONResponse(content={"conversation_id": conv_id})
@@ -1023,7 +1032,7 @@ async def get_conversation(conversation_id: str, user: str = Depends(require_use
         # 计算当前对话的context使用情况
         if conv.get("messages") and len(conv["messages"]) > 0:
             try:
-                model_name = conv.get("model", "gpt-5.2")
+                model_name = conv.get("model", "gpt-5")
                 agent = get_or_create_agent(model_name)
                 context_stats = agent.context_manager.calculate_usage(conv["messages"])
                 conv["context_stats"] = context_stats

@@ -70,6 +70,10 @@ class ToolResult:
     metadata: Dict[str, Any] = field(default_factory=dict)
     generated_files: List[str] = field(default_factory=list)  # 生成的文件名列表
 
+    # === 多模态支持 ===
+    inject_images: Optional[List[str]] = None  # 需要注入给LLM查看的图片路径列表
+    image_detail: Literal["low", "high", "auto"] = "auto"  # 图片细节级别
+
     def to_agent_message(self) -> str:
         """转换为对Agent友好的自然语言描述
 

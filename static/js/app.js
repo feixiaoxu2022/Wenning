@@ -6,7 +6,7 @@
 // 初始化
 const sseClient = new SSEClient();
 const ui = new UI();
-let currentModel = 'gpt-5.2';
+let currentModel = 'gpt-5';
 let currentConversationId = null;
 let isSending = false; // 防止重复发送
 let stopBtnEl = null;
@@ -269,7 +269,7 @@ async function loadModels() {
                 option.selected = true;
                 // 仅在 currentModel 还是初始值时才设置默认模型
                 // 如果用户已经选择了模型，不要覆盖
-                if (currentModel === 'gpt-5.2') {
+                if (currentModel === 'gpt-5') {
                     currentModel = model.name;
                 }
             }

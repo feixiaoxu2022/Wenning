@@ -30,7 +30,7 @@ class SSEClient {
      * @param {string} model - 模型名称
      * @param {string} conversationId - 对话ID
      */
-    send(message, model = 'gpt-5.2', conversationId, clientMsgId) {
+    send(message, model = 'gpt-5', conversationId, clientMsgId) {
         // 关闭之前的连接
         this.close();
 

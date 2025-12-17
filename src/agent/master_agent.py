@@ -310,6 +310,104 @@ class MasterAgent:
         logger.info(f"[消息验证] 验证完成: 原始{len(messages)}条 → 修复后{len(fixed)}条 (移除{len(messages)-len(fixed)}条)")
         return fixed
 
+    def _inject_pending_images_to_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """将待注入的图片添加到消息列表（从conversation state读取）
+
+        Args:
+            messages: 原始消息列表
+
+        Returns:
+            添加了图片的消息列表
+        """
+        if not self.conv_manager or not self.current_conversation_id:
+            return messages
+
+        # 从conversation state读取图片列表
+        pending_images = self.conv_manager.get_images_to_view(self.current_conversation_id)
+
+        if not pending_images:
+            return messages
+
+        from src.utils.image_processor import ImageProcessor
+        from pathlib import Path as _Path
+
+        # 构造multimodal content
+        content_parts = []
+
+        for img_data in pending_images:
+            try:
+                img_path = img_data["path"]
+                detail_level = img_data.get("detail", "auto")
+
+                # 构造完整路径
+                output_dir_name = self.conv_manager.get_output_dir_name(self.current_conversation_id)
+                full_path = _Path("outputs") / output_dir_name / img_path
+
+                if not full_path.exists():
+                    logger.warning(f"待注入图片不存在: {full_path}")
+                    continue
+
+                # 根据当前使用的模型选择合适的格式
+                model_name = self.llm.model_name.lower()
+
+                if 'claude' in model_name or 'anthropic' in model_name:
+                    # Anthropic格式
+                    img_content = ImageProcessor.build_anthropic_content([str(full_path)], detail_level)
+                    content_parts.extend(img_content)
+                    logger.info(f"  - 已转换图片(Anthropic格式): {img_path} (detail={detail_level})")
+                elif 'gemini' in model_name:
+                    # Gemini格式
+                    img_content = ImageProcessor.build_gemini_content([str(full_path)], detail_level)
+                    content_parts.extend(img_content)
+                    logger.info(f"  - 已转换图片(Gemini格式): {img_path} (detail={detail_level})")
+                else:
+                    # OpenAI格式（默认）
+                    img_content = ImageProcessor.build_openai_content([str(full_path)], detail_level)
+                    content_parts.extend(img_content)
+                    logger.info(f"  - 已转换图片(OpenAI格式): {img_path} (detail={detail_level})")
+
+            except Exception as e:
+                logger.error(f"处理待注入图片失败: {img_data}, error={e}")
+                import traceback
+                traceback.print_exc()
+
+        if content_parts:
+            # 在最后一条tool消息之后插入图片消息
+            # 策略：如果最后一条消息是tool，在后面插入；否则在最后插入
+            last_tool_idx = -1
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i].get('role') == 'tool':
+                    last_tool_idx = i
+                    break
+
+            # 构造图片消息（作为user消息）
+            image_message = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"以下是待查看的{len(content_parts)}张图片，请查看并分析："}
+                ] + content_parts
+            }
+
+            # 插入到合适的位置
+            if last_tool_idx >= 0:
+                messages.insert(last_tool_idx + 1, image_message)
+                logger.info(f"已在tool消息#{last_tool_idx}后插入图片消息")
+            else:
+                messages.append(image_message)
+                logger.info(f"已在消息列表末尾添加图片消息")
+
+            # ⭐ 关键：注入后递减查看次数并移除已消耗的图片
+            removed_count = self.conv_manager.decrement_views_and_cleanup(self.current_conversation_id)
+            if removed_count > 0:
+                logger.info(f"✓ 已自动移除 {removed_count} 张查看次数用尽的图片")
+
+            remaining_count = len(pending_images) - removed_count
+            logger.info(f"图片已注入，剩余 {remaining_count} 张图片在列表中（待下次查看）")
+        else:
+            logger.info(f"图片列表非空（{len(pending_images)}张），但无有效内容可注入")
+
+        return messages
+
     def _react_loop(self, user_input: str) -> str:
         """ReAct循环: Reason → Act → Observe
 
@@ -574,7 +672,8 @@ class MasterAgent:
         # 检查是否有待附加的图片
         user_content = user_input  # 默认纯文本
         if self.conv_manager and self.current_conversation_id:
-            pending_images = self.conv_manager.get_pending_images(self.current_conversation_id)
+            images_data = self.conv_manager.get_images_to_view(self.current_conversation_id)
+            pending_images = [img["path"] for img in images_data] if images_data else []
             if pending_images:
                 logger.info(f"检测到{len(pending_images)}张待附加图片，构造multimodal消息")
 
@@ -647,7 +746,7 @@ class MasterAgent:
                     logger.info(f"Multimodal消息构造完成: {len(content_parts)-1}张图片")
 
                 # 清空pending_images
-                self.conv_manager.clear_pending_images(self.current_conversation_id)
+                self.conv_manager.clear_images_to_view(self.current_conversation_id)
 
         # 添加当前用户输入
         messages.append({
@@ -683,6 +782,9 @@ class MasterAgent:
 
             # 验证并修复消息格式（防止tool_calls没有对应响应导致API错误）
             messages = self._validate_and_fix_messages(messages)
+
+            # === 视觉控制：从conversation state读取并注入图片 ===
+            messages = self._inject_pending_images_to_messages(messages)
 
             stream = self.llm.chat(
                 messages=messages,
@@ -799,11 +901,14 @@ class MasterAgent:
                 for tc in response["tool_calls"]:
                     logger.info(f"  - {tc['function']['name']}({tc['function']['arguments'][:100]}...)")
 
-                # 有tool_calls时，如果有content_buffer，展示为accompanying text
-                if content_buffer:
+                # 🔧 FIX: Claude不会stream content当有tool_calls时，而是作为完整块返回
+                # 优先使用content_buffer（如果有streaming），否则使用response.get("content")
+                accompanying_text = content_buffer or response.get("content", "")
+
+                if accompanying_text:
                     yield {
                         "type": "note",
-                        "delta": content_buffer,
+                        "delta": accompanying_text,
                         "iter": iteration + 1,
                         "ts": time.time()
                     }
@@ -1008,6 +1113,34 @@ class MasterAgent:
                                     "files": previewable,
                                     "ts": time.time()
                                 }
+
+                        # === 兼容性支持：工具返回inject_images时自动添加到conversation state ===
+                        if hasattr(tool_result, 'inject_images') and tool_result.inject_images:
+                            image_detail = getattr(tool_result, 'image_detail', 'auto')
+                            logger.info(f"工具请求注入{len(tool_result.inject_images)}张图片 (detail={image_detail})")
+
+                            # 自动添加到conversation state（默认查看1次）
+                            if self.conv_manager and self.current_conversation_id:
+                                success = self.conv_manager.add_images_to_view(
+                                    self.current_conversation_id,
+                                    tool_result.inject_images,
+                                    image_detail,
+                                    view_count=1  # 默认1次后自动移除
+                                )
+                                if success:
+                                    logger.info(f"  - 已自动添加{len(tool_result.inject_images)}张图片到查看列表（查看1次后移除）")
+                                else:
+                                    logger.warning(f"  - 自动添加图片到查看列表失败")
+
+                            # 发送files事件，让前端知道这些图片会被LLM查看
+                            yield {
+                                "type": "exec",
+                                "iter": iteration + 1,
+                                "phase": "files",
+                                "files": tool_result.inject_images,
+                                "message": f"已准备{len(tool_result.inject_images)}张图片供LLM查看",
+                                "ts": time.time()
+                            }
                     else:
                         logger.warning(f"工具执行失败: {tool_name}")
                         logger.warning(f"  错误类型: {tool_result.error_type}")
