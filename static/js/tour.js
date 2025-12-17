@@ -78,6 +78,27 @@ class ProductTour {
     }
 
     /**
+     * 生成SVG图标HTML（内联样式，确保在Driver popover中正常显示）
+     */
+    icon(name) {
+        const icons = {
+            wave: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M5.5 8.5 L2 12"/><path d="m12 2-1.5 2.5L13 7l-1.5 2.5"/><path d="m18 6-1.5 2.5L19 11l-1.5 2.5"/><path d="M3 20v-4 4c0-1.7.7-3.3 2-4.5"/></svg>',
+            plus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M12 5v14M5 12h14"/></svg>',
+            folder: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+            clock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+            edit: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+            paperclip: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+            send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
+            cpu: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></svg>',
+            eye: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+            moon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>',
+            message: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>',
+            check: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:8px;"><path d="M20 6 9 17l-5-5"/></svg>'
+        };
+        return icons[name] || '';
+    }
+
+    /**
      * 初始化Driver实例
      */
     initDriver() {
@@ -267,7 +288,7 @@ class ProductTour {
             {
                 element: '.logo-container',
                 popover: {
-                    title: '欢迎使用Wenning AI助手 👋',
+                    title: this.icon('wave') + '欢迎使用Wenning AI助手',
                     description: 'Wenning是您的智能助手，支持多模型对话、文件处理、代码执行等强大功能。让我带您快速了解各个功能区域。',
                     side: 'bottom',
                     align: 'start'
@@ -276,7 +297,7 @@ class ProductTour {
             {
                 element: '#new-conversation-btn',
                 popover: {
-                    title: '新建对话 ✨',
+                    title: this.icon('plus') + '新建对话',
                     description: '点击这里创建新的对话。每个对话独立保存，您可以同时进行多个不同主题的讨论。',
                     side: 'right',
                     align: 'start'
@@ -285,7 +306,7 @@ class ProductTour {
             {
                 element: '.workspace-panel',
                 popover: {
-                    title: 'Workspace工作区 📁',
+                    title: this.icon('folder') + 'Workspace工作区',
                     description: '这里显示您保存的所有文件，按类型分类管理（图片、文档、表格等）。点击文件名可以快速预览和下载。',
                     side: 'right',
                     align: 'start'
@@ -294,7 +315,7 @@ class ProductTour {
             {
                 element: '#history-toggle',
                 popover: {
-                    title: '对话历史 📚',
+                    title: this.icon('clock') + '对话历史',
                     description: '点击这里查看所有历史对话记录。可以快速切换到之前的会话，继续之前的讨论。',
                     side: 'right',
                     align: 'end'
@@ -303,7 +324,7 @@ class ProductTour {
             {
                 element: '#chat-input',
                 popover: {
-                    title: '消息输入框 ✍️',
+                    title: this.icon('edit') + '消息输入框',
                     description: '在这里输入您的问题或指令。Wenning支持多轮对话，能够理解上下文并给出准确回答。',
                     side: 'top',
                     align: 'center'
@@ -312,7 +333,7 @@ class ProductTour {
             {
                 element: '.add-file-wrapper',
                 popover: {
-                    title: '附件上传 📎',
+                    title: this.icon('paperclip') + '附件上传',
                     description: '点击这里可以上传文件（图片、Excel、Word、PDF等）。Wenning可以分析文档内容、处理表格数据、识别图片中的信息。',
                     side: 'top',
                     align: 'start'
@@ -321,7 +342,7 @@ class ProductTour {
             {
                 element: '.send-btn',
                 popover: {
-                    title: '发送消息 🚀',
+                    title: this.icon('send') + '发送消息',
                     description: '输入完成后点击发送按钮（或按Enter键）即可提交。如果正在处理，这里会变成「停止」按钮。',
                     side: 'top',
                     align: 'end'
@@ -330,7 +351,7 @@ class ProductTour {
             {
                 element: '#model-select',
                 popover: {
-                    title: '模型选择 🤖',
+                    title: this.icon('cpu') + '模型选择',
                     description: '这里可以切换不同的AI模型。不同模型有各自的特点：GPT-4擅长推理，Claude善于编程，Gemini支持超长上下文等。',
                     side: 'bottom',
                     align: 'end'
@@ -357,7 +378,7 @@ class ProductTour {
                     }
                 },
                 popover: {
-                    title: '文件预览区 👁️',
+                    title: this.icon('eye') + '文件预览区',
                     description: 'AI生成的文件会自动显示在这里。支持Excel表格、图片、代码、HTML等多种格式的实时预览。您可以直接复制、下载或保存到Workspace。',
                     side: 'left',
                     align: 'start'
@@ -366,7 +387,7 @@ class ProductTour {
             {
                 element: '#theme-toggle',
                 popover: {
-                    title: '主题切换 🌙',
+                    title: this.icon('moon') + '主题切换',
                     description: '点击这里可以切换亮色/暗色主题，保护您的眼睛。',
                     side: 'bottom',
                     align: 'end'
@@ -375,7 +396,7 @@ class ProductTour {
             {
                 element: '#feedback-btn',
                 popover: {
-                    title: '反馈与帮助 💬',
+                    title: this.icon('message') + '反馈与帮助',
                     description: '有任何问题或建议？点击这里提交反馈。您也可以随时点击右上角的帮助按钮重新查看本引导。',
                     side: 'bottom',
                     align: 'end'
@@ -383,7 +404,7 @@ class ProductTour {
             },
             {
                 popover: {
-                    title: '准备好了吗？🎉',
+                    title: this.icon('check') + '准备好了吗？',
                     description: '恭喜您完成新手引导！现在开始与Wenning对话吧。记住：您可以随时通过右上角的帮助按钮重新查看本引导。祝您使用愉快！',
                     side: 'over',
                     // 最后一步的完成按钮回调
