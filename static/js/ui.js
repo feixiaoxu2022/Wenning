@@ -987,6 +987,20 @@ class UI {
         const key = String(iter || '1');
         const wrap = this._iterBoxes.get(key);
         if (!wrap) return;
+
+        // 检查该轮次是否有实质内容（工具执行、思考过程等）
+        const hasExecList = wrap.querySelector('.exec-list');
+        const hasThinking = wrap.querySelector('.thinking-box');
+        const hasProgress = wrap.querySelector('.progress-box');
+
+        // 如果没有任何实质内容，移除这个空容器
+        if (!hasExecList && !hasThinking && !hasProgress) {
+            console.log(`[UI] 第${key}轮没有实质内容，移除空容器`);
+            wrap.remove();
+            this._iterBoxes.delete(key);
+            return;
+        }
+
         const dot = wrap._statusDot;
         if (!dot) return;
         dot.classList.remove('spinner','success','failed');
