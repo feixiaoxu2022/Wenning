@@ -26,11 +26,30 @@
                 <select id="model-select">
                     <!-- 动态加载 -->
                 </select>
-                <button id="theme-toggle" class="theme-toggle" title="Toggle Theme">🌙</button>
-                <button id="help-tour-btn" class="theme-toggle" title="帮助导览">❓</button>
-                <button id="feedback-btn" class="feedback-btn" title="Feedback">💬</button>
+                <button id="theme-toggle" class="theme-toggle" title="Toggle Theme">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                    </svg>
+                </button>
+                <button id="help-tour-btn" class="theme-toggle" title="帮助导览">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                        <path d="M12 17h.01"/>
+                    </svg>
+                </button>
+                <button id="feedback-btn" class="feedback-btn" title="Feedback">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </button>
                 <div class="account" id="account">
-                    <button id="account-btn" class="account-btn" title="Account">👤</button>
+                    <button id="account-btn" class="account-btn" title="Account">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </button>
                     <div id="account-menu" class="account-menu" style="display:none;">
                         <div class="account-row" id="account-username">Not signed in</div>
                         <button id="logout-btn" class="account-logout">Logout</button>
