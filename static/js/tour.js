@@ -5,8 +5,10 @@
 
 class ProductTour {
     constructor() {
+        console.log('[Tour] ProductTour实例创建中...');
         this.driver = null;
         this.hasSeenTour = this.checkTourStatus();
+        console.log('[Tour] 已看过引导:', this.hasSeenTour);
         this.initDriver();
     }
 
@@ -48,12 +50,17 @@ class ProductTour {
      * 初始化Driver实例
      */
     initDriver() {
-        if (typeof driver === 'undefined') {
-            console.warn('[Tour] Driver.js未加载');
+        // 检查Driver.js是否加载
+        if (typeof window.driver === 'undefined') {
+            console.error('[Tour] Driver.js未加载，请检查CDN连接');
+            console.error('[Tour] 请尝试访问: https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js');
             return;
         }
 
-        this.driver = driver({
+        console.log('[Tour] Driver.js已加载，开始初始化');
+
+        try {
+            this.driver = window.driver({
             showProgress: true,
             showButtons: ['next', 'previous', 'close'],
             nextBtnText: '下一步',
@@ -74,7 +81,11 @@ class ProductTour {
             },
 
             steps: this.getSteps()
-        });
+            });
+            console.log('[Tour] Driver初始化成功');
+        } catch (error) {
+            console.error('[Tour] Driver初始化失败:', error);
+        }
     }
 
     /**
@@ -186,14 +197,27 @@ class ProductTour {
      * 启动引导
      */
     start() {
+        console.log('[Tour] 尝试启动引导...');
+
         if (!this.driver) {
-            console.warn('[Tour] Driver实例未初始化');
+            console.warn('[Tour] Driver实例未初始化，尝试重新初始化');
+            this.initDriver();
+        }
+
+        if (!this.driver) {
+            console.error('[Tour] Driver实例仍然未初始化，无法启动引导');
+            alert('引导功能初始化失败，请检查网络连接后刷新页面重试');
             return;
         }
 
-        // 重新初始化以获取最新的步骤配置（防止DOM变化）
-        this.initDriver();
-        this.driver.drive();
+        try {
+            console.log('[Tour] 开始启动Driver引导');
+            this.driver.drive();
+            console.log('[Tour] Driver引导已启动');
+        } catch (error) {
+            console.error('[Tour] 启动引导失败:', error);
+            alert('启动引导失败: ' + error.message);
+        }
     }
 
     /**
@@ -213,10 +237,17 @@ class ProductTour {
 let productTour = null;
 
 // DOM加载完成后初始化
+console.log('[Tour] 开始初始化全局ProductTour实例, document.readyState:', document.readyState);
+
 if (document.readyState === 'loading') {
+    console.log('[Tour] 等待DOMContentLoaded事件');
     document.addEventListener('DOMContentLoaded', () => {
+        console.log('[Tour] DOMContentLoaded触发，创建ProductTour实例');
         productTour = new ProductTour();
+        console.log('[Tour] 全局productTour实例已创建');
     });
 } else {
+    console.log('[Tour] DOM已加载，直接创建ProductTour实例');
     productTour = new ProductTour();
+    console.log('[Tour] 全局productTour实例已创建');
 }
