@@ -265,29 +265,29 @@ class ProductTour {
             },
             {
                 element: '.preview-panel',
+                // 步骤开始前的回调：临时移除center-mode以显示预览区
+                onHighlightStarted: () => {
+                    const mainContainer = document.querySelector('.main-container');
+                    if (mainContainer && mainContainer.classList.contains('center-mode')) {
+                        mainContainer.classList.remove('center-mode');
+                        mainContainer.dataset.tempCenterMode = 'true'; // 标记需要恢复
+                        console.log('[Tour] 步骤8：临时移除center-mode以高亮预览区');
+                    }
+                },
+                // 步骤结束后的回调：立即恢复center-mode
+                onDeselected: () => {
+                    const mainContainer = document.querySelector('.main-container');
+                    if (mainContainer && mainContainer.dataset.tempCenterMode === 'true') {
+                        mainContainer.classList.add('center-mode');
+                        delete mainContainer.dataset.tempCenterMode;
+                        console.log('[Tour] 步骤8结束：恢复center-mode');
+                    }
+                },
                 popover: {
                     title: '文件预览区 👁️',
                     description: 'AI生成的文件会自动显示在这里。支持Excel表格、图片、代码、HTML等多种格式的实时预览。您可以直接复制、下载或保存到Workspace。',
                     side: 'left',
-                    align: 'start',
-                    // 步骤开始前的回调：临时移除center-mode以显示预览区
-                    onHighlightStarted: () => {
-                        const mainContainer = document.querySelector('.main-container');
-                        if (mainContainer && mainContainer.classList.contains('center-mode')) {
-                            mainContainer.classList.remove('center-mode');
-                            mainContainer.dataset.tempCenterMode = 'true'; // 标记需要恢复
-                            console.log('[Tour] 步骤8：临时移除center-mode以高亮预览区');
-                        }
-                    },
-                    // 步骤结束后的回调：立即恢复center-mode
-                    onDeselected: () => {
-                        const mainContainer = document.querySelector('.main-container');
-                        if (mainContainer && mainContainer.dataset.tempCenterMode === 'true') {
-                            mainContainer.classList.add('center-mode');
-                            delete mainContainer.dataset.tempCenterMode;
-                            console.log('[Tour] 步骤8结束：恢复center-mode');
-                        }
-                    }
+                    align: 'start'
                 }
             },
             {
