@@ -1565,6 +1565,16 @@ body {
     cursor: pointer;
     transition: all 0.2s;
     padding: 0;
+    position: relative;
+    z-index: 10;
+}
+
+/* 折叠状态：按钮移到预览区域左上角 */
+.file-tabs-container.collapsed .file-list-collapse-btn {
+    position: fixed;
+    top: 80px;
+    left: 220px;
+    box-shadow: var(--shadow);
 }
 
 .file-list-collapse-btn:hover {
