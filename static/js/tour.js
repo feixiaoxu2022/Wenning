@@ -123,13 +123,11 @@ class ProductTour {
                         }
                     });
 
-                    // 关键：检查是否是center-mode，并恢复正确状态
+                    // 关键：检查并强制恢复正确的布局模式
                     const mainContainer = document.querySelector('.main-container');
                     const sidebar = document.querySelector('.conversations-sidebar');
                     const preview = document.querySelector('.preview-panel');
-                    const isCenterMode = mainContainer && mainContainer.classList.contains('center-mode');
-
-                    console.log('[Tour] 当前布局模式:', isCenterMode ? 'center-mode' : 'normal-mode');
+                    const fileTabsContainer = document.getElementById('file-tabs-container');
 
                     // 移除所有可能残留的内联样式，让CSS规则生效
                     if (sidebar) {
@@ -140,17 +138,29 @@ class ProductTour {
                         preview.removeAttribute('style');
                     }
 
-                    // 关键修复：完全清除mainContainer的内联样式
-                    // 这会让CSS的center-mode规则重新生效
                     if (mainContainer) {
                         // 先移除所有内联样式
                         mainContainer.removeAttribute('style');
 
-                        // 如果是center-mode，确保grid布局正确
-                        if (isCenterMode) {
-                            // 不需要设置任何样式，CSS会自动应用.main-container.center-mode的规则
-                            console.log('[Tour] center-mode已恢复，预览区应该被隐藏');
+                        // 关键修复：检查是否应该处于center-mode（没有文件时）
+                        const hasFiles = fileTabsContainer && fileTabsContainer.classList.contains('has-files');
+                        const shouldBeCenterMode = !hasFiles;
+                        const isCenterMode = mainContainer.classList.contains('center-mode');
+
+                        console.log('[Tour] 文件状态:', hasFiles ? '有文件' : '无文件');
+                        console.log('[Tour] 应该是center-mode:', shouldBeCenterMode);
+                        console.log('[Tour] 当前是center-mode:', isCenterMode);
+
+                        // 强制恢复正确的center-mode状态
+                        if (shouldBeCenterMode && !isCenterMode) {
+                            console.log('[Tour] 强制添加center-mode类');
+                            mainContainer.classList.add('center-mode');
+                        } else if (!shouldBeCenterMode && isCenterMode) {
+                            console.log('[Tour] 强制移除center-mode类');
+                            mainContainer.classList.remove('center-mode');
                         }
+
+                        console.log('[Tour] 布局状态已恢复');
                     }
 
                     // 额外清理：移除所有splitter和布局相关元素的内联样式
