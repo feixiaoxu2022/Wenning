@@ -104,49 +104,74 @@ class ProductTour {
                         el.classList.remove('driver-highlighted-element', 'driver-active-element', 'driver-no-interaction');
                     });
 
-                    // 移除Driver.js可能添加的内联样式
+                    // 完全移除所有元素上的内联样式（让CSS接管）
                     document.querySelectorAll('[style]').forEach(el => {
-                        const style = el.getAttribute('style');
-                        if (style) {
-                            // 移除包含driver、transform、z-index等可能由Driver.js添加的样式
-                            const cleaned = style
-                                .split(';')
-                                .filter(s => !s.includes('driver') &&
-                                           !s.includes('pointer-events') &&
-                                           !s.includes('z-index: 10'))
-                                .join(';');
-                            if (cleaned !== style) {
-                                if (cleaned.trim()) {
-                                    el.setAttribute('style', cleaned);
-                                } else {
-                                    el.removeAttribute('style');
-                                }
+                        // 只清除Driver.js添加的样式属性
+                        const style = el.style;
+                        if (style.length > 0) {
+                            // 保存可能需要保留的样式
+                            const preservedStyles = {};
+
+                            // 移除Driver.js相关的样式
+                            style.removeProperty('pointer-events');
+                            style.removeProperty('z-index');
+
+                            // 如果没有其他样式了，直接移除style属性
+                            if (style.length === 0) {
+                                el.removeAttribute('style');
                             }
                         }
                     });
 
-                    // 确保关键布局元素可见
+                    // 关键：检查是否是center-mode，并恢复正确状态
+                    const mainContainer = document.querySelector('.main-container');
                     const sidebar = document.querySelector('.conversations-sidebar');
                     const preview = document.querySelector('.preview-panel');
-                    const mainContainer = document.querySelector('.main-container');
+                    const isCenterMode = mainContainer && mainContainer.classList.contains('center-mode');
 
+                    console.log('[Tour] 当前布局模式:', isCenterMode ? 'center-mode' : 'normal-mode');
+
+                    // 移除所有可能残留的内联样式，让CSS规则生效
                     if (sidebar) {
-                        sidebar.style.display = '';
-                        sidebar.style.visibility = '';
-                        sidebar.style.opacity = '';
+                        sidebar.removeAttribute('style');
                     }
 
                     if (preview) {
-                        preview.style.display = '';
-                        preview.style.visibility = '';
+                        preview.removeAttribute('style');
                     }
 
+                    // 关键修复：完全清除mainContainer的内联样式
+                    // 这会让CSS的center-mode规则重新生效
                     if (mainContainer) {
-                        mainContainer.style.display = '';
+                        // 先移除所有内联样式
+                        mainContainer.removeAttribute('style');
+
+                        // 如果是center-mode，确保grid布局正确
+                        if (isCenterMode) {
+                            // 不需要设置任何样式，CSS会自动应用.main-container.center-mode的规则
+                            console.log('[Tour] center-mode已恢复，预览区应该被隐藏');
+                        }
                     }
+
+                    // 额外清理：移除所有splitter和布局相关元素的内联样式
+                    document.querySelectorAll('.v-splitter, .chat-panel, .file-tabs-container, .file-contents-container').forEach(el => {
+                        el.removeAttribute('style');
+                    });
+
+                    // 清除Driver.js可能添加的aria属性
+                    document.querySelectorAll('[aria-haspopup], [aria-expanded], [aria-controls]').forEach(el => {
+                        el.removeAttribute('aria-haspopup');
+                        el.removeAttribute('aria-expanded');
+                        el.removeAttribute('aria-controls');
+                    });
 
                     // 触发resize事件，让布局重新计算
                     window.dispatchEvent(new Event('resize'));
+
+                    // 再次触发resize（某些浏览器需要两次）
+                    setTimeout(() => {
+                        window.dispatchEvent(new Event('resize'));
+                    }, 50);
 
                     console.log('[Tour] 页面状态恢复完成');
                 }, 100);
