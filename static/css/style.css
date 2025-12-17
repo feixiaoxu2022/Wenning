@@ -1517,6 +1517,11 @@ body {
     overflow: hidden;
 }
 
+/* 折叠时隐藏splitter */
+.file-tabs-container.collapsed ~ #splitter-preview {
+    display: none;
+}
+
 /* 文件列表折叠按钮 */
 .file-list-collapse-btn {
     position: absolute;

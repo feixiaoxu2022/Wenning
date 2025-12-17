@@ -1016,13 +1016,29 @@ function initFileListCollapse() {
         } catch (_) {}
     });
 
-    // 恢复折叠状态
-    try {
-        const collapsed = localStorage.getItem('fileListCollapsed') === 'true';
-        if (collapsed) {
-            fileTabsContainer.classList.add('collapsed');
+    // 恢复折叠状态（仅当有文件时）
+    const restoreCollapsedState = () => {
+        try {
+            if (fileTabsContainer.classList.contains('has-files')) {
+                const collapsed = localStorage.getItem('fileListCollapsed') === 'true';
+                if (collapsed) {
+                    fileTabsContainer.classList.add('collapsed');
+                }
+            }
+        } catch (_) {}
+    };
+
+    // 初始恢复
+    restoreCollapsedState();
+
+    // 监听文件列表变化（当添加文件时恢复状态）
+    const observer = new MutationObserver(() => {
+        if (fileTabsContainer.classList.contains('has-files')) {
+            restoreCollapsedState();
+            observer.disconnect(); // 只需要恢复一次
         }
-    } catch (_) {}
+    });
+    observer.observe(fileTabsContainer, { attributes: true, attributeFilter: ['class'] });
 }
 
 /**
