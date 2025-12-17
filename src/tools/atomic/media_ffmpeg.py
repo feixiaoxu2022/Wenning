@@ -68,194 +68,188 @@ class MediaFFmpeg(BaseAtomicTool):
         self.timeout = getattr(config, "code_executor_timeout", 180)
         self.output_dir = config.output_dir
 
+
     def execute(self, **kwargs) -> Dict[str, Any]:
-        """满足抽象基类要求；实际逻辑在 run()，此处返回空数据。"""
-        return {}
+        """执行工具逻辑
+        
+        由基类的run()方法调用，返回纯数据dict或抛出异常
+        """
+        mode = kwargs.get("mode")
+        conv_id = kwargs.get("conversation_id")
+        output_dir_name = kwargs.get("_output_dir_name")  # 由master_agent统一注入
+        out_name = kwargs.get("out")
+        ensure_420 = bool(kwargs.get("ensure_yuv420p", True))
+        faststart = bool(kwargs.get("faststart", True))
+        shortest = bool(kwargs.get("shortest", True))
+        reencode_video = bool(kwargs.get("reencode_video", False))
+        audio_codec = (kwargs.get("audio_codec") or "aac").lower()
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        self.status = ToolStatus.RUNNING
-        try:
-            mode = kwargs.get("mode")
-            conv_id = kwargs.get("conversation_id")
-            output_dir_name = kwargs.get("_output_dir_name")  # 由master_agent统一注入
-            out_name = kwargs.get("out")
-            ensure_420 = bool(kwargs.get("ensure_yuv420p", True))
-            faststart = bool(kwargs.get("faststart", True))
-            shortest = bool(kwargs.get("shortest", True))
-            reencode_video = bool(kwargs.get("reencode_video", False))
-            audio_codec = (kwargs.get("audio_codec") or "aac").lower()
+        if not conv_id:
+            raise RuntimeError("conversation_id缺失")
+        if not output_dir_name:
+            raise RuntimeError("缺少_output_dir_name参数（应由master_agent自动注入）")
+        if not out_name or not out_name.lower().endswith(".mp4"):
+            raise RuntimeError("out必须以.mp4结尾")
 
-            if not conv_id:
-                return {"status": "failed", "error": "conversation_id缺失"}
-            if not output_dir_name:
-                return {"status": "failed", "error": "缺少_output_dir_name参数（应由master_agent自动注入）"}
-            if not out_name or not out_name.lower().endswith(".mp4"):
-                return {"status": "failed", "error": "out必须以.mp4结尾"}
+        # 规范化会话ID（避免传入 'outputs/<id>' 或路径）
+        from pathlib import Path as _P
+        conv_id = _P(str(conv_id)).name
 
-            # 规范化会话ID（避免传入 'outputs/<id>' 或路径）
-            from pathlib import Path as _P
-            conv_id = _P(str(conv_id)).name
+        work_dir = self.output_dir / output_dir_name
+        work_dir.mkdir(parents=True, exist_ok=True)
 
-            work_dir = self.output_dir / output_dir_name
-            work_dir.mkdir(parents=True, exist_ok=True)
+        cmd: List[str] = ["ffmpeg", "-y"]
 
-            cmd: List[str] = ["ffmpeg", "-y"]
+        if mode == "mux":
+            video = kwargs.get("video")
+            audio = kwargs.get("audio")
+            if not video or not audio:
+                raise RuntimeError("mux模式需要video与audio")
 
-            if mode == "mux":
-                video = kwargs.get("video")
-                audio = kwargs.get("audio")
-                if not video or not audio:
-                    return {"status": "failed", "error": "mux模式需要video与audio"}
+            cmd += ["-i", video, "-i", audio]
 
-                cmd += ["-i", video, "-i", audio]
-
-                # 视频编码策略
-                if ensure_420 or reencode_video:
-                    vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
-                    cmd += ["-vf", vf, "-c:v", "libx264", "-profile:v", "high", "-level", "4.1"]
-                    if faststart:
-                        cmd += ["-movflags", "+faststart"]
-                else:
-                    cmd += ["-c:v", "copy"]
-
-                # 音频编码策略
-                if audio_codec == "aac":
-                    cmd += ["-c:a", "aac", "-b:a", "128k"]
-                else:
-                    cmd += ["-c:a", "copy"]
-
-                if shortest:
-                    cmd += ["-shortest"]
-
-                cmd += [out_name]
-
-            elif mode == "transcode":
-                video = kwargs.get("video")
-                if not video:
-                    return {"status": "failed", "error": "transcode模式需要video"}
-
-                cmd += ["-i", video]
-
-                vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" if ensure_420 else "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+            # 视频编码策略
+            if ensure_420 or reencode_video:
+                vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
                 cmd += ["-vf", vf, "-c:v", "libx264", "-profile:v", "high", "-level", "4.1"]
                 if faststart:
                     cmd += ["-movflags", "+faststart"]
-                # 保持无音频或复制（不强制）
-                cmd += ["-c:a", "copy"]
-                cmd += [out_name]
-
-            elif mode == "mix":
-                # 旁白+BGM混音，可输出音频；若同时传入 video 且 out 以 .mp4 结尾，则生成视频（两段式）
-                vocal = kwargs.get("vocal")
-                bgm = kwargs.get("bgm")
-                if not vocal or not bgm:
-                    return {"status": "failed", "error": "mix模式需要vocal与bgm"}
-
-                out_name = out_name  # already set
-                is_video_out = out_name.lower().endswith(".mp4") and bool(kwargs.get("video"))
-
-                # 目标音频文件名（中间产物或最终音频）
-                audio_out_name = (
-                    (Path(out_name).with_suffix(".m4a").name) if is_video_out else out_name
-                )
-
-                # BGM前置增益与淡入淡出
-                bgm_gain_db = float(kwargs.get("bgm_gain_db", -14))
-                ducking = bool(kwargs.get("ducking", True))
-                thr = float(kwargs.get("threshold", -18))
-                ratio = float(kwargs.get("ratio", 6))
-                att = int(kwargs.get("attack_ms", 20))
-                rel = int(kwargs.get("release_ms", 250))
-                fin = int(kwargs.get("fade_in_ms", 0))
-                fout = int(kwargs.get("fade_out_ms", 0))
-                loop_bgm = bool(kwargs.get("loop_bgm", False))
-
-                # 组装 filter_complex
-                fc_parts: List[str] = []
-                # 输入映射: 0:vocal, 1:bgm
-                # 背景音乐音量与淡入/淡出
-                bgm_chain = "[1:a]volume={:.2f}dB".format(bgm_gain_db)
-                if fin > 0:
-                    bgm_chain += ",afade=t=in:st=0:d={}".format(fin / 1000.0)
-                if fout > 0:
-                    bgm_chain += ",afade=t=out:st=99999:d={}".format(fout / 1000.0)  # 过长，后续以shortest截断
-                bgm_chain += "[bgm0]"
-                fc_parts.append(bgm_chain)
-
-                if ducking:
-                    # 侧链压缩: 以vocal作为sidechain，压低bgm
-                    sc = (
-                        "[bgm0][0:a]sidechaincompress=threshold={thr}dB:ratio={ratio}:"
-                        "attack={att}:release={rel}:makeup=0:mix=1[ducked]"
-                    ).format(thr=thr, ratio=ratio, att=att, rel=rel)
-                    fc_parts.append(sc)
-                    mix_input = "[ducked][0:a]amix=inputs=2:normalize=0:duration=longest[aout]"
-                    fc_parts.append(mix_input)
-                else:
-                    # 直接混音
-                    fc_parts.append("[bgm0][0:a]amix=inputs=2:normalize=0:duration=longest[aout]")
-
-                filter_complex = ";".join(fc_parts)
-
-                cmd += ["-i", vocal, "-i", bgm, "-filter_complex", filter_complex, "-map", "[aout]"]
-
-                # 输出音频编码
-                if audio_out_name.lower().endswith(".m4a"):
-                    cmd += ["-c:a", "aac", "-b:a", "128k"]
-                else:
-                    # wav
-                    cmd += ["-ar", "44100", "-ac", "2"]
-                if shortest:
-                    cmd += ["-shortest"]
-
-                cmd += [audio_out_name]
-
-                logger.info(f"media_ffmpeg 混音命令: {' '.join(shlex.quote(c) for c in cmd)} (cwd={work_dir})")
-                r = subprocess.run(cmd, cwd=str(work_dir), capture_output=True, text=True, timeout=self.timeout)
-                if r.returncode != 0:
-                    return {"status": "failed", "error": r.stderr.strip() or r.stdout.strip()}
-
-                generated: List[str] = [audio_out_name]
-
-                # 如需要直接输出视频，再进行一次mux/transcode
-                if is_video_out:
-                    video = kwargs.get("video")
-                    # 第二次调用 ffmpeg: 将 audio_out 与 video 合并，并确保兼容性
-                    cmd2: List[str] = ["ffmpeg", "-y", "-i", video, "-i", audio_out_name]
-                    if ensure_420 or reencode_video:
-                        vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
-                        cmd2 += ["-vf", vf, "-c:v", "libx264", "-profile:v", "high", "-level", "4.1"]
-                        if faststart:
-                            cmd2 += ["-movflags", "+faststart"]
-                    else:
-                        cmd2 += ["-c:v", "copy"]
-
-                    # aac 音频
-                    cmd2 += ["-c:a", "aac", "-b:a", "128k"]
-                    if shortest:
-                        cmd2 += ["-shortest"]
-                    cmd2 += [out_name]
-
-                    logger.info(f"media_ffmpeg 合成视频命令: {' '.join(shlex.quote(c) for c in cmd2)} (cwd={work_dir})")
-                    r2 = subprocess.run(cmd2, cwd=str(work_dir), capture_output=True, text=True, timeout=self.timeout)
-                    if r2.returncode != 0:
-                        return {"status": "failed", "error": r2.stderr.strip() or r2.stdout.strip(), "generated_files": generated}
-                    generated.append(out_name)
-
-                return {"status": "success", "data": {"mode": mode, "out": out_name}, "generated_files": generated}
-
             else:
-                return {"status": "failed", "error": f"不支持的mode: {mode}"}
+                cmd += ["-c:v", "copy"]
 
-            logger.info(f"media_ffmpeg 命令: {' '.join(shlex.quote(c) for c in cmd)} (cwd={work_dir})")
+            # 音频编码策略
+            if audio_codec == "aac":
+                cmd += ["-c:a", "aac", "-b:a", "128k"]
+            else:
+                cmd += ["-c:a", "copy"]
+
+            if shortest:
+                cmd += ["-shortest"]
+
+            cmd += [out_name]
+
+        elif mode == "transcode":
+            video = kwargs.get("video")
+            if not video:
+                raise RuntimeError("transcode模式需要video")
+
+            cmd += ["-i", video]
+
+            vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" if ensure_420 else "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+            cmd += ["-vf", vf, "-c:v", "libx264", "-profile:v", "high", "-level", "4.1"]
+            if faststart:
+                cmd += ["-movflags", "+faststart"]
+            # 保持无音频或复制（不强制）
+            cmd += ["-c:a", "copy"]
+            cmd += [out_name]
+
+        elif mode == "mix":
+            # 旁白+BGM混音，可输出音频；若同时传入 video 且 out 以 .mp4 结尾，则生成视频（两段式）
+            vocal = kwargs.get("vocal")
+            bgm = kwargs.get("bgm")
+            if not vocal or not bgm:
+                raise RuntimeError("mix模式需要vocal与bgm")
+
+            out_name = out_name  # already set
+            is_video_out = out_name.lower().endswith(".mp4") and bool(kwargs.get("video"))
+
+            # 目标音频文件名（中间产物或最终音频）
+            audio_out_name = (
+                (Path(out_name).with_suffix(".m4a").name) if is_video_out else out_name
+            )
+
+            # BGM前置增益与淡入淡出
+            bgm_gain_db = float(kwargs.get("bgm_gain_db", -14))
+            ducking = bool(kwargs.get("ducking", True))
+            thr = float(kwargs.get("threshold", -18))
+            ratio = float(kwargs.get("ratio", 6))
+            att = int(kwargs.get("attack_ms", 20))
+            rel = int(kwargs.get("release_ms", 250))
+            fin = int(kwargs.get("fade_in_ms", 0))
+            fout = int(kwargs.get("fade_out_ms", 0))
+            loop_bgm = bool(kwargs.get("loop_bgm", False))
+
+            # 组装 filter_complex
+            fc_parts: List[str] = []
+            # 输入映射: 0:vocal, 1:bgm
+            # 背景音乐音量与淡入/淡出
+            bgm_chain = "[1:a]volume={:.2f}dB".format(bgm_gain_db)
+            if fin > 0:
+                bgm_chain += ",afade=t=in:st=0:d={}".format(fin / 1000.0)
+            if fout > 0:
+                bgm_chain += ",afade=t=out:st=99999:d={}".format(fout / 1000.0)  # 过长，后续以shortest截断
+            bgm_chain += "[bgm0]"
+            fc_parts.append(bgm_chain)
+
+            if ducking:
+                # 侧链压缩: 以vocal作为sidechain，压低bgm
+                sc = (
+                    "[bgm0][0:a]sidechaincompress=threshold={thr}dB:ratio={ratio}:"
+                    "attack={att}:release={rel}:makeup=0:mix=1[ducked]"
+                ).format(thr=thr, ratio=ratio, att=att, rel=rel)
+                fc_parts.append(sc)
+                mix_input = "[ducked][0:a]amix=inputs=2:normalize=0:duration=longest[aout]"
+                fc_parts.append(mix_input)
+            else:
+                # 直接混音
+                fc_parts.append("[bgm0][0:a]amix=inputs=2:normalize=0:duration=longest[aout]")
+
+            filter_complex = ";".join(fc_parts)
+
+            cmd += ["-i", vocal, "-i", bgm, "-filter_complex", filter_complex, "-map", "[aout]"]
+
+            # 输出音频编码
+            if audio_out_name.lower().endswith(".m4a"):
+                cmd += ["-c:a", "aac", "-b:a", "128k"]
+            else:
+                # wav
+                cmd += ["-ar", "44100", "-ac", "2"]
+            if shortest:
+                cmd += ["-shortest"]
+
+            cmd += [audio_out_name]
+
+            logger.info(f"media_ffmpeg 混音命令: {' '.join(shlex.quote(c) for c in cmd)} (cwd={work_dir})")
             r = subprocess.run(cmd, cwd=str(work_dir), capture_output=True, text=True, timeout=self.timeout)
             if r.returncode != 0:
-                return {"status": "failed", "error": r.stderr.strip() or r.stdout.strip()}
+                raise RuntimeError(r.stderr.strip() or r.stdout.strip())
 
-            return {"status": "success", "data": {"mode": mode, "out": out_name}, "generated_files": [out_name]}
+            generated: List[str] = [audio_out_name]
 
-        except subprocess.TimeoutExpired:
-            return {"status": "failed", "error": f"ffmpeg超时({self.timeout}s)"}
-        except Exception as e:
-            logger.error(f"media_ffmpeg失败: {e}")
-            return {"status": "failed", "error": str(e)}
+            # 如需要直接输出视频，再进行一次mux/transcode
+            if is_video_out:
+                video = kwargs.get("video")
+                # 第二次调用 ffmpeg: 将 audio_out 与 video 合并，并确保兼容性
+                cmd2: List[str] = ["ffmpeg", "-y", "-i", video, "-i", audio_out_name]
+                if ensure_420 or reencode_video:
+                    vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
+                    cmd2 += ["-vf", vf, "-c:v", "libx264", "-profile:v", "high", "-level", "4.1"]
+                    if faststart:
+                        cmd2 += ["-movflags", "+faststart"]
+                else:
+                    cmd2 += ["-c:v", "copy"]
+
+                # aac 音频
+                cmd2 += ["-c:a", "aac", "-b:a", "128k"]
+                if shortest:
+                    cmd2 += ["-shortest"]
+                cmd2 += [out_name]
+
+                logger.info(f"media_ffmpeg 合成视频命令: {' '.join(shlex.quote(c) for c in cmd2)} (cwd={work_dir})")
+                r2 = subprocess.run(cmd2, cwd=str(work_dir), capture_output=True, text=True, timeout=self.timeout)
+                if r2.returncode != 0:
+                    raise RuntimeError(r2.stderr.strip() or r2.stdout.strip())
+                generated.append(out_name)
+
+            return {"mode": mode, "out": out_name, "generated_files": generated}
+
+        else:
+            raise RuntimeError(f"不支持的mode: {mode}")
+
+        logger.info(f"media_ffmpeg 命令: {' '.join(shlex.quote(c) for c in cmd)} (cwd={work_dir})")
+        r = subprocess.run(cmd, cwd=str(work_dir), capture_output=True, text=True, timeout=self.timeout)
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr.strip() or r.stdout.strip())
+
+        return {"mode": mode, "out": out_name, "generated_files": [out_name]}
+

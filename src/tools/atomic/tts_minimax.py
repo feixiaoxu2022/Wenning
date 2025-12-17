@@ -85,186 +85,175 @@ class TTSMiniMax(BaseAtomicTool):
         self.output_dir = config.output_dir
         self.conv_manager = conv_manager
 
+
     def execute(self, **kwargs) -> Dict[str, Any]:
-        # BaseAtomicTool 需要此方法；真实逻辑在 run()
-        return {}
+        """执行工具逻辑
+        
+        由基类的run()方法调用，返回纯数据dict或抛出异常
+        """
+        text: str = (kwargs.get("text") or "").strip()
+        conv_id: str = kwargs.get("conversation_id")
+        model: str = kwargs.get("model") or "speech-2.6-hd"
+        voice_id: str = kwargs.get("voice_id") or "male-qn-qingse"
+        speed: float = float(kwargs.get("speed") or 1.0)
+        vol: float = float(kwargs.get("vol") or 1.0)
+        pitch: int = int(kwargs.get("pitch") or 0)
+        emotion: Optional[str] = kwargs.get("emotion")
+        fmt: str = (kwargs.get("format") or "mp3").lower()
+        sample_rate: int = int(kwargs.get("sample_rate") or 32000)
+        filename: Optional[str] = kwargs.get("filename")
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        self.status = ToolStatus.RUNNING
-        try:
-            text: str = (kwargs.get("text") or "").strip()
-            conv_id: str = kwargs.get("conversation_id")
-            model: str = kwargs.get("model") or "speech-2.6-hd"
-            voice_id: str = kwargs.get("voice_id") or "male-qn-qingse"
-            speed: float = float(kwargs.get("speed") or 1.0)
-            vol: float = float(kwargs.get("vol") or 1.0)
-            pitch: int = int(kwargs.get("pitch") or 0)
-            emotion: Optional[str] = kwargs.get("emotion")
-            fmt: str = (kwargs.get("format") or "mp3").lower()
-            sample_rate: int = int(kwargs.get("sample_rate") or 32000)
-            filename: Optional[str] = kwargs.get("filename")
+        if not text:
+            raise RuntimeError("text不能为空")
+        if not conv_id:
+            raise RuntimeError("conversation_id缺失")
 
-            if not text:
-                return {"status": "failed", "error": "text不能为空"}
-            if not conv_id:
-                return {"status": "failed", "error": "conversation_id缺失"}
+        # 检查凭据
+        if not self.api_key:
+            raise RuntimeError("缺少 MINIMAX_API_KEY 环境变量")
 
-            # 检查凭据
-            if not self.api_key:
-                return {"status": "failed", "error": "缺少 MINIMAX_API_KEY 环境变量"}
+        # 输出路径（使用带时间戳的输出目录名）
+        if not self.conv_manager:
+            raise RuntimeError("系统配置错误: 缺少conv_manager")
 
-            # 输出路径（使用带时间戳的输出目录名）
-            if not self.conv_manager:
-                return {"status": "failed", "error": "系统配置错误: 缺少conv_manager"}
+        output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
+        work_dir = self.output_dir / output_dir_name
+        work_dir.mkdir(parents=True, exist_ok=True)
+        if not filename:
+            filename = f"narration.{fmt}"
+        out_path = work_dir / filename
 
-            output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
-            work_dir = self.output_dir / output_dir_name
-            work_dir.mkdir(parents=True, exist_ok=True)
-            if not filename:
-                filename = f"narration.{fmt}"
-            out_path = work_dir / filename
+        # 构建 voice_setting
+        voice_setting = {
+            "voice_id": voice_id,
+            "speed": speed,
+            "vol": vol,
+            "pitch": pitch
+        }
+        if emotion:
+            voice_setting["emotion"] = emotion
 
-            # 构建 voice_setting
-            voice_setting = {
-                "voice_id": voice_id,
-                "speed": speed,
-                "vol": vol,
-                "pitch": pitch
-            }
-            if emotion:
-                voice_setting["emotion"] = emotion
+        # 构建请求体（严格按照官方文档格式）
+        payload = {
+            "model": model,
+            "text": text,
+            "stream": False,
+            "voice_setting": voice_setting,
+            "audio_setting": {
+                "sample_rate": sample_rate,
+                "bitrate": 128000,
+                "format": fmt,
+                "channel": 1
+            },
+            "subtitle_enable": False
+        }
 
-            # 构建请求体（严格按照官方文档格式）
-            payload = {
-                "model": model,
-                "text": text,
-                "stream": False,
-                "voice_setting": voice_setting,
-                "audio_setting": {
-                    "sample_rate": sample_rate,
-                    "bitrate": 128000,
-                    "format": fmt,
-                    "channel": 1
-                },
-                "subtitle_enable": False
-            }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+        logger.info(f"调用 MiniMax TTS API: model={model}, voice_id={voice_id}, speed={speed}, emotion={emotion}")
 
-            logger.info(f"调用 MiniMax TTS API: model={model}, voice_id={voice_id}, speed={speed}, emotion={emotion}")
+        response = requests.post(
+            self.api_url,
+            headers=headers,
+            json=payload,
+            timeout=self.timeout
+        )
 
-            response = requests.post(
-                self.api_url,
-                headers=headers,
-                json=payload,
-                timeout=self.timeout
-            )
+        if response.status_code != 200:
+            error_msg = f"MiniMax TTS API 错误: HTTP {response.status_code}, {response.text}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-            if response.status_code != 200:
-                error_msg = f"MiniMax TTS API 错误: HTTP {response.status_code}, {response.text}"
-                logger.error(error_msg)
-                return {"status": "failed", "error": error_msg}
+        result = response.json()
 
-            result = response.json()
+        # 检查 base_resp.status_code
+        base_resp = result.get("base_resp", {})
+        if base_resp.get("status_code") != 0:
+            error_msg = base_resp.get("status_msg", "未知错误")
+            raise RuntimeError(f"MiniMax TTS 失败: {error_msg}")
 
-            # 检查 base_resp.status_code
-            base_resp = result.get("base_resp", {})
-            if base_resp.get("status_code") != 0:
-                error_msg = base_resp.get("status_msg", "未知错误")
-                return {"status": "failed", "error": f"MiniMax TTS 失败: {error_msg}"}
+        # 提取音频数据
+        # MiniMax TTS API 返回格式: {"base_resp": {...}, "data": {"audio": "hex_or_base64_string", ...}}
+        if "data" in result and "audio" in result["data"]:
+            audio_encoded = result["data"]["audio"]
 
-            # 提取音频数据
-            # MiniMax TTS API 返回格式: {"base_resp": {...}, "data": {"audio": "hex_or_base64_string", ...}}
-            if "data" in result and "audio" in result["data"]:
-                audio_encoded = result["data"]["audio"]
+            # 调试信息：检查编码数据
+            logger.info(f"收到音频编码数据，长度: {len(audio_encoded)} 字符")
+            logger.info(f"数据前100字符: {audio_encoded[:100]}")
 
-                # 调试信息：检查编码数据
-                logger.info(f"收到音频编码数据，长度: {len(audio_encoded)} 字符")
-                logger.info(f"数据前100字符: {audio_encoded[:100]}")
+            # 检测编码类型（十六进制 vs base64）
+            # 十六进制只包含 0-9, a-f, A-F
+            # Base64包含 A-Z, a-z, 0-9, +, /, =
+            is_hex = all(c in '0123456789abcdefABCDEF' for c in audio_encoded)
 
-                # 检测编码类型（十六进制 vs base64）
-                # 十六进制只包含 0-9, a-f, A-F
-                # Base64包含 A-Z, a-z, 0-9, +, /, =
-                is_hex = all(c in '0123456789abcdefABCDEF' for c in audio_encoded)
-
-                try:
-                    if is_hex:
-                        # 十六进制解码
-                        logger.info("检测到十六进制编码，使用hex解码")
-                        audio_bytes = bytes.fromhex(audio_encoded)
-                        logger.info(f"Hex解码成功，音频数据大小: {len(audio_bytes)} 字节")
-                    else:
-                        # Base64解码
-                        logger.info("检测到base64编码，使用base64解码")
-                        import base64
-                        # 修复base64 padding问题
-                        missing_padding = len(audio_encoded) % 4
-                        if missing_padding:
-                            audio_encoded += '=' * (4 - missing_padding)
-                            logger.info(f"已修复base64 padding，补充了 {4 - missing_padding} 个'='")
-                        audio_bytes = base64.b64decode(audio_encoded)
-                        logger.info(f"Base64解码成功，音频数据大小: {len(audio_bytes)} 字节")
-                except Exception as decode_error:
-                    error_msg = f"音频解码失败: {decode_error}. 数据前100字符: {audio_encoded[:100]}"
-                    logger.error(error_msg)
-                    return {"status": "failed", "error": error_msg}
-
-                # 验证音频文件格式
-                if len(audio_bytes) < 10:
-                    error_msg = f"音频数据太短（{len(audio_bytes)}字节），可能不是有效的音频文件"
-                    logger.error(error_msg)
-                    return {"status": "failed", "error": error_msg}
-
-                # 检查文件头，判断实际格式
-                header = audio_bytes[:10]
-                logger.info(f"音频文件头 (hex): {header.hex()}")
-
-                # MP3文件头: ID3 (0x494433) 或 MPEG sync (0xFFxx)
-                # WAV文件头: RIFF (0x52494646)
-                actual_format = None
-                if header[:3] == b'ID3' or header[0:2] in [b'\xff\xfb', b'\xff\xfa', b'\xff\xf3', b'\xff\xf2']:
-                    actual_format = "mp3"
-                    logger.info("✓ 检测到有效的MP3文件格式")
-                elif header[:4] == b'RIFF':
-                    actual_format = "wav"
-                    logger.warning("⚠️ 检测到WAV格式，但请求的是MP3格式")
+            try:
+                if is_hex:
+                    # 十六进制解码
+                    logger.info("检测到十六进制编码，使用hex解码")
+                    audio_bytes = bytes.fromhex(audio_encoded)
+                    logger.info(f"Hex解码成功，音频数据大小: {len(audio_bytes)} 字节")
                 else:
-                    # 尝试检查是否是文本
-                    try:
-                        text_sample = audio_bytes[:100].decode('utf-8', errors='ignore')
-                        if all(32 <= ord(c) < 127 or c in '\n\r\t' for c in text_sample):
-                            logger.error(f"❌ 音频数据实际是文本内容: {text_sample[:200]}")
-                            return {"status": "failed", "error": f"API返回的不是音频文件，而是文本: {text_sample[:100]}"}
-                    except:
-                        pass
-                    logger.warning(f"⚠️ 无法识别的音频格式，文件头: {header.hex()}")
+                    # Base64解码
+                    logger.info("检测到base64编码，使用base64解码")
+                    import base64
+                    # 修复base64 padding问题
+                    missing_padding = len(audio_encoded) % 4
+                    if missing_padding:
+                        audio_encoded += '=' * (4 - missing_padding)
+                        logger.info(f"已修复base64 padding，补充了 {4 - missing_padding} 个'='")
+                    audio_bytes = base64.b64decode(audio_encoded)
+                    logger.info(f"Base64解码成功，音频数据大小: {len(audio_bytes)} 字节")
+            except Exception as decode_error:
+                error_msg = f"音频解码失败: {decode_error}. 数据前100字符: {audio_encoded[:100]}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
 
-                out_path.write_bytes(audio_bytes)
-                logger.info(f"音频保存成功: {filename}（实际格式: {actual_format or '未知'}）")
+            # 验证音频文件格式
+            if len(audio_bytes) < 10:
+                error_msg = f"音频数据太短（{len(audio_bytes)}字节），可能不是有效的音频文件"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
 
-                return {
-                    "status": "success",
-                    "data": {
-                        "model": model,
-                        "voice_id": voice_id,
-                        "speed": speed,
-                        "vol": vol,
-                        "pitch": pitch,
-                        "emotion": emotion,
-                        "format": fmt,
-                        "file_path": str(out_path)
-                    },
-                    "generated_files": [out_path.name]
-                }
+            # 检查文件头，判断实际格式
+            header = audio_bytes[:10]
+            logger.info(f"音频文件头 (hex): {header.hex()}")
+
+            # MP3文件头: ID3 (0x494433) 或 MPEG sync (0xFFxx)
+            # WAV文件头: RIFF (0x52494646)
+            actual_format = None
+            if header[:3] == b'ID3' or header[0:2] in [b'\xff\xfb', b'\xff\xfa', b'\xff\xf3', b'\xff\xf2']:
+                actual_format = "mp3"
+                logger.info("✓ 检测到有效的MP3文件格式")
+            elif header[:4] == b'RIFF':
+                actual_format = "wav"
+                logger.warning("⚠️ 检测到WAV格式，但请求的是MP3格式")
             else:
-                return {"status": "failed", "error": "响应中缺少音频数据"}
+                # 尝试检查是否是文本
+                try:
+                    text_sample = audio_bytes[:100].decode('utf-8', errors='ignore')
+                    if all(32 <= ord(c) < 127 or c in '\n\r\t' for c in text_sample):
+                        logger.error(f"❌ 音频数据实际是文本内容: {text_sample[:200]}")
+                        raise RuntimeError(f"API返回的不是音频文件，而是文本: {text_sample[:100]}")
+                except:
+                    pass
+                logger.warning(f"⚠️ 无法识别的音频格式，文件头: {header.hex()}")
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"tts_minimax 网络请求失败: {e}")
-            return {"status": "failed", "error": f"网络请求失败: {str(e)}"}
-        except Exception as e:
-            logger.error(f"tts_minimax 执行失败: {e}")
-            return {"status": "failed", "error": str(e)}
+            out_path.write_bytes(audio_bytes)
+            logger.info(f"音频保存成功: {filename}（实际格式: {actual_format or '未知'}）")
+
+            return {
+                    "model": model,
+                    "voice_id": voice_id,
+                    "speed": speed,
+                    "vol": vol,
+                    "pitch": pitch,
+                    "emotion": emotion,
+                    "format": fmt,
+                    "file_path": str(out_path)
+                , "generated_files": [out_path.name]}
+        else:
+            raise RuntimeError("响应中缺少音频数据")
+
