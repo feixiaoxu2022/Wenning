@@ -210,12 +210,30 @@ class ProductTour {
                 }
             },
             {
-                element: '.conversations-sidebar',
+                element: '#new-conversation-btn',
                 popover: {
-                    title: '对话历史 📚',
-                    description: '这里显示您的所有对话记录。点击「新建对话」开始新的会话，点击历史记录可以切换到之前的对话。',
+                    title: '新建对话 ✨',
+                    description: '点击这里创建新的对话。每个对话独立保存，您可以同时进行多个不同主题的讨论。',
                     side: 'right',
                     align: 'start'
+                }
+            },
+            {
+                element: '.workspace-panel',
+                popover: {
+                    title: 'Workspace工作区 📁',
+                    description: '这里显示您保存的所有文件，按类型分类管理（图片、文档、表格等）。点击文件名可以快速预览和下载。',
+                    side: 'right',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#history-toggle',
+                popover: {
+                    title: '对话历史 📚',
+                    description: '点击这里查看所有历史对话记录。可以快速切换到之前的会话，继续之前的讨论。',
+                    side: 'right',
+                    align: 'end'
                 }
             },
             {
@@ -255,15 +273,6 @@ class ProductTour {
                 }
             },
             {
-                element: '.workspace-panel',
-                popover: {
-                    title: 'Workspace工作区 📁',
-                    description: '这里显示您保存的所有文件，按类型分类管理（图片、文档、表格等）。点击文件名可以快速预览和下载。',
-                    side: 'left',
-                    align: 'start'
-                }
-            },
-            {
                 element: '.preview-panel',
                 // 步骤开始前的回调：临时移除center-mode以显示预览区
                 onHighlightStarted: () => {
@@ -271,7 +280,7 @@ class ProductTour {
                     if (mainContainer && mainContainer.classList.contains('center-mode')) {
                         mainContainer.classList.remove('center-mode');
                         mainContainer.dataset.tempCenterMode = 'true'; // 标记需要恢复
-                        console.log('[Tour] 步骤8：临时移除center-mode以高亮预览区');
+                        console.log('[Tour] 步骤9（预览区）：临时移除center-mode以高亮预览区');
                     }
                 },
                 // 步骤结束后的回调：立即恢复center-mode
@@ -280,7 +289,7 @@ class ProductTour {
                     if (mainContainer && mainContainer.dataset.tempCenterMode === 'true') {
                         mainContainer.classList.add('center-mode');
                         delete mainContainer.dataset.tempCenterMode;
-                        console.log('[Tour] 步骤8结束：恢复center-mode');
+                        console.log('[Tour] 步骤9结束：恢复center-mode');
                     }
                 },
                 popover: {
