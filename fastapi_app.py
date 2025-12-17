@@ -140,7 +140,12 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
         # 创建Agent（传入conv_manager用于路径转换）
         agent = MasterAgent(config, tool_registry, model_name=model_name, conv_manager=conv_manager)
         agents[model_name] = agent
-        logger.info(f"创建新Agent: model={model_name}, tools={len(tool_registry.list_tools())}")
+
+        # 调试日志：打印所有注册的工具名称
+        all_tool_names = tool_registry.list_tools()
+        logger.info(f"创建新Agent: model={model_name}, tools={len(all_tool_names)}")
+        logger.info(f"所有注册的工具: {all_tool_names}")
+        logger.info(f"manage_images_view是否注册: {'manage_images_view' in all_tool_names}")
 
     return agents[model_name]
 

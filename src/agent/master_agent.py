@@ -435,7 +435,11 @@ class MasterAgent:
         # 获取所有可用工具的schema
         tools = self.tool_registry.get_function_calling_schemas()
 
-        logger.info(f"ReAct循环开始: 可用工具={[t['function']['name'] for t in tools]}")
+        # 调试日志：打印传递给LLM的工具列表
+        tool_names = [t['function']['name'] for t in tools]
+        logger.info(f"ReAct循环开始: 可用工具数量={len(tools)}")
+        logger.info(f"ReAct循环开始: 可用工具={tool_names}")
+        logger.info(f"manage_images_view在tools中: {'manage_images_view' in tool_names}")
 
         # ReAct迭代
         for iteration in range(self.max_iterations):
@@ -764,7 +768,11 @@ class MasterAgent:
         # 获取所有可用工具的schema
         tools = self.tool_registry.get_function_calling_schemas()
 
-        logger.info(f"ReAct循环开始: 可用工具={[t['function']['name'] for t in tools]}")
+        # 调试日志：打印传递给LLM的工具列表
+        tool_names = [t['function']['name'] for t in tools]
+        logger.info(f"ReAct循环开始(streaming): 可用工具数量={len(tools)}")
+        logger.info(f"ReAct循环开始(streaming): 可用工具={tool_names}")
+        logger.info(f"manage_images_view在tools中(streaming): {'manage_images_view' in tool_names}")
 
         # 追踪连续content_filter次数，防止无限循环
         consecutive_content_filter_count = 0
