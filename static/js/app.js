@@ -996,9 +996,24 @@ function initSidebarToggles() {
 function initFileListCollapse() {
     const fileTabsContainer = document.getElementById('file-tabs-container');
     const collapseBtn = document.getElementById('file-list-collapse-btn');
-    const expandBtn = document.getElementById('file-list-expand-btn');
+    const fileContentsContainer = document.getElementById('file-contents-container');
 
-    if (!fileTabsContainer || !collapseBtn) return;
+    if (!fileTabsContainer || !collapseBtn || !fileContentsContainer) return;
+
+    // 动态创建展开按钮（确保一定存在）
+    let expandBtn = document.getElementById('file-list-expand-btn');
+    if (!expandBtn) {
+        expandBtn = document.createElement('button');
+        expandBtn.id = 'file-list-expand-btn';
+        expandBtn.className = 'file-list-expand-btn';
+        expandBtn.title = '展开文件列表';
+        expandBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+        `;
+        fileContentsContainer.insertBefore(expandBtn, fileContentsContainer.firstChild);
+    }
 
     // 折叠按钮：添加collapsed类
     collapseBtn.addEventListener('click', (e) => {
@@ -1011,16 +1026,14 @@ function initFileListCollapse() {
     });
 
     // 展开按钮：移除collapsed类
-    if (expandBtn) {
-        expandBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            fileTabsContainer.classList.remove('collapsed');
-            try {
-                localStorage.setItem('fileListCollapsed', 'false');
-            } catch (_) {}
-        });
-    }
+    expandBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fileTabsContainer.classList.remove('collapsed');
+        try {
+            localStorage.setItem('fileListCollapsed', 'false');
+        } catch (_) {}
+    });
 
     // 恢复折叠状态
     const restoreCollapsedState = () => {
