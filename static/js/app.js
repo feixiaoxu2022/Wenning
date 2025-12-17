@@ -388,7 +388,7 @@ function createConversationItem(conv) {
 }
 
 /**
- * 确保有当前对话（显示所有模型的对话）
+ * 确保有当前对话（优先加载有消息的最新对话）
  */
 async function ensureConversation() {
     try {
@@ -427,25 +427,53 @@ async function ensureConversation() {
             }
         }
 
-        // 如果没有保存的对话或恢复失败，查询与当前模型匹配的对话
-        const response = await fetch(`/conversations?model=${encodeURIComponent(currentModel)}`);
+        // 获取所有对话（不过滤模型）
+        const response = await fetch(`/conversations`);
         const data = await response.json();
 
         if (data.conversations && data.conversations.length > 0) {
-            // 选取 updated_at 最大的作为"最新"
-            let latest = null;
-            try {
-                latest = data.conversations.reduce((best, cur) => {
-                    if (!best) return cur;
-                    const bu = String(best.updated_at || '');
-                    const cu = String(cur.updated_at || '');
-                    return cu.localeCompare(bu) > 0 ? cur : best;
-                }, null);
-            } catch (_) {}
-            currentConversationId = (latest || data.conversations[0]).id;
-            await loadConversation(currentConversationId);
+            // 过滤出有消息的对话
+            const conversationsWithMessages = [];
+
+            for (const conv of data.conversations) {
+                try {
+                    // 加载对话详情检查是否有消息
+                    const detailResp = await fetch(`/conversations/${conv.id}`);
+                    if (detailResp.ok) {
+                        const detail = await detailResp.json();
+                        if (detail.messages && detail.messages.length > 0) {
+                            conversationsWithMessages.push({
+                                ...conv,
+                                messageCount: detail.messages.length
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[App] 检查对话 ${conv.id} 失败:`, e);
+                }
+            }
+
+            // 如果有消息的对话存在，选择最新的（updated_at最大）
+            if (conversationsWithMessages.length > 0) {
+                conversationsWithMessages.sort((a, b) => {
+                    const at = String(a.updated_at || '');
+                    const bt = String(b.updated_at || '');
+                    return bt.localeCompare(at);
+                });
+
+                const latest = conversationsWithMessages[0];
+                console.log(`[App] 加载最新的有消息对话: ${latest.id}, 消息数: ${latest.messageCount}, 更新时间: ${latest.updated_at}`);
+
+                currentConversationId = latest.id;
+                await loadConversation(currentConversationId);
+            } else {
+                // 所有对话都是空的，创建新对话
+                console.log('[App] 所有对话都是空的，创建新对话');
+                await createNewConversation();
+            }
         } else {
-            // 创建新对话
+            // 没有任何对话，创建新对话
+            console.log('[App] 没有任何对话，创建新对话');
             await createNewConversation();
         }
 
@@ -456,7 +484,7 @@ async function ensureConversation() {
             ui.setOutputsBase(currentConversationId);
         }
 
-        // 刷新左侧History列表，修复首次进入页面时先加载列表再创建会话导致的"暂无对话"显示问题
+        // 刷新左侧History列表
         try {
             await loadConversationsList();
         } catch (_) {
