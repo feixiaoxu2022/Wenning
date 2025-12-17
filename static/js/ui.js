@@ -1001,6 +1001,18 @@ class UI {
             return;
         }
 
+        // 停止thinking-label的动画（标记为completed）
+        const thinkingLabel = wrap.querySelector('.thinking-label');
+        if (thinkingLabel) {
+            thinkingLabel.classList.add('completed');
+        }
+
+        // 也停止tool-call-text-label的动画
+        const toolCallLabel = wrap.querySelector('.tool-call-text-label');
+        if (toolCallLabel) {
+            toolCallLabel.classList.add('completed');
+        }
+
         const dot = wrap._statusDot;
         if (!dot) return;
         dot.classList.remove('spinner','success','failed');
