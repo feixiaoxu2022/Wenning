@@ -996,7 +996,7 @@ function setupSSECallbacks() {
     // 思考过程更新（映射后端iter为前端显示iter）
     sseClient.onIterStart = (iter) => {
         try {
-            ui.hideLoadingIndicator();
+            // 🔧 不隐藏loading indicator，保持"正在思考..."直到有实际内容
             console.log('[SSE] onIterStart received iter:', iter);
             const frontendIter = ui._mapSSEIter(iter);
             console.log('[SSE] Mapped to frontendIter:', frontendIter);
