@@ -1175,6 +1175,286 @@ async def submit_message_feedback(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+# ========== 日志查看 APIs（用于远程调试）==========
+
+@app.get("/api/logs/files")
+async def list_log_files():
+    """列出所有日志文件"""
+    log_dir = Path("logs")
+    if not log_dir.exists():
+        return JSONResponse(content={"files": []})
+
+    files = []
+    for f in sorted(log_dir.glob('*.log')):
+        stat = f.stat()
+        files.append({
+            "name": f.name,
+            "size": stat.st_size,
+            "modified": stat.st_mtime
+        })
+
+    return JSONResponse(content={"files": files})
+
+
+@app.get("/api/logs/{filename}")
+async def view_log(
+    filename: str,
+    lines: str = Query("100", description="显示行数，可以是数字或'all'"),
+    search: str = Query("", description="搜索关键字")
+):
+    """查看日志文件内容"""
+    log_path = Path("logs") / filename
+
+    if not log_path.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"日志文件不存在: {filename}"}
+        )
+
+    try:
+        # 读取文件
+        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+            all_lines = f.readlines()
+
+        total_lines = len(all_lines)
+        filtered_lines = all_lines
+
+        # 如果有搜索关键字，先过滤
+        if search:
+            filtered_lines = [line for line in all_lines if search in line]
+
+        # 取最后N行
+        if lines == 'all':
+            shown_lines = filtered_lines
+        else:
+            lines_count = int(lines)
+            shown_lines = filtered_lines[-lines_count:]
+
+        content = ''.join(shown_lines)
+
+        return JSONResponse(content={
+            "total_lines": total_lines,
+            "filtered_lines": len(filtered_lines),
+            "shown_lines": len(shown_lines),
+            "content": content
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"读取日志失败: {str(e)}"}
+        )
+
+
+@app.get("/logs/viewer")
+async def log_viewer():
+    """日志查看器界面"""
+    html = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Wenning日志查看器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 20px; }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .control-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        label { font-weight: 600; min-width: 80px; }
+        select, input, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        input { flex: 1; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover { background: #0056b3; }
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-height: 80vh;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        pre {
+            margin: 0;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .stats {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        .loading { text-align: center; padding: 40px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Wenning日志查看器</h1>
+        <div class="controls">
+            <div class="control-row">
+                <label>日志文件:</label>
+                <select id="logFile">
+                    <option value="">-- 加载中 --</option>
+                </select>
+                <label>显示行数:</label>
+                <select id="lines">
+                    <option value="50">50行</option>
+                    <option value="100" selected>100行</option>
+                    <option value="200">200行</option>
+                    <option value="500">500行</option>
+                    <option value="1000">1000行</option>
+                    <option value="all">全部</option>
+                </select>
+            </div>
+            <div class="control-row">
+                <label>搜索关键字:</label>
+                <input type="text" id="search" placeholder="输入关键字，如: manage_images_view">
+                <button onclick="loadLogs()">📊 查看日志</button>
+                <button onclick="autoRefresh()" id="refreshBtn">🔄 自动刷新(5s)</button>
+            </div>
+        </div>
+        <div id="statsDiv"></div>
+        <div class="log-container" id="logContainer">
+            <div class="loading">正在加载日志文件列表...</div>
+        </div>
+    </div>
+    <script>
+        let autoRefreshInterval = null;
+        window.onload = function() { loadFileList(); };
+
+        function loadFileList() {
+            fetch('/api/logs/files')
+                .then(r => r.json())
+                .then(data => {
+                    const select = document.getElementById('logFile');
+                    select.innerHTML = '';
+                    if (data.files.length === 0) {
+                        select.innerHTML = '<option value="">-- 无日志文件 --</option>';
+                        document.getElementById('logContainer').innerHTML =
+                            '<div class="loading">logs/目录下没有.log文件</div>';
+                        return;
+                    }
+                    data.files.forEach(f => {
+                        const option = document.createElement('option');
+                        option.value = f.name;
+                        option.textContent = `${f.name} (${formatSize(f.size)})`;
+                        select.appendChild(option);
+                    });
+                    document.getElementById('logContainer').innerHTML =
+                        '<div class="loading">选择日志文件并点击"查看日志"</div>';
+                })
+                .catch(err => {
+                    document.getElementById('logContainer').innerHTML =
+                        `<div class="loading">加载文件列表失败: ${err.message}</div>`;
+                });
+        }
+
+        function loadLogs() {
+            const logFile = document.getElementById('logFile').value;
+            const lines = document.getElementById('lines').value;
+            const search = document.getElementById('search').value;
+            if (!logFile) { alert('请选择日志文件'); return; }
+
+            let url = `/api/logs/${logFile}?lines=${lines}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+
+            document.getElementById('logContainer').innerHTML = '<div class="loading">加载中...</div>';
+            document.getElementById('statsDiv').innerHTML = '';
+
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    let stats = `📊 总行数: ${data.total_lines}`;
+                    if (data.filtered_lines !== data.total_lines) {
+                        stats += ` | 🔍 匹配行数: ${data.filtered_lines}`;
+                    }
+                    stats += ` | 📄 显示行数: ${data.shown_lines}`;
+                    document.getElementById('statsDiv').innerHTML =
+                        `<div class="stats">${stats}</div>`;
+                    const content = data.content || '（空）';
+                    document.getElementById('logContainer').innerHTML =
+                        `<pre>${escapeHtml(content)}</pre>`;
+                })
+                .catch(err => {
+                    document.getElementById('logContainer').innerHTML =
+                        `<div class="loading" style="color: #f44336;">加载失败: ${err.message}</div>`;
+                });
+        }
+
+        function autoRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                btn.textContent = '🔄 自动刷新(5s)';
+                btn.style.background = '#007bff';
+            } else {
+                loadLogs();
+                autoRefreshInterval = setInterval(loadLogs, 5000);
+                btn.textContent = '⏹️ 停止刷新';
+                btn.style.background = '#dc3545';
+            }
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.getElementById('search').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') loadLogs();
+        });
+
+        window.onbeforeunload = function() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+        };
+    </script>
+</body>
+</html>"""
+    return Response(content=html, media_type="text/html")
+
+
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
