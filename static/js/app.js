@@ -573,6 +573,8 @@ async function loadConversation(convId) {
                 const msg = deduped[i];
 
                 if (msg.role === 'user') {
+                    // 每次遇到新的user消息，重置iter计数为0
+                    currentIter = 0;
                     ui.addUserMessage(msg.content);
                 } else if (msg.role === 'assistant') {
                     // 检查是否有工具调用 - 如果有，说明开始新的迭代轮次

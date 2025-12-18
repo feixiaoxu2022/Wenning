@@ -58,6 +58,12 @@ class UI {
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg>';
     }
 
+    /** 创建成功复制的checkmark图标SVG */
+    _checkmarkSvg() {
+        // check-circle icon
+        return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+    }
+
     /** 创建思考图标SVG */
     _thinkingSvg() {
         // message-circle icon (思考气泡)
@@ -126,8 +132,25 @@ class UI {
             try {
                 const ok = await this.copyText(String(await getText() || ''));
                 const oldTitle = btn.title;
-                btn.title = ok ? '已复制' : '复制失败';
-                setTimeout(() => { btn.title = oldTitle || '复制'; }, 1200);
+
+                if (ok) {
+                    // 复制成功 - 显示视觉反馈
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = this._checkmarkSvg();
+                    btn.title = '已复制';
+                    btn.style.color = '#22c55e'; // 绿色
+
+                    // 1200ms后恢复原状
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.title = oldTitle || '复制';
+                        btn.style.color = '';
+                    }, 1200);
+                } else {
+                    // 复制失败
+                    btn.title = '复制失败';
+                    setTimeout(() => { btn.title = oldTitle || '复制'; }, 1200);
+                }
             } catch (_) {}
         });
         targetEl.appendChild(btn);
@@ -162,8 +185,28 @@ class UI {
             try {
                 const ok = await this.copyText(String(await getText() || ''));
                 const oldTitle = btn.title;
-                btn.title = ok ? '已复制' : '复制失败';
-                setTimeout(() => { btn.title = oldTitle || '复制'; }, 1200);
+
+                if (ok) {
+                    // 复制成功 - 显示视觉反馈
+                    const originalHTML = btn.innerHTML;
+                    const textSpan = btn.querySelector('.copy-text');
+
+                    // 更新图标和文字
+                    btn.innerHTML = `${this._checkmarkSvg()} <span class="copy-text">已复制</span>`;
+                    btn.title = '已复制';
+                    btn.style.color = '#22c55e'; // 绿色
+
+                    // 1200ms后恢复原状
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.title = oldTitle || '复制';
+                        btn.style.color = '';
+                    }, 1200);
+                } else {
+                    // 复制失败
+                    btn.title = '复制失败';
+                    setTimeout(() => { btn.title = oldTitle || '复制'; }, 1200);
+                }
             } catch (err) {}
         });
         targetEl.appendChild(btn);
@@ -280,11 +323,58 @@ class UI {
             if (!el) return;
             const lower = (obj.filename || '').toLowerCase();
             try {
-                if (lower.endsWith('.xlsx')) this.loadExcelIntoContainer(obj.filename, el);
-                else if (/(\.png|\.jpg|\.jpeg|\.svg|\.gif|\.webp|\.avif)$/.test(lower)) this.loadImageIntoContainer(obj.filename, el);
-                else if (/(\.mp3|\.wav|\.m4a|\.aac|\.ogg|\.flac)$/.test(lower)) this.loadAudioIntoContainer(obj.filename, el);
-                else if (/(\.mp4|\.webm|\.mov)$/.test(lower)) this.loadVideoIntoContainer(obj.filename, el);
-                else if (lower.endsWith('.html')) this.loadHtmlIntoContainer(obj.filename, el);
+                // Excel文件
+                if (lower.endsWith('.xlsx')) {
+                    this.loadExcelIntoContainer(obj.filename, el);
+                }
+                // 图片文件
+                else if (/(\.png|\.jpg|\.jpeg|\.svg|\.gif|\.webp|\.avif)$/.test(lower)) {
+                    this.loadImageIntoContainer(obj.filename, el);
+                }
+                // 音频文件
+                else if (/(\.mp3|\.wav|\.m4a|\.aac|\.ogg|\.flac)$/.test(lower)) {
+                    this.loadAudioIntoContainer(obj.filename, el);
+                }
+                // 视频文件
+                else if (/(\.mp4|\.webm|\.mov)$/.test(lower)) {
+                    this.loadVideoIntoContainer(obj.filename, el);
+                }
+                // HTML文件
+                else if (lower.endsWith('.html')) {
+                    this.loadHtmlIntoContainer(obj.filename, el);
+                }
+                // PowerPoint文件
+                else if (lower.endsWith('.pptx')) {
+                    this.loadPptxIntoContainer(obj.filename, el);
+                }
+                // Word文档
+                else if (/(\.doc|\.docx)$/.test(lower)) {
+                    this.loadWordIntoContainer(obj.filename, el);
+                }
+                // PDF文件
+                else if (lower.endsWith('.pdf')) {
+                    this.loadPdfIntoContainer(obj.filename, el);
+                }
+                // ZIP文件
+                else if (lower.endsWith('.zip')) {
+                    this.loadZipIntoContainer(obj.filename, el);
+                }
+                // JSONL文件
+                else if (lower.endsWith('.jsonl')) {
+                    this.loadJsonlIntoContainer(obj.filename, el);
+                }
+                // JSON文件
+                else if (lower.endsWith('.json')) {
+                    this.loadJsonIntoContainer(obj.filename, el);
+                }
+                // Markdown文件
+                else if (lower.endsWith('.md')) {
+                    this.loadMarkdownIntoContainer(obj.filename, el);
+                }
+                // 文本文件（支持多种扩展名）
+                else if (/\.(txt|log|yaml|yml|toml|ini|cfg|conf|xml|py|js|ts|tsx|jsx|java|go|rs|c|cpp|h|cs|rb|php|sh|bash|zsh|sql|csv)$/i.test(lower)) {
+                    this.loadTextIntoContainer(obj.filename, el);
+                }
             } catch (e) {
                 console.warn('[UI] refresh file failed:', obj.filename, e);
             }
