@@ -97,6 +97,13 @@ async function initAppAfterAuth() {
         console.log('[App] Showcase已初始化');
     }
     console.log('[App] 应用就绪');
+
+    // ✅ 只有在用户成功登录/认证后，才触发首次引导
+    setTimeout(() => {
+        if (productTour) {
+            productTour.autoStartForFirstTime();
+        }
+    }, 1500);
 }
 
 function showAuthOverlay() {
@@ -1871,7 +1878,7 @@ const feedbackModal = {
 document.addEventListener('DOMContentLoaded', () => {
     feedbackModal.init();
 
-    // 绑定帮助导览按钮
+    // 绑定帮助导览按钮（手动触发）
     const helpTourBtn = document.getElementById('help-tour-btn');
     if (helpTourBtn) {
         helpTourBtn.addEventListener('click', () => {
@@ -1882,11 +1889,4 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    // 首次访问自动启动导览（延迟执行，确保所有DOM准备就绪）
-    setTimeout(() => {
-        if (productTour) {
-            productTour.autoStartForFirstTime();
-        }
-    }, 1500);
 });
