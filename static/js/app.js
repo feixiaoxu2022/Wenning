@@ -1073,6 +1073,10 @@ function initFileListCollapse() {
         e.preventDefault();
         e.stopPropagation();
         fileTabsContainer.classList.add('collapsed');
+        console.log('[文件列表] 已折叠，展开按钮应该显示在预览区域左上角');
+        console.log('[调试] collapsed类已添加:', fileTabsContainer.classList.contains('collapsed'));
+        console.log('[调试] 展开按钮元素:', expandBtn);
+        console.log('[调试] 展开按钮display样式:', window.getComputedStyle(expandBtn).display);
         try {
             localStorage.setItem('fileListCollapsed', 'true');
         } catch (_) {}
@@ -1083,6 +1087,7 @@ function initFileListCollapse() {
         e.preventDefault();
         e.stopPropagation();
         fileTabsContainer.classList.remove('collapsed');
+        console.log('[文件列表] 已展开');
         try {
             localStorage.setItem('fileListCollapsed', 'false');
         } catch (_) {}
