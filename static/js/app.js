@@ -562,7 +562,9 @@ async function loadConversation(convId) {
             let currentIter = 0;
 
             // 使用for...of替代forEach，支持async/await
-            for (const msg of deduped) {
+            for (let i = 0; i < deduped.length; i++) {
+                const msg = deduped[i];
+
                 if (msg.role === 'user') {
                     ui.addUserMessage(msg.content);
                 } else if (msg.role === 'assistant') {
@@ -611,8 +613,31 @@ async function loadConversation(convId) {
                     // 关键修复：等待async方法完成
                     const resultBox = await ui.showResult({ status: 'success', result: content }, false); // 禁用打字机效果
 
-                    // 为历史assistant消息添加反馈按钮
-                    if (msg.id && resultBox) {
+                    // 判断是否应该添加反馈按钮：
+                    // 只有当这条assistant消息是"最终回复"时才添加反馈按钮
+                    // 判断标准：下一条消息是user消息，或者这是对话历史中的最后一条消息
+                    const shouldAttachFeedback = (() => {
+                        // 查找下一条非tool消息
+                        for (let j = i + 1; j < deduped.length; j++) {
+                            const nextMsg = deduped[j];
+                            if (nextMsg.role === 'tool') {
+                                continue; // 跳过tool消息
+                            }
+                            // 如果下一条是user消息，说明当前assistant是最终回复
+                            if (nextMsg.role === 'user') {
+                                return true;
+                            }
+                            // 如果下一条是assistant消息，说明当前不是最终回复
+                            if (nextMsg.role === 'assistant') {
+                                return false;
+                            }
+                        }
+                        // 如果没有找到下一条消息，说明这是对话历史中的最后一条
+                        return true;
+                    })();
+
+                    // 只为最终回复消息添加反馈按钮
+                    if (shouldAttachFeedback && msg.id && resultBox) {
                         ui.attachFeedbackButtons(resultBox, msg.id, msg.feedback);
                     }
 
