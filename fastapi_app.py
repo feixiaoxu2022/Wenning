@@ -19,7 +19,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from src.utils.config import get_config
 from src.agent.master_agent import MasterAgent
 from src.tools.registry import ToolRegistry
-from src.tools.atomic.web_search import WebSearchTool
+from src.tools.atomic.web_search_with_tracking import WebSearchWithTrackingTool
 from src.tools.atomic.url_fetch import URLFetchTool
 from src.tools.atomic.code_executor import CodeExecutor
 from src.tools.atomic.shell_executor import ShellExecutor
@@ -112,7 +112,7 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
         tool_registry = ToolRegistry()
 
         # 1. 核心工具（优先级最高）
-        tool_registry.register_atomic_tool(WebSearchTool(config))
+        tool_registry.register_atomic_tool(WebSearchWithTrackingTool(config))
         tool_registry.register_atomic_tool(URLFetchTool(config))
         tool_registry.register_atomic_tool(CodeExecutor(config, conv_manager))
         tool_registry.register_atomic_tool(ManageImagesViewTool(config, conv_manager))  # 视觉控制
