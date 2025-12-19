@@ -302,6 +302,9 @@ class LLMClient:
         system_parts: List[str] = []
         anth_msgs: List[Dict[str, Any]] = []
 
+        # 收集所有tool_use的ID，用于验证tool_result
+        valid_tool_use_ids: set = set()
+
         for m in messages:
             role = (m.get("role") or "user").lower()
             content = m.get("content")
@@ -315,6 +318,12 @@ class LLMClient:
             if role == "tool":
                 # 工具结果 → user消息中的tool_result块
                 tool_use_id = m.get("tool_call_id") or m.get("id") or ""
+
+                # 验证：只有当tool_use_id在前面的assistant消息中出现过时才添加tool_result
+                if tool_use_id not in valid_tool_use_ids:
+                    logger.warning(f"跳过孤立的tool消息: tool_call_id={tool_use_id} 没有对应的tool_use")
+                    continue
+
                 result_text = str(m.get("content") or "")
                 anth_msgs.append({
                     "role": "user",
@@ -342,6 +351,10 @@ class LLMClient:
                     except Exception:
                         args_obj = {}
                     tid = (tc or {}).get("id") or f"tu_{int(time.time()*1000)}_{i}"
+
+                    # 记录这个tool_use_id为有效ID
+                    valid_tool_use_ids.add(tid)
+
                     blocks.append({
                         "type": "tool_use",
                         "id": tid,
