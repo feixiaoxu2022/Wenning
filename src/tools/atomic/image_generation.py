@@ -114,53 +114,42 @@ class ImageGeneration(BaseAtomicTool):
         logger.info(f"ImageGeneration 初始化: backend={self.backend}, model={self.model}")
 
     def execute(self, **kwargs) -> Dict[str, Any]:
-        # BaseAtomicTool 需要此方法；真实逻辑在 run()
-        return {}
+        """执行图像生成的核心逻辑"""
+        # 提取通用参数
+        prompt: str = (kwargs.get("prompt") or "").strip()
+        conv_id: str = kwargs.get("conversation_id")
+        aspect_ratio: str = kwargs.get("aspect_ratio") or "16:9"
+        n: int = int(kwargs.get("n") or 1)
+        quality: str = kwargs.get("quality") or "standard"
+        filename_prefix: str = kwargs.get("filename_prefix") or "generated_image"
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """执行图像生成"""
-        self.status = ToolStatus.RUNNING
+        # 参数验证
+        if not prompt:
+            raise RuntimeError("prompt不能为空")
+        if not conv_id:
+            raise RuntimeError("conversation_id缺失")
+        if not self.api_key:
+            raise RuntimeError("缺少图像生成API密钥配置")
 
-        try:
-            # 提取通用参数
-            prompt: str = (kwargs.get("prompt") or "").strip()
-            conv_id: str = kwargs.get("conversation_id")
-            aspect_ratio: str = kwargs.get("aspect_ratio") or "16:9"
-            n: int = int(kwargs.get("n") or 1)
-            quality: str = kwargs.get("quality") or "standard"
-            filename_prefix: str = kwargs.get("filename_prefix") or "generated_image"
+        # 输出路径（使用带时间戳的输出目录名）
+        if not self.conv_manager:
+            raise RuntimeError("系统配置错误: 缺少conv_manager")
 
-            # 参数验证
-            if not prompt:
-                return {"status": "failed", "error": "prompt不能为空"}
-            if not conv_id:
-                return {"status": "failed", "error": "conversation_id缺失"}
-            if not self.api_key:
-                return {"status": "failed", "error": "缺少图像生成API密钥配置"}
+        output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
+        work_dir = self.output_dir / output_dir_name
+        work_dir.mkdir(parents=True, exist_ok=True)
 
-            # 输出路径（使用带时间戳的输出目录名）
-            if not self.conv_manager:
-                return {"status": "failed", "error": "系统配置错误: 缺少conv_manager"}
-
-            output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
-            work_dir = self.output_dir / output_dir_name
-            work_dir.mkdir(parents=True, exist_ok=True)
-
-            # 根据后端调用不同的生成方法
-            if self.backend == "gemini":
-                return self._generate_with_gemini(
-                    prompt, work_dir, aspect_ratio, n, quality, filename_prefix
-                )
-            elif self.backend == "minimax":
-                return self._generate_with_minimax(
-                    prompt, work_dir, aspect_ratio, n, quality, filename_prefix
-                )
-            else:
-                return {"status": "failed", "error": f"不支持的后端: {self.backend}"}
-
-        except Exception as e:
-            logger.error(f"image_generation 执行失败: {e}")
-            return {"status": "failed", "error": str(e)}
+        # 根据后端调用不同的生成方法
+        if self.backend == "gemini":
+            return self._generate_with_gemini(
+                prompt, work_dir, aspect_ratio, n, quality, filename_prefix
+            )
+        elif self.backend == "minimax":
+            return self._generate_with_minimax(
+                prompt, work_dir, aspect_ratio, n, quality, filename_prefix
+            )
+        else:
+            raise RuntimeError(f"不支持的后端: {self.backend}")
 
     def _generate_with_gemini(
         self,
@@ -192,68 +181,60 @@ class ImageGeneration(BaseAtomicTool):
 
         logger.info(f"调用 Gemini Image Generation API: model={self.model}, prompt={prompt[:50]}...")
 
-        try:
-            response = requests.post(
-                self.api_url,
-                headers=headers,
-                json=payload,
-                timeout=self.timeout
-            )
+        response = requests.post(
+            self.api_url,
+            headers=headers,
+            json=payload,
+            timeout=self.timeout
+        )
 
-            if response.status_code != 200:
-                error_msg = f"Gemini API 错误: HTTP {response.status_code}, {response.text}"
-                logger.error(error_msg)
-                return {"status": "failed", "error": error_msg}
+        if response.status_code != 200:
+            error_msg = f"Gemini API 错误: HTTP {response.status_code}, {response.text}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-            result = response.json()
+        result = response.json()
 
-            # 提取并保存图像（Gemini 返回格式）
-            generated_files = []
-            images_data = []
+        # 提取并保存图像（Gemini 返回格式）
+        generated_files = []
+        images_data = []
 
-            if "candidates" in result:
-                for i, candidate in enumerate(result["candidates"]):
-                    if "content" in candidate and "parts" in candidate["content"]:
-                        for j, part in enumerate(candidate["content"]["parts"]):
-                            if "inlineData" in part:
-                                # Base64 编码的图像
-                                mime_type = part["inlineData"].get("mimeType", "image/png")
-                                data = part["inlineData"].get("data", "")
+        if "candidates" in result:
+            for i, candidate in enumerate(result["candidates"]):
+                if "content" in candidate and "parts" in candidate["content"]:
+                    for j, part in enumerate(candidate["content"]["parts"]):
+                        if "inlineData" in part:
+                            # Base64 编码的图像
+                            mime_type = part["inlineData"].get("mimeType", "image/png")
+                            data = part["inlineData"].get("data", "")
 
-                                if data:
-                                    ext = mime_type.split("/")[-1]
-                                    filename = f"{filename_prefix}_{len(generated_files)+1}.{ext}"
-                                    file_path = work_dir / filename
+                            if data:
+                                ext = mime_type.split("/")[-1]
+                                filename = f"{filename_prefix}_{len(generated_files)+1}.{ext}"
+                                file_path = work_dir / filename
 
-                                    # 解码并保存
-                                    file_path.write_bytes(base64.b64decode(data))
-                                    generated_files.append(filename)
+                                # 解码并保存
+                                file_path.write_bytes(base64.b64decode(data))
+                                generated_files.append(filename)
 
-                                    images_data.append({
-                                        "filename": filename,
-                                        "index": len(generated_files),
-                                        "mime_type": mime_type
-                                    })
-                                    logger.info(f"图像 {len(generated_files)} 保存成功: {filename}")
+                                images_data.append({
+                                    "filename": filename,
+                                    "index": len(generated_files),
+                                    "mime_type": mime_type
+                                })
+                                logger.info(f"图像 {len(generated_files)} 保存成功: {filename}")
 
-            if not generated_files:
-                return {"status": "failed", "error": "未能从Gemini响应中提取图像数据"}
+        if not generated_files:
+            raise RuntimeError("未能从Gemini响应中提取图像数据")
 
-            return {
-                "status": "success",
-                "data": {
-                    "backend": "gemini",
-                    "model": self.model,
-                    "prompt": prompt,
-                    "count": len(generated_files),
-                    "images": images_data
-                },
-                "generated_files": generated_files
-            }
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Gemini API 网络请求失败: {e}")
-            return {"status": "failed", "error": f"网络请求失败: {str(e)}"}
+        return {
+            "backend": "gemini",
+            "model": self.model,
+            "prompt": prompt,
+            "count": len(generated_files),
+            "images": images_data,
+            "generated_files": generated_files
+        }
 
     def _generate_with_minimax(
         self,
@@ -283,74 +264,66 @@ class ImageGeneration(BaseAtomicTool):
 
         logger.info(f"调用 MiniMax Image Generation API: model={self.model}, aspect_ratio={aspect_ratio}, n={n}")
 
-        try:
-            response = requests.post(
-                self.api_url,
-                headers=headers,
-                json=payload,
-                timeout=self.timeout
-            )
+        response = requests.post(
+            self.api_url,
+            headers=headers,
+            json=payload,
+            timeout=self.timeout
+        )
 
-            if response.status_code != 200:
-                error_msg = f"MiniMax API 错误: HTTP {response.status_code}, {response.text}"
-                logger.error(error_msg)
-                return {"status": "failed", "error": error_msg}
+        if response.status_code != 200:
+            error_msg = f"MiniMax API 错误: HTTP {response.status_code}, {response.text}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-            result = response.json()
+        result = response.json()
 
-            # 检查 base_resp
-            base_resp = result.get("base_resp", {})
-            if base_resp.get("status_code") != 0:
-                error_msg = base_resp.get("status_msg", "未知错误")
-                return {"status": "failed", "error": f"MiniMax API 失败: {error_msg}"}
+        # 检查 base_resp
+        base_resp = result.get("base_resp", {})
+        if base_resp.get("status_code") != 0:
+            error_msg = base_resp.get("status_msg", "未知错误")
+            raise RuntimeError(f"MiniMax API 失败: {error_msg}")
 
-            # 提取并保存图像
-            generated_files = []
-            images_data = []
+        # 提取并保存图像
+        generated_files = []
+        images_data = []
 
-            if "data" in result and "image_urls" in result["data"]:
-                image_urls = result["data"]["image_urls"]
+        if "data" in result and "image_urls" in result["data"]:
+            image_urls = result["data"]["image_urls"]
 
-                for idx, image_url in enumerate(image_urls):
-                    try:
-                        # 下载图像
-                        img_response = requests.get(image_url, timeout=30)
-                        if img_response.status_code == 200:
-                            image_data = img_response.content
+            for idx, image_url in enumerate(image_urls):
+                try:
+                    # 下载图像
+                    img_response = requests.get(image_url, timeout=30)
+                    if img_response.status_code == 200:
+                        image_data = img_response.content
 
-                            filename = f"{filename_prefix}_{idx+1}.png"
-                            file_path = work_dir / filename
-                            file_path.write_bytes(image_data)
-                            generated_files.append(filename)
+                        filename = f"{filename_prefix}_{idx+1}.png"
+                        file_path = work_dir / filename
+                        file_path.write_bytes(image_data)
+                        generated_files.append(filename)
 
-                            images_data.append({
-                                "filename": filename,
-                                "index": idx + 1,
-                                "url": image_url
-                            })
-                            logger.info(f"图像 {idx+1} 保存成功: {filename}")
-                        else:
-                            logger.warning(f"下载图像 {idx+1} 失败: HTTP {img_response.status_code}")
-                    except Exception as e:
-                        logger.warning(f"下载图像 {idx+1} 异常: {e}")
-                        continue
+                        images_data.append({
+                            "filename": filename,
+                            "index": idx + 1,
+                            "url": image_url
+                        })
+                        logger.info(f"图像 {idx+1} 保存成功: {filename}")
+                    else:
+                        logger.warning(f"下载图像 {idx+1} 失败: HTTP {img_response.status_code}")
+                except Exception as e:
+                    logger.warning(f"下载图像 {idx+1} 异常: {e}")
+                    continue
 
-            if not generated_files:
-                return {"status": "failed", "error": "未能从MiniMax响应中提取图像数据"}
+        if not generated_files:
+            raise RuntimeError("未能从MiniMax响应中提取图像数据")
 
-            return {
-                "status": "success",
-                "data": {
-                    "backend": "minimax",
-                    "model": self.model,
-                    "prompt": prompt,
-                    "aspect_ratio": aspect_ratio,
-                    "count": len(generated_files),
-                    "images": images_data
-                },
-                "generated_files": generated_files
-            }
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"MiniMax API 网络请求失败: {e}")
-            return {"status": "failed", "error": f"网络请求失败: {str(e)}"}
+        return {
+            "backend": "minimax",
+            "model": self.model,
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "count": len(generated_files),
+            "images": images_data,
+            "generated_files": generated_files
+        }

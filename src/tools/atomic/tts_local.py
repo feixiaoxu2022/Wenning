@@ -48,129 +48,123 @@ class TTSLocal(BaseAtomicTool):
         self.output_dir = config.output_dir
 
     def execute(self, **kwargs) -> Dict[str, Any]:
-        """满足抽象基类要求；实际逻辑在 run()，此处返回空数据。"""
-        return {}
+        """执行工具逻辑
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        self.status = ToolStatus.RUNNING
-        try:
-            text: str = kwargs.get("text", "").strip()
-            voice: Optional[str] = kwargs.get("voice")
-            rate: Optional[int] = kwargs.get("rate")
-            fmt: str = (kwargs.get("format") or "wav").lower()
-            filename: Optional[str] = kwargs.get("filename")
-            conv_id: str = kwargs.get("conversation_id")
-            output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
-            timeout: int = int(kwargs.get("timeout") or self.timeout)
+        由基类的run()方法调用，返回纯数据dict或抛出异常
+        """
+        text: str = kwargs.get("text", "").strip()
+        voice: Optional[str] = kwargs.get("voice")
+        rate: Optional[int] = kwargs.get("rate")
+        fmt: str = (kwargs.get("format") or "wav").lower()
+        filename: Optional[str] = kwargs.get("filename")
+        conv_id: str = kwargs.get("conversation_id")
+        output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
+        timeout: int = int(kwargs.get("timeout") or self.timeout)
 
-            if not text:
-                return {"status": "failed", "error": "text不能为空"}
-            if not conv_id:
-                return {"status": "failed", "error": "conversation_id缺失"}
-            if not output_dir_name:
-                return {"status": "failed", "error": "缺少_output_dir_name参数（应由master_agent自动注入）"}
+        if not text:
+            raise RuntimeError("text不能为空")
+        if not conv_id:
+            raise RuntimeError("conversation_id缺失")
+        if not output_dir_name:
+            raise RuntimeError("缺少_output_dir_name参数（应由master_agent自动注入）")
 
-            # 规范化会话ID（防止传入 'outputs/<id>' 或包含路径）
-            from pathlib import Path as _P
-            conv_id = _P(str(conv_id)).name
+        # 规范化会话ID（防止传入 'outputs/<id>' 或包含路径）
+        from pathlib import Path as _P
+        conv_id = _P(str(conv_id)).name
 
-            work_dir = self.output_dir / output_dir_name
-            work_dir.mkdir(parents=True, exist_ok=True)
+        work_dir = self.output_dir / output_dir_name
+        work_dir.mkdir(parents=True, exist_ok=True)
 
-            sysname = platform.system().lower()
-            gen_files: List[str] = []
+        sysname = platform.system().lower()
+        gen_files: List[str] = []
 
-            # 默认目标文件名
-            if not filename:
-                filename = f"narration.{fmt}"
+        # 默认目标文件名
+        if not filename:
+            filename = f"narration.{fmt}"
 
-            if sysname == "darwin":
-                # macOS: say -> AIFF，再可转 wav/m4a
-                aiff_name = Path(filename).with_suffix(".aiff").name
-                aiff_path = work_dir / aiff_name
-                # 构造 say 命令
-                cmd = ["say"]
-                if voice:
-                    cmd += ["-v", voice]
-                if rate:
-                    cmd += ["-r", str(rate)]
-                cmd += ["-o", aiff_name, text]
-
-                logger.info(f"TTSLocal: say command: {' '.join(shlex.quote(c) for c in cmd)} (cwd={work_dir})")
-                r = subprocess.run(cmd, cwd=str(work_dir), capture_output=True, text=True, timeout=timeout)
-                if r.returncode != 0:
-                    msg = (r.stderr or r.stdout or "").strip()
-                    # 常见：指定 voice 不存在，自动降级为系统默认
-                    if "Voice" in msg and "not found" in msg:
-                        logger.warning(f"TTSLocal: 指定voice不可用({voice})，自动降级为系统默认")
-                        cmd_fallback = ["say"]
-                        if rate:
-                            cmd_fallback += ["-r", str(rate)]
-                        cmd_fallback += ["-o", aiff_name, text]
-                        r2 = subprocess.run(cmd_fallback, cwd=str(work_dir), capture_output=True, text=True, timeout=timeout)
-                        if r2.returncode != 0:
-                            return {"status": "failed", "error": f"say失败: {r2.stderr.strip() or r2.stdout.strip()}"}
-                    else:
-                        return {"status": "failed", "error": f"say失败: {msg}"}
-
-                gen_files.append(aiff_name)
-
-                # 需要转换格式
-                if fmt in ("wav", "m4a"):
-                    out_path = work_dir / filename
-                    if fmt == "wav":
-                        ffmpeg_cmd = [
-                            "ffmpeg", "-y", "-i", aiff_name,
-                            "-ar", "44100", "-ac", "2",
-                            out_path.name,
-                        ]
-                    else:  # m4a (aac in mp4)
-                        ffmpeg_cmd = [
-                            "ffmpeg", "-y", "-i", aiff_name,
-                            "-c:a", "aac", "-b:a", "128k",
-                            out_path.name,
-                        ]
-                    logger.info(f"TTSLocal: ffmpeg command: {' '.join(shlex.quote(c) for c in ffmpeg_cmd)}")
-                    rr = subprocess.run(ffmpeg_cmd, cwd=str(work_dir), capture_output=True, text=True, timeout=timeout)
-                    if rr.returncode != 0:
-                        return {"status": "failed", "error": f"ffmpeg转码失败: {rr.stderr.strip() or rr.stdout.strip()}"}
-                    gen_files.append(out_path.name)
-
-                return {"status": "success", "data": {"voice": voice, "rate": rate, "format": fmt}, "generated_files": gen_files}
-
-            # 其他平台: 尝试pyttsx3
-            try:
-                import pyttsx3  # type: ignore
-            except Exception:
-                return {"status": "failed", "error": "非macOS且未安装pyttsx3，无法离线TTS。可改用ShellExecutor+系统TTS，或启用云TTS。"}
-
-            engine = pyttsx3.init()
+        if sysname == "darwin":
+            # macOS: say -> AIFF，再可转 wav/m4a
+            aiff_name = Path(filename).with_suffix(".aiff").name
+            aiff_path = work_dir / aiff_name
+            # 构造 say 命令
+            cmd = ["say"]
             if voice:
-                # 尝试匹配包含voice关键字的id/name
-                try:
-                    for v in engine.getProperty("voices"):
-                        if voice.lower() in (v.id or "").lower() or voice.lower() in (v.name or "").lower():
-                            engine.setProperty("voice", v.id)
-                            break
-                except Exception:
-                    pass
+                cmd += ["-v", voice]
             if rate:
-                try:
-                    engine.setProperty("rate", int(rate))
-                except Exception:
-                    pass
+                cmd += ["-r", str(rate)]
+            cmd += ["-o", aiff_name, text]
 
-            # pyttsx3 保存到 wav
-            out = work_dir / (Path(filename).with_suffix(".wav").name)
+            logger.info(f"TTSLocal: say command: {' '.join(shlex.quote(c) for c in cmd)} (cwd={work_dir})")
+            r = subprocess.run(cmd, cwd=str(work_dir), capture_output=True, text=True, timeout=timeout)
+            if r.returncode != 0:
+                msg = (r.stderr or r.stdout or "").strip()
+                # 常见：指定 voice 不存在，自动降级为系统默认
+                if "Voice" in msg and "not found" in msg:
+                    logger.warning(f"TTSLocal: 指定voice不可用({voice})，自动降级为系统默认")
+                    cmd_fallback = ["say"]
+                    if rate:
+                        cmd_fallback += ["-r", str(rate)]
+                    cmd_fallback += ["-o", aiff_name, text]
+                    r2 = subprocess.run(cmd_fallback, cwd=str(work_dir), capture_output=True, text=True, timeout=timeout)
+                    if r2.returncode != 0:
+                        raise RuntimeError(f"say失败: {r2.stderr.strip() or r2.stdout.strip()}")
+                else:
+                    raise RuntimeError(f"say失败: {msg}")
+
+            gen_files.append(aiff_name)
+
+            # 需要转换格式
+            if fmt in ("wav", "m4a"):
+                out_path = work_dir / filename
+                if fmt == "wav":
+                    ffmpeg_cmd = [
+                        "ffmpeg", "-y", "-i", aiff_name,
+                        "-ar", "44100", "-ac", "2",
+                        out_path.name,
+                    ]
+                else:  # m4a (aac in mp4)
+                    ffmpeg_cmd = [
+                        "ffmpeg", "-y", "-i", aiff_name,
+                        "-c:a", "aac", "-b:a", "128k",
+                        out_path.name,
+                    ]
+                logger.info(f"TTSLocal: ffmpeg command: {' '.join(shlex.quote(c) for c in ffmpeg_cmd)}")
+                rr = subprocess.run(ffmpeg_cmd, cwd=str(work_dir), capture_output=True, text=True, timeout=timeout)
+                if rr.returncode != 0:
+                    raise RuntimeError(f"ffmpeg转码失败: {rr.stderr.strip() or rr.stdout.strip()}")
+                gen_files.append(out_path.name)
+
+            return {"voice": voice, "rate": rate, "format": fmt, "generated_files": gen_files}
+
+        # 其他平台: 尝试pyttsx3
+        try:
+            import pyttsx3  # type: ignore
+        except Exception:
+            raise RuntimeError("非macOS且未安装pyttsx3，无法离线TTS。可改用ShellExecutor+系统TTS，或启用云TTS。")
+
+        engine = pyttsx3.init()
+        if voice:
+            # 尝试匹配包含voice关键字的id/name
             try:
-                engine.save_to_file(text, str(out))
-                engine.runAndWait()
-            except Exception as e:
-                return {"status": "failed", "error": f"pyttsx3合成失败: {e}"}
+                for v in engine.getProperty("voices"):
+                    if voice.lower() in (v.id or "").lower() or voice.lower() in (v.name or "").lower():
+                        engine.setProperty("voice", v.id)
+                        break
+            except Exception:
+                pass
+        if rate:
+            try:
+                engine.setProperty("rate", int(rate))
+            except Exception:
+                pass
 
-            gen_files.append(out.name)
-            return {"status": "success", "data": {"voice": voice, "rate": rate, "format": "wav"}, "generated_files": gen_files}
-
+        # pyttsx3 保存到 wav
+        out = work_dir / (Path(filename).with_suffix(".wav").name)
+        try:
+            engine.save_to_file(text, str(out))
+            engine.runAndWait()
         except Exception as e:
-            logger.error(f"tts_local执行失败: {e}")
-            return {"status": "failed", "error": str(e)}
+            raise RuntimeError(f"pyttsx3合成失败: {e}")
+
+        gen_files.append(out.name)
+        return {"voice": voice, "rate": rate, "format": "wav", "generated_files": gen_files}

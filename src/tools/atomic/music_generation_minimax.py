@@ -71,11 +71,7 @@ class MusicGenerationMiniMax(BaseAtomicTool):
         self.conv_manager = conv_manager
 
     def execute(self, **kwargs) -> Dict[str, Any]:
-        # BaseAtomicTool 需要此方法；真实逻辑在 run()
-        return {}
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        self.status = ToolStatus.RUNNING
+        """执行音乐生成的核心逻辑"""
         try:
             prompt: str = (kwargs.get("prompt") or "").strip()
             conv_id: str = kwargs.get("conversation_id")

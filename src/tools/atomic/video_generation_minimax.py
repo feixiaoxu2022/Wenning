@@ -76,133 +76,115 @@ class VideoGenerationMiniMax(BaseAtomicTool):
         self.conv_manager = conv_manager
 
     def execute(self, **kwargs) -> Dict[str, Any]:
-        # BaseAtomicTool 需要此方法；真实逻辑在 run()
-        return {}
+        """执行视频生成的核心逻辑"""
+        prompt: str = (kwargs.get("prompt") or "").strip()
+        conv_id: str = kwargs.get("conversation_id")
+        model: str = kwargs.get("model") or "MiniMax-Hailuo-2.3"
+        duration: int = int(kwargs.get("duration") or 6)
+        resolution: str = kwargs.get("resolution") or "1080P"
+        filename: Optional[str] = kwargs.get("filename") or "generated_video.mp4"
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        self.status = ToolStatus.RUNNING
-        try:
-            prompt: str = (kwargs.get("prompt") or "").strip()
-            conv_id: str = kwargs.get("conversation_id")
-            model: str = kwargs.get("model") or "MiniMax-Hailuo-2.3"
-            duration: int = int(kwargs.get("duration") or 6)
-            resolution: str = kwargs.get("resolution") or "1080P"
-            filename: Optional[str] = kwargs.get("filename") or "generated_video.mp4"
+        if not prompt:
+            raise RuntimeError("prompt不能为空")
+        if not conv_id:
+            raise RuntimeError("conversation_id缺失")
 
-            if not prompt:
-                return {"status": "failed", "error": "prompt不能为空"}
-            if not conv_id:
-                return {"status": "failed", "error": "conversation_id缺失"}
+        # 检查凭据
+        if not self.api_key:
+            raise RuntimeError("缺少 MINIMAX_API_KEY 环境变量")
 
-            # 检查凭据
-            if not self.api_key:
-                return {"status": "failed", "error": "缺少 MINIMAX_API_KEY 环境变量"}
+        # 输出路径（使用带时间戳的输出目录名）
+        if not self.conv_manager:
+            raise RuntimeError("系统配置错误: 缺少conv_manager")
 
-            # 输出路径（使用带时间戳的输出目录名）
-            if not self.conv_manager:
-                return {"status": "failed", "error": "系统配置错误: 缺少conv_manager"}
+        output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
+        work_dir = self.output_dir / output_dir_name
+        work_dir.mkdir(parents=True, exist_ok=True)
 
-            output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
-            work_dir = self.output_dir / output_dir_name
-            work_dir.mkdir(parents=True, exist_ok=True)
+        # 构建请求体（严格按照官方文档格式）
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "duration": duration,
+            "resolution": resolution
+        }
 
-            # 构建请求体（严格按照官方文档格式）
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "duration": duration,
-                "resolution": resolution
-            }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+        logger.info(f"调用 MiniMax Video Generation API: model={model}, duration={duration}s, resolution={resolution}")
 
-            logger.info(f"调用 MiniMax Video Generation API: model={model}, duration={duration}s, resolution={resolution}")
+        response = requests.post(
+            self.api_url,
+            headers=headers,
+            json=payload,
+            timeout=self.timeout
+        )
 
-            response = requests.post(
-                self.api_url,
-                headers=headers,
-                json=payload,
-                timeout=self.timeout
-            )
+        if response.status_code != 200:
+            error_msg = f"MiniMax Video Generation API 错误: HTTP {response.status_code}, {response.text}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-            if response.status_code != 200:
-                error_msg = f"MiniMax Video Generation API 错误: HTTP {response.status_code}, {response.text}"
-                logger.error(error_msg)
-                return {"status": "failed", "error": error_msg}
+        result = response.json()
 
-            result = response.json()
+        # 检查 base_resp.status_code
+        base_resp = result.get("base_resp", {})
+        if base_resp.get("status_code") != 0:
+            error_msg = base_resp.get("status_msg", "未知错误")
+            raise RuntimeError(f"MiniMax Video Generation 失败: {error_msg}")
 
-            # 检查 base_resp.status_code
-            base_resp = result.get("base_resp", {})
-            if base_resp.get("status_code") != 0:
-                error_msg = base_resp.get("status_msg", "未知错误")
-                return {"status": "failed", "error": f"MiniMax Video Generation 失败: {error_msg}"}
+        # 视频生成通常是异步的
+        task_id = result.get("data", {}).get("task_id")
+        video_url = result.get("data", {}).get("video_url")
 
-            # 视频生成通常是异步的
-            task_id = result.get("data", {}).get("task_id")
-            video_url = result.get("data", {}).get("video_url")
+        # 情况1: 直接返回视频URL（同步，较少见）
+        if video_url:
+            video_data = self._download_video(video_url)
+            if video_data:
+                file_path = work_dir / filename
+                file_path.write_bytes(video_data)
+                logger.info(f"视频下载成功: {filename}")
 
-            # 情况1: 直接返回视频URL（同步，较少见）
+                return {
+                    "model": model,
+                    "prompt": prompt,
+                    "duration": duration,
+                    "resolution": resolution,
+                    "video_url": video_url,
+                    "file_path": str(file_path),
+                    "generated_files": [filename]
+                }
+
+        # 情况2: 返回task_id，需要轮询（异步，通常情况）
+        elif task_id:
+            logger.info(f"视频生成任务已提交，task_id={task_id}，开始轮询...")
+            video_url = self._poll_task_result(task_id, headers)
+
             if video_url:
                 video_data = self._download_video(video_url)
                 if video_data:
                     file_path = work_dir / filename
                     file_path.write_bytes(video_data)
-                    logger.info(f"视频下载成功: {filename}")
+                    logger.info(f"视频生成并下载成功: {filename}")
 
                     return {
-                        "status": "success",
-                        "data": {
-                            "model": model,
-                            "prompt": prompt,
-                            "duration": duration,
-                            "resolution": resolution,
-                            "video_url": video_url,
-                            "file_path": str(file_path)
-                        },
+                        "model": model,
+                        "prompt": prompt,
+                        "duration": duration,
+                        "resolution": resolution,
+                        "task_id": task_id,
+                        "video_url": video_url,
+                        "file_path": str(file_path),
                         "generated_files": [filename]
                     }
-
-            # 情况2: 返回task_id，需要轮询（异步，通常情况）
-            elif task_id:
-                logger.info(f"视频生成任务已提交，task_id={task_id}，开始轮询...")
-                video_url = self._poll_task_result(task_id, headers)
-
-                if video_url:
-                    video_data = self._download_video(video_url)
-                    if video_data:
-                        file_path = work_dir / filename
-                        file_path.write_bytes(video_data)
-                        logger.info(f"视频生成并下载成功: {filename}")
-
-                        return {
-                            "status": "success",
-                            "data": {
-                                "model": model,
-                                "prompt": prompt,
-                                "duration": duration,
-                                "resolution": resolution,
-                                "task_id": task_id,
-                                "video_url": video_url,
-                                "file_path": str(file_path)
-                            },
-                            "generated_files": [filename]
-                        }
-                else:
-                    return {"status": "failed", "error": "视频生成超时或失败"}
-
             else:
-                return {"status": "failed", "error": "未能从响应中提取task_id或video_url"}
+                raise RuntimeError("视频生成超时或失败")
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"video_generation_minimax 网络请求失败: {e}")
-            return {"status": "failed", "error": f"网络请求失败: {str(e)}"}
-        except Exception as e:
-            logger.error(f"video_generation_minimax 执行失败: {e}")
-            return {"status": "failed", "error": str(e)}
+        else:
+            raise RuntimeError("未能从响应中提取task_id或video_url")
 
     def _poll_task_result(self, task_id: str, headers: dict) -> Optional[str]:
         """轮询任务结果，返回视频URL"""

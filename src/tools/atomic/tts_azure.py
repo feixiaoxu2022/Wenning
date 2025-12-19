@@ -56,73 +56,71 @@ class TTSAzure(BaseAtomicTool):
         self.output_dir = config.output_dir
 
     def execute(self, **kwargs) -> Dict[str, Any]:
-        # 真正逻辑在 run(); 该方法仅满足抽象基类
-        return {}
+        """执行工具逻辑
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        self.status = ToolStatus.RUNNING
+        由基类的run()方法调用，返回纯数据dict或抛出异常
+        """
+        text: str = (kwargs.get("text") or "").strip()
+        conv_id: str = kwargs.get("conversation_id")
+        output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
+        voice_name: Optional[str] = kwargs.get("voice_name") or "zh-CN-XiaoxiaoNeural"
+        rate: float = float(kwargs.get("speaking_rate") or 1.0)
+        pitch: float = float(kwargs.get("pitch") or 0.0)
+        fmt: str = (kwargs.get("format") or "mp3").lower()
+        filename: Optional[str] = kwargs.get("filename")
+
+        if not text:
+            raise RuntimeError("text不能为空")
+        if not conv_id:
+            raise RuntimeError("conversation_id缺失")
+        if not output_dir_name:
+            raise RuntimeError("缺少_output_dir_name参数（应由master_agent自动注入）")
+
+        # 规范化会话ID
+        from pathlib import Path as _P
+        conv_id = _P(str(conv_id)).name
+
+        # 凭据
+        key = os.getenv("AZURE_SPEECH_KEY") or os.getenv("SPEECH_KEY") or os.getenv("AZURE_TTS_KEY")
+        region = os.getenv("AZURE_SPEECH_REGION") or os.getenv("SPEECH_REGION") or os.getenv("AZURE_TTS_REGION")
+        if not key or not region:
+            raise RuntimeError("缺少AZURE_SPEECH_KEY/SPEECH_KEY或AZURE_SPEECH_REGION/SPEECH_REGION环境变量")
+
         try:
-            text: str = (kwargs.get("text") or "").strip()
-            conv_id: str = kwargs.get("conversation_id")
-            output_dir_name: str = kwargs.get("_output_dir_name")  # 由master_agent统一注入
-            voice_name: Optional[str] = kwargs.get("voice_name") or "zh-CN-XiaoxiaoNeural"
-            rate: float = float(kwargs.get("speaking_rate") or 1.0)
-            pitch: float = float(kwargs.get("pitch") or 0.0)
-            fmt: str = (kwargs.get("format") or "mp3").lower()
-            filename: Optional[str] = kwargs.get("filename")
+            import azure.cognitiveservices.speech as speechsdk  # type: ignore
+        except Exception as e:
+            raise RuntimeError(f"缺少依赖 azure-cognitiveservices-speech，请安装: {e}")
 
-            if not text:
-                return {"status": "failed", "error": "text不能为空"}
-            if not conv_id:
-                return {"status": "failed", "error": "conversation_id缺失"}
-            if not output_dir_name:
-                return {"status": "failed", "error": "缺少_output_dir_name参数（应由master_agent自动注入）"}
+        # 输出文件与目录
+        work_dir = self.output_dir / output_dir_name
+        work_dir.mkdir(parents=True, exist_ok=True)
+        if not filename:
+            filename = f"narration.{fmt}"
+        out_path = work_dir / filename
 
-            # 规范化会话ID
-            from pathlib import Path as _P
-            conv_id = _P(str(conv_id)).name
+        # Speech Config
+        speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
+        speech_config.speech_synthesis_voice_name = voice_name
 
-            # 凭据
-            key = os.getenv("AZURE_SPEECH_KEY") or os.getenv("SPEECH_KEY") or os.getenv("AZURE_TTS_KEY")
-            region = os.getenv("AZURE_SPEECH_REGION") or os.getenv("SPEECH_REGION") or os.getenv("AZURE_TTS_REGION")
-            if not key or not region:
-                return {"status": "failed", "error": "缺少AZURE_SPEECH_KEY/SPEECH_KEY或AZURE_SPEECH_REGION/SPEECH_REGION环境变量"}
+        # 输出格式
+        if fmt == "mp3":
+            speech_config.set_speech_synthesis_output_format(
+                speechsdk.SpeechSynthesisOutputFormat.Audio24Khz48KBitRateMonoMp3
+            )
+        else:  # wav
+            speech_config.set_speech_synthesis_output_format(
+                speechsdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm
+            )
 
-            try:
-                import azure.cognitiveservices.speech as speechsdk  # type: ignore
-            except Exception as e:
-                return {"status": "failed", "error": f"缺少依赖 azure-cognitiveservices-speech，请安装: {e}"}
+        audio_config = speechsdk.audio.AudioOutputConfig(filename=str(out_path))
+        synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
 
-            # 输出文件与目录
-            work_dir = self.output_dir / output_dir_name
-            work_dir.mkdir(parents=True, exist_ok=True)
-            if not filename:
-                filename = f"narration.{fmt}"
-            out_path = work_dir / filename
-
-            # Speech Config
-            speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
-            speech_config.speech_synthesis_voice_name = voice_name
-
-            # 输出格式
-            if fmt == "mp3":
-                speech_config.set_speech_synthesis_output_format(
-                    speechsdk.SpeechSynthesisOutputFormat.Audio24Khz48KBitRateMonoMp3
-                )
-            else:  # wav
-                speech_config.set_speech_synthesis_output_format(
-                    speechsdk.SpeechSynthesisOutputFormat.Riff24Khz16BitMonoPcm
-                )
-
-            audio_config = speechsdk.audio.AudioOutputConfig(filename=str(out_path))
-            synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
-
-            # 构造SSML以支持rate/pitch
-            # Azure pitch单位可用 st/Hz，此处用相对st近似；rate 用百分比
-            rate_pct = int((rate - 1.0) * 100)
-            rate_attr = f"{rate_pct:+d}%"
-            pitch_attr = f"{int(pitch):+d}st"
-            ssml = f"""
+        # 构造SSML以支持rate/pitch
+        # Azure pitch单位可用 st/Hz，此处用相对st近似；rate 用百分比
+        rate_pct = int((rate - 1.0) * 100)
+        rate_attr = f"{rate_pct:+d}%"
+        pitch_attr = f"{int(pitch):+d}st"
+        ssml = f"""
 <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='{voice_name.split('-')[0].lower()}'>
   <voice name='{voice_name}'>
     <prosody rate='{rate_attr}' pitch='{pitch_attr}'>
@@ -132,18 +130,14 @@ class TTSAzure(BaseAtomicTool):
 </speak>
 """
 
-            result = synthesizer.speak_ssml(ssml)
-            from azure.cognitiveservices.speech import ResultReason  # type: ignore
-            if result.reason != ResultReason.SynthesizingAudioCompleted:
-                details = getattr(result, "cancellation_details", None)
-                err = getattr(details, "error_details", None) if details else None
-                return {"status": "failed", "error": f"Azure TTS失败: {err or result.reason}"}
+        result = synthesizer.speak_ssml(ssml)
+        from azure.cognitiveservices.speech import ResultReason  # type: ignore
+        if result.reason != ResultReason.SynthesizingAudioCompleted:
+            details = getattr(result, "cancellation_details", None)
+            err = getattr(details, "error_details", None) if details else None
+            raise RuntimeError(f"Azure TTS失败: {err or result.reason}")
 
-            return {"status": "success", "data": {"voice_name": voice_name, "format": fmt}, "generated_files": [out_path.name]}
-
-        except Exception as e:
-            logger.error(f"tts_azure 执行失败: {e}")
-            return {"status": "failed", "error": str(e)}
+        return {"voice_name": voice_name, "format": fmt, "generated_files": [out_path.name]}
 
     @staticmethod
     def _escape(text: str) -> str:
