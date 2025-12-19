@@ -297,6 +297,51 @@ class LLMClient:
 
         return merged_contents
 
+    def _remove_orphaned_tool_messages(self, msgs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """移除孤立的tool消息（没有对应tool_use的tool_result）
+
+        Claude/Bedrock严格要求：tool消息必须紧跟在包含对应tool_use的assistant消息之后
+        """
+        cleaned = []
+        last_assistant_tool_ids = set()
+
+        for m in msgs:
+            role = (m.get("role") or "").lower()
+
+            if role == "assistant":
+                # 重置并记录新的tool_use IDs
+                last_assistant_tool_ids.clear()
+                tcs = m.get("tool_calls") or []
+                for tc in tcs:
+                    tid = (tc or {}).get("id")
+                    if tid:
+                        last_assistant_tool_ids.add(tid)
+                cleaned.append(m)
+
+            elif role == "tool":
+                # 验证tool_call_id
+                tool_call_id = m.get("tool_call_id") or m.get("id") or ""
+                if tool_call_id in last_assistant_tool_ids:
+                    cleaned.append(m)
+                    last_assistant_tool_ids.discard(tool_call_id)
+                else:
+                    logger.warning(f"[消息清理] 跳过孤立的tool消息: tool_call_id={tool_call_id}, last_assistant_tool_ids={last_assistant_tool_ids}")
+
+            elif role == "user":
+                # user消息打断序列，清空tool_ids
+                last_assistant_tool_ids.clear()
+                cleaned.append(m)
+
+            else:
+                # system等其他消息直接保留
+                cleaned.append(m)
+
+        removed_count = len(msgs) - len(cleaned)
+        if removed_count > 0:
+            logger.info(f"[消息清理] 移除了 {removed_count} 条孤立的tool消息")
+
+        return cleaned
+
     def _build_anthropic_messages_payload(self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]], temperature: float, max_tokens: Optional[int]) -> Dict[str, Any]:
         import json as _json
         system_parts: List[str] = []
@@ -502,7 +547,8 @@ class LLMClient:
         used_tools = tools
         if str(self.model_name).lower().startswith("claude"):
             used_messages = _sanitize_msgs_for_claude(messages)
-            # 保持工具透传给网关（若网关支持OAI→Anthropic映射）；不在此处强制移除
+            # 清理孤立的tool消息（Bedrock后端严格要求）
+            used_messages = self._remove_orphaned_tool_messages(used_messages)
 
         payload = {
             "model": self.model_config["model"],
@@ -762,6 +808,8 @@ class LLMClient:
 
         if is_claude:
             used_messages = _sanitize_msgs_for_claude(messages)
+            # 清理孤立的tool消息（Bedrock后端严格要求）
+            used_messages = self._remove_orphaned_tool_messages(used_messages)
 
         # ===== Gemini原生API =====
         if is_gemini:
