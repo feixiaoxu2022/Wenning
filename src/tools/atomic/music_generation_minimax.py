@@ -186,13 +186,13 @@ class MusicGenerationMiniMax(BaseAtomicTool):
                 except Exception as decode_error:
                     error_msg = f"音频解码失败: {decode_error}. 数据前100字符: {audio_encoded[:100]}"
                     logger.error(error_msg)
-                    return {"status": "failed", "error": error_msg}
+                    raise RuntimeError(error_msg)
 
                 # 验证音频文件格式
                 if len(audio_bytes) < 10:
                     error_msg = f"音频数据太短（{len(audio_bytes)}字节），可能不是有效的音频文件"
                     logger.error(error_msg)
-                    return {"status": "failed", "error": error_msg}
+                    raise RuntimeError(error_msg)
 
                 # 检查文件头，判断实际格式
                 header = audio_bytes[:10]
@@ -213,8 +213,8 @@ class MusicGenerationMiniMax(BaseAtomicTool):
                         text_sample = audio_bytes[:100].decode('utf-8', errors='ignore')
                         if all(32 <= ord(c) < 127 or c in '\n\r\t' for c in text_sample):
                             logger.error(f"❌ 音频数据实际是文本内容: {text_sample[:200]}")
-                            return {"status": "failed", "error": f"API返回的不是音频文件，而是文本: {text_sample[:100]}"}
-                    except:
+                            raise RuntimeError(f"API返回的不是音频文件，而是文本: {text_sample[:100]}")
+                    except UnicodeDecodeError:
                         pass
                     logger.warning(f"⚠️ 无法识别的音频格式，文件头: {header.hex()}")
 
@@ -223,16 +223,13 @@ class MusicGenerationMiniMax(BaseAtomicTool):
                 logger.info(f"音乐文件保存成功: {filename}（实际格式: {actual_format or '未知'}）")
 
                 return {
-                    "status": "success",
-                    "data": {
-                        "model": model,
-                        "prompt": prompt,
-                        "has_lyrics": bool(lyrics),
-                        "format": fmt,
-                        "sample_rate": sample_rate,
-                        "bitrate": bitrate,
-                        "file_path": str(file_path)
-                    },
+                    "model": model,
+                    "prompt": prompt,
+                    "has_lyrics": bool(lyrics),
+                    "format": fmt,
+                    "sample_rate": sample_rate,
+                    "bitrate": bitrate,
+                    "file_path": str(file_path),
                     "generated_files": [filename]
                 }
             else:
