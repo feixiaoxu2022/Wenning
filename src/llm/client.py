@@ -297,6 +297,25 @@ class LLMClient:
 
         return merged_contents
 
+    def _sanitize_inf_values(self, obj):
+        """递归清理对象中的inf/-inf值，替换为None
+
+        JSON标准不支持inf值，需要清理掉
+        """
+        import math
+
+        if isinstance(obj, float):
+            if math.isinf(obj) or math.isnan(obj):
+                logger.warning(f"发现非法浮点数值: {obj}，替换为None")
+                return None
+            return obj
+        elif isinstance(obj, dict):
+            return {k: self._sanitize_inf_values(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._sanitize_inf_values(item) for item in obj]
+        else:
+            return obj
+
     def _remove_orphaned_tool_messages(self, msgs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """移除孤立的tool消息（没有对应tool_use的tool_result）
 
@@ -940,6 +959,9 @@ class LLMClient:
             }
             payload_native = self._build_anthropic_messages_payload(messages, tools, temperature, max_tokens)
             payload_native["stream"] = True
+
+            # 清理inf/nan值（JSON不支持）
+            payload_native = self._sanitize_inf_values(payload_native)
 
             try:
                 response = requests.post(
