@@ -1,4 +1,20 @@
 #!/usr/bin/env bash
+# ========================================
+# Wenning 改进版部署脚本 (deploy_improved.sh)
+# ========================================
+#
+# 主要改进：
+# 1. 使用 kill -9 强制杀死进程（而非温和的 kill）
+# 2. 添加 pkill 清理所有残留进程
+# 3. 循环等待验证进程真正停止（最多5秒）
+# 4. 清理 Python 缓存（__pycache__ 和 .pyc 文件）
+# 5. 启动后验证新进程是否成功运行
+#
+# 使用方法：
+#   cd /home/work/Wenning/output
+#   sh deploy_improved.sh
+# ========================================
+
 set -e
 
 export https_proxy=http://agent.baidu.com:8891
