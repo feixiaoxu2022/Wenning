@@ -93,6 +93,7 @@ verify_*.py
 clone_*.py
 move_*.py
 *.sh
+!deploy.sh  # 例外：部署脚本需要提交
 pytest.ini
 server.log
 apiinfo.md
