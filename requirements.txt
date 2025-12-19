@@ -30,6 +30,7 @@ Pillow>=10.0.0
 opencv-python>=4.8.0  # 视频帧提取和图像处理
 matplotlib>=3.8.0
 playwright>=1.40.0  # HTML转图片
+cairosvg>=2.7.0  # SVG栅格化（需要系统依赖: brew install cairo）
 svglib>=1.6.0  # SVG转换
 reportlab>=4.0.0  # PDF生成和处理
 
