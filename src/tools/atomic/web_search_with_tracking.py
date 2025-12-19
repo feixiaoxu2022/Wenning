@@ -1,6 +1,7 @@
 """Web搜索工具（带使用统计）
 
 在原有web_search基础上增加本地使用量跟踪功能。
+支持Tavily双账号自动切换。
 """
 
 import requests
@@ -19,11 +20,12 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
 
     在每次搜索时记录：
     - 时间戳
-    - 使用的API（Tavily/Serper）
+    - 使用的API（Tavily主账号/Tavily副账号/Serper）
     - 查询内容
     - 结果数量
 
     统计数据保存在 data/search_usage.jsonl
+    Tavily支持双账号配置，当主账号额度用尽时自动切换到副账号。
     """
 
     name = "web_search"
@@ -47,13 +49,63 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
 
     def __init__(self, config):
         super().__init__(config)
-        self.tavily_key = config.tavily_api_key
+        self.tavily_key_primary = config.tavily_api_key_primary
+        self.tavily_key_secondary = config.tavily_api_key_secondary
         self.serper_key = config.serper_api_key
         self.timeout = 15
 
         # 统计文件路径
         self.stats_file = Path("data/search_usage.jsonl")
         self.stats_file.parent.mkdir(exist_ok=True)
+
+        # 状态文件路径（记录当前使用的Tavily key）
+        self.state_file = config.output_dir / ".tavily_key_state.json"
+        self._current_tavily_key = None
+        self._load_state()
+
+    def _load_state(self):
+        """从状态文件加载当前使用的Tavily key"""
+        try:
+            if self.state_file.exists():
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                    current_key_type = state.get("current_key", "primary")
+
+                    if current_key_type == "secondary" and self.tavily_key_secondary:
+                        self._current_tavily_key = self.tavily_key_secondary
+                        logger.info("从状态文件加载：使用Tavily副账号（主账号已知额度用尽）")
+                    elif self.tavily_key_primary:
+                        self._current_tavily_key = self.tavily_key_primary
+                        logger.info("从状态文件加载：使用Tavily主账号")
+            else:
+                self._current_tavily_key = self.tavily_key_primary
+                logger.info("首次使用Tavily主账号")
+        except Exception as e:
+            logger.warning(f"加载Tavily状态文件失败: {e}, 使用主账号")
+            self._current_tavily_key = self.tavily_key_primary
+
+    def _save_state(self, key_type: str):
+        """保存当前使用的Tavily key状态"""
+        try:
+            with open(self.state_file, 'w') as f:
+                json.dump({"current_key": key_type}, f, indent=2)
+            logger.info(f"已保存Tavily状态: {key_type}")
+        except Exception as e:
+            logger.warning(f"保存Tavily状态失败: {e}")
+
+    def _switch_tavily_key(self):
+        """切换到备用Tavily key"""
+        if self._current_tavily_key == self.tavily_key_primary and self.tavily_key_secondary:
+            self._current_tavily_key = self.tavily_key_secondary
+            self._save_state("secondary")
+            logger.info("Tavily主账号额度用尽，切换到副账号")
+            return True
+        elif self._current_tavily_key == self.tavily_key_secondary and self.tavily_key_primary:
+            self._current_tavily_key = self.tavily_key_primary
+            self._save_state("primary")
+            logger.info("Tavily副账号失败，尝试切回主账号")
+            return True
+        return False
 
     def _log_usage(self, api_name: str, query: str, result_count: int, success: bool):
         """记录使用情况
@@ -91,16 +143,67 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
         Returns:
             搜索结果字典
         """
-        # 优先使用Tavily
-        if self.tavily_key:
+        # 优先使用Tavily（支持双账号自动切换）
+        if self._current_tavily_key:
+            current_key_type = "primary" if self._current_tavily_key == self.tavily_key_primary else "secondary"
+
+            # 尝试使用当前Tavily key
             try:
-                logger.info(f"使用Tavily搜索: query='{query}'")
-                result = self._tavily_search(query, max_results, search_depth)
-                self._log_usage("tavily", query, result.get("total", 0), True)
+                logger.info(f"使用Tavily {current_key_type}账号搜索: query='{query}'")
+                result = self._tavily_search(query, max_results, search_depth, self._current_tavily_key)
+                self._log_usage(f"tavily_{current_key_type}", query, result.get("total", 0), True)
                 return result
+
+            except requests.exceptions.HTTPError as e:
+                # 检查是否是额度用尽错误
+                status_code = e.response.status_code if hasattr(e.response, 'status_code') else 0
+                error_msg = str(e)
+
+                # 尝试解析错误响应
+                try:
+                    error_data = e.response.json() if hasattr(e.response, 'json') else {}
+                    error_detail = error_data.get('error', '') + ' ' + error_data.get('detail', '')
+                except:
+                    error_detail = error_msg
+
+                # 判断是否是额度/限制错误
+                is_quota_error = (
+                    status_code == 429 or  # Too Many Requests
+                    status_code == 402 or  # Payment Required
+                    "quota" in error_detail.lower() or
+                    "limit" in error_detail.lower() or
+                    "credit" in error_detail.lower() or
+                    "exceeded" in error_detail.lower()
+                )
+
+                if is_quota_error:
+                    logger.warning(f"Tavily {current_key_type}账号额度用尽或受限: {error_detail}")
+                    self._log_usage(f"tavily_{current_key_type}", query, 0, False)
+
+                    # 如果有备用key，尝试切换
+                    if self._switch_tavily_key():
+                        try:
+                            new_key_type = "primary" if self._current_tavily_key == self.tavily_key_primary else "secondary"
+                            logger.info(f"切换到Tavily {new_key_type}账号重试: query='{query}'")
+                            result = self._tavily_search(query, max_results, search_depth, self._current_tavily_key)
+                            self._log_usage(f"tavily_{new_key_type}", query, result.get("total", 0), True)
+                            return result
+                        except Exception as e2:
+                            logger.warning(f"备用Tavily账号也失败: {str(e2)}, 切换到Serper")
+                            self._log_usage(f"tavily_{new_key_type}", query, 0, False)
+                    else:
+                        logger.warning("没有可用的备用Tavily账号")
+                else:
+                    # 非额度问题的错误，直接抛出
+                    logger.error(f"Tavily搜索失败（非额度问题）: {error_detail}")
+                    self._log_usage(f"tavily_{current_key_type}", query, 0, False)
+                    raise
+
             except Exception as e:
-                logger.warning(f"Tavily搜索失败: {str(e)}, 切换到Serper")
-                self._log_usage("tavily", query, 0, False)
+                # 其他非HTTP错误
+                logger.error(f"Tavily搜索异常: {str(e)}")
+                self._log_usage(f"tavily_{current_key_type}", query, 0, False)
+                raise
 
         # 回退到Serper
         if self.serper_key:
@@ -116,12 +219,22 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
 
         raise RuntimeError("没有可用的搜索引擎API")
 
-    def _tavily_search(self, query: str, max_results: int, search_depth: str) -> Dict[str, Any]:
-        """使用Tavily API搜索"""
+    def _tavily_search(self, query: str, max_results: int, search_depth: str, api_key: str) -> Dict[str, Any]:
+        """使用Tavily API搜索
+
+        Args:
+            query: 搜索查询
+            max_results: 最大结果数
+            search_depth: 搜索深度
+            api_key: Tavily API密钥
+
+        Returns:
+            标准化的搜索结果
+        """
         url = "https://api.tavily.com/search"
         headers = {"Content-Type": "application/json"}
         payload = {
-            "api_key": self.tavily_key,
+            "api_key": api_key,
             "query": query,
             "search_depth": search_depth,
             "max_results": max_results,
