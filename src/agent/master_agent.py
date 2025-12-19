@@ -525,8 +525,33 @@ class MasterAgent:
                             pass
                     logger.info(f"执行工具: {tool_name}, 参数: {arguments}")
 
+                    # 发送工具执行开始状态
+                    tool_emoji = {"web_search": "🔎", "url_fetch": "🌐", "code_executor": "🛠"}.get(tool_name, "•")
+                    args_preview = str(arguments)[:80] + "..." if len(str(arguments)) > 80 else str(arguments)
+                    tool_start_time = time.time()
+                    yield {
+                        "type": "exec",
+                        "iter": iteration + 1,
+                        "phase": "start",
+                        "tool": tool_name,
+                        "args_preview": args_preview,
+                        "ts": tool_start_time
+                    }
+
                     # 执行工具
                     tool_result: ToolResult = self.tool_registry.execute(tool_name, arguments)
+
+                    # 发送工具执行完成状态
+                    tool_end_time = time.time()
+                    yield {
+                        "type": "exec",
+                        "iter": iteration + 1,
+                        "phase": "done",
+                        "tool": tool_name,
+                        "success": tool_result.success,
+                        "elapsed_sec": int(tool_end_time - tool_start_time),
+                        "ts": tool_end_time
+                    }
 
                     # 记录工具执行结果
                     if tool_result.success:
