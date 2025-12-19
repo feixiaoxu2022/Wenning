@@ -70,6 +70,7 @@ samples/
 prompt_templates/
 !static/showcase/  # 例外：提交static目录下的showcase
 media/
+analysis/  # 分析结果目录（不提交）
 
 # Development and testing (不提交到GitHub)
 tests/
