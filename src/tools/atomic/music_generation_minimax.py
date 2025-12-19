@@ -39,8 +39,8 @@ class MusicGenerationMiniMax(BaseAtomicTool):
     name = "music_generation_minimax"
     description = (
         "MiniMax 音乐生成: 根据提示词和歌词生成完整音乐作品，支持风格控制和歌词演唱。"
-        "适用场景：背景音乐创作、歌曲制作、音效生成、需要原创音乐的各类场景。"
-        "参数: prompt(必填风格描述), conversation_id(必填), lyrics(歌词内容可选), format(输出格式)"
+        "适用场景：歌曲制作、音乐创作、需要原创音乐的各类场景。"
+        "参数: prompt(必填风格描述), conversation_id(必填), lyrics(必填歌词10-3000字符), format(输出格式)"
     )
 
     parameters_schema = {
@@ -48,7 +48,12 @@ class MusicGenerationMiniMax(BaseAtomicTool):
         "properties": {
             "prompt": {"type": "string", "description": "音乐风格描述"},
             "conversation_id": {"type": "string", "description": "会话ID(必须)"},
-            "lyrics": {"type": "string", "description": "歌词内容"},
+            "lyrics": {
+                "type": "string",
+                "description": "歌词内容(必填)。使用\\n分隔每行。可以在歌词中加入[Intro],[Verse],[Chorus],[Bridge],[Outro]等结构标签来优化音乐结构。长度限制10-3000字符",
+                "minLength": 10,
+                "maxLength": 3000
+            },
             "model": {
                 "type": "string",
                 "description": "模型名称",
@@ -59,7 +64,7 @@ class MusicGenerationMiniMax(BaseAtomicTool):
             "format": {"type": "string", "enum": ["mp3", "wav"], "default": "mp3"},
             "filename": {"type": "string", "description": "输出文件名"}
         },
-        "required": ["prompt", "conversation_id"]
+        "required": ["prompt", "conversation_id", "lyrics"]
     }
 
     def __init__(self, config, conv_manager=None):
@@ -72,55 +77,61 @@ class MusicGenerationMiniMax(BaseAtomicTool):
 
     def execute(self, **kwargs) -> Dict[str, Any]:
         """执行音乐生成的核心逻辑"""
+        prompt: str = (kwargs.get("prompt") or "").strip()
+        conv_id: str = kwargs.get("conversation_id")
+        lyrics: str = (kwargs.get("lyrics") or "").strip()
+        model: str = kwargs.get("model") or "music-2.0"
+        sample_rate: int = int(kwargs.get("sample_rate") or 44100)
+        bitrate: int = int(kwargs.get("bitrate") or 256000)
+        fmt: str = (kwargs.get("format") or "mp3").lower()
+        filename: Optional[str] = kwargs.get("filename") or f"generated_music.{fmt}"
+
+        if not prompt:
+            raise RuntimeError("prompt不能为空")
+        if not conv_id:
+            raise RuntimeError("conversation_id缺失")
+        if not lyrics:
+            raise RuntimeError("lyrics不能为空，MiniMax Music API要求必须提供歌词")
+
+        # 验证lyrics长度
+        lyrics_len = len(lyrics)
+        if lyrics_len < 10:
+            raise RuntimeError(f"歌词长度不足：{lyrics_len}字符，最少需要10字符")
+        if lyrics_len > 3000:
+            raise RuntimeError(f"歌词过长：{lyrics_len}字符，最多支持3000字符")
+
+        # 检查凭据
+        if not self.api_key:
+            raise RuntimeError("缺少 MINIMAX_API_KEY 环境变量")
+
+        # 输出路径（使用带时间戳的输出目录名）
+        if not self.conv_manager:
+            raise RuntimeError("系统配置错误: 缺少conv_manager")
+
+        output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
+        work_dir = self.output_dir / output_dir_name
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        # 构建请求体（严格按照官方文档格式）
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "lyrics": lyrics,  # lyrics现在是必填的
+            "audio_setting": {
+                "sample_rate": sample_rate,
+                "bitrate": bitrate,
+                "format": fmt
+            }
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        logger.info(f"调用 MiniMax Music Generation API: model={model}, format={fmt}, lyrics_length={len(lyrics)}")
+
         try:
-            prompt: str = (kwargs.get("prompt") or "").strip()
-            conv_id: str = kwargs.get("conversation_id")
-            lyrics: Optional[str] = kwargs.get("lyrics")
-            model: str = kwargs.get("model") or "music-2.0"
-            sample_rate: int = int(kwargs.get("sample_rate") or 44100)
-            bitrate: int = int(kwargs.get("bitrate") or 256000)
-            fmt: str = (kwargs.get("format") or "mp3").lower()
-            filename: Optional[str] = kwargs.get("filename") or f"generated_music.{fmt}"
-
-            if not prompt:
-                return {"status": "failed", "error": "prompt不能为空"}
-            if not conv_id:
-                return {"status": "failed", "error": "conversation_id缺失"}
-
-            # 检查凭据
-            if not self.api_key:
-                return {"status": "failed", "error": "缺少 MINIMAX_API_KEY 环境变量"}
-
-            # 输出路径（使用带时间戳的输出目录名）
-            if not self.conv_manager:
-                return {"status": "failed", "error": "系统配置错误: 缺少conv_manager"}
-
-            output_dir_name = self.conv_manager.get_output_dir_name(conv_id)
-            work_dir = self.output_dir / output_dir_name
-            work_dir.mkdir(parents=True, exist_ok=True)
-
-            # 构建请求体（严格按照官方文档格式）
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "audio_setting": {
-                    "sample_rate": sample_rate,
-                    "bitrate": bitrate,
-                    "format": fmt
-                }
-            }
-
-            # 添加歌词（如果提供）
-            if lyrics:
-                payload["lyrics"] = lyrics
-
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-
-            logger.info(f"调用 MiniMax Music Generation API: model={model}, format={fmt}, has_lyrics={bool(lyrics)}")
-
             response = requests.post(
                 self.api_url,
                 headers=headers,
@@ -131,7 +142,7 @@ class MusicGenerationMiniMax(BaseAtomicTool):
             if response.status_code != 200:
                 error_msg = f"MiniMax Music Generation API 错误: HTTP {response.status_code}, {response.text}"
                 logger.error(error_msg)
-                return {"status": "failed", "error": error_msg}
+                raise RuntimeError(error_msg)
 
             result = response.json()
 
@@ -139,7 +150,7 @@ class MusicGenerationMiniMax(BaseAtomicTool):
             base_resp = result.get("base_resp", {})
             if base_resp.get("status_code") != 0:
                 error_msg = base_resp.get("status_msg", "未知错误")
-                return {"status": "failed", "error": f"MiniMax Music Generation 失败: {error_msg}"}
+                raise RuntimeError(f"MiniMax Music Generation 失败: {error_msg}")
 
             # 提取音频数据
             # MiniMax Music API 返回格式: {"base_resp": {...}, "data": {"audio": "hex_or_base64_string", ...}}
@@ -229,11 +240,11 @@ class MusicGenerationMiniMax(BaseAtomicTool):
                 logger.error(f"响应格式异常，result keys: {result.keys()}")
                 if "data" in result:
                     logger.error(f"data keys: {result['data'].keys()}")
-                return {"status": "failed", "error": "响应中缺少音频数据"}
+                raise RuntimeError("响应中缺少音频数据")
 
         except requests.exceptions.RequestException as e:
             logger.error(f"music_generation_minimax 网络请求失败: {e}")
-            return {"status": "failed", "error": f"网络请求失败: {str(e)}"}
+            raise RuntimeError(f"网络请求失败: {str(e)}")
         except Exception as e:
             logger.error(f"music_generation_minimax 执行失败: {e}")
-            return {"status": "failed", "error": str(e)}
+            raise
