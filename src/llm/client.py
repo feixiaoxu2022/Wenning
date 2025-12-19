@@ -829,6 +829,8 @@ class LLMClient:
             used_messages = _sanitize_msgs_for_claude(messages)
             # 清理孤立的tool消息（Bedrock后端严格要求）
             used_messages = self._remove_orphaned_tool_messages(used_messages)
+            # 清理inf/nan值
+            used_messages = self._sanitize_inf_values(used_messages)
 
         # ===== Gemini原生API =====
         if is_gemini:
@@ -957,7 +959,8 @@ class LLMClient:
                 "Authorization": f"Bearer {self.model_config['api_key']}",
                 "anthropic-version": "2023-06-01"
             }
-            payload_native = self._build_anthropic_messages_payload(messages, tools, temperature, max_tokens)
+            # 使用清理过的messages（包含inf/nan清理和孤立tool消息移除）
+            payload_native = self._build_anthropic_messages_payload(used_messages, tools, temperature, max_tokens)
             payload_native["stream"] = True
 
             # 清理inf/nan值（JSON不支持）
@@ -1070,9 +1073,19 @@ class LLMClient:
                     yield {"type": "done", "response": final_response}
                     return
                 else:
-                    logger.warning(f"Claude原生messages返回非200，fallback到OAI: status={response.status_code}")
+                    # Claude native API返回非200，直接报错（不再fallback）
+                    error_msg = f"Claude原生API失败: status={response.status_code}"
+                    try:
+                        error_detail = response.json()
+                        error_msg += f", detail={error_detail}"
+                    except:
+                        error_msg += f", text={response.text[:500]}"
+                    logger.error(error_msg)
+                    raise RuntimeError(error_msg)
             except Exception as e:
-                logger.warning(f"Claude原生messages请求失败，fallback到OAI: {e}")
+                # Claude native API异常，直接抛出（不再fallback）
+                logger.error(f"Claude原生messages请求失败: {e}")
+                raise
 
         # —— OAI ChatCompletions 常规流式 ——
         payload = {
