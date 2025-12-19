@@ -487,6 +487,10 @@ class LLMClient:
         if max_tokens:
             payload["max_tokens"] = max_tokens
 
+        # Reasoning effort参数（仅OpenAI模型支持）
+        if not str(self.model_name).lower().startswith("claude"):
+            payload["reasoning_effort"] = "high"
+
         # Function Calling参数
         if used_tools:
             payload["tools"] = used_tools
@@ -982,6 +986,11 @@ class LLMClient:
         }
         if max_tokens:
             payload["max_tokens"] = max_tokens
+
+        # Reasoning effort参数（仅OpenAI模型支持）
+        if not is_claude:
+            payload["reasoning_effort"] = "high"
+
         if used_tools:
             payload["tools"] = used_tools
             if tool_choice:

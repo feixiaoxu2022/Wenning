@@ -1034,7 +1034,7 @@ async def list_models():
         {"name": "ernie-5.0-thinking-preview", "display_name": "百度 EB5 思考模型", "default": False},
         {"name": "glm-4.5", "display_name": "智谱GLM-4.5", "default": False},
         {"name": "doubao-seed-1-6-thinking-250615", "display_name": "豆包Thinking模型", "default": False},
-        {"name": "gemini-2.5-pro", "display_name": "Google Gemini 2.5 Pro", "default": False},
+        {"name": "deepseek-v3.2", "display_name": "DeepSeek V3.2", "default": False},
         {"name": "gemini-3-pro-preview", "display_name": "Google Gemini 3 Pro (Preview)", "default": False},
         {"name": "claude-sonnet-4-5-20250929", "display_name": "Anthropic Claude Sonnet 4.5 (2025-09-29)", "default": False},
     ]

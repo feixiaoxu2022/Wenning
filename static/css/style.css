@@ -164,6 +164,7 @@ body {
     grid-template-rows: 1fr;
     align-items: stretch;
     flex: 1;
+    min-height: 0; /* 防止flex子元素溢出 */
     overflow: hidden;
     max-width: 1800px;
     margin: 0 auto;
@@ -212,6 +213,7 @@ body {
 /* Center mode下消息和输入框居中显示 */
 .main-container.center-mode .chat-messages {
     max-width: 900px;
+    min-width: 600px; /* 设置最小宽度，避免初始太窄 */
     margin-left: auto;
     margin-right: auto;
 }
@@ -242,7 +244,6 @@ body {
     flex-direction: column;
     overflow: hidden;
     position: relative; /* 让history overlay仅覆盖侧栏 */
-    height: 100%; /* 确保占满高度 */
 }
 
 .conversations-header {
@@ -346,12 +347,14 @@ body {
     border-radius: 8px;
     border: 1px solid var(--border);
     overflow: hidden;
-    margin-bottom: 20px;
     box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 /* Preview Info Header */
-.preview-info { display: block; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0)); }
+.preview-info { display: block; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0)); flex-shrink: 0; }
 
 .preview-info h4 {
     margin: 0;
@@ -419,7 +422,7 @@ body {
 
 .excel-table-wrapper {
     overflow: auto;
-    max-height: 600px;
+    flex: 1;
     padding: 16px;
 }
 
@@ -800,7 +803,6 @@ body {
     padding: 10px 14px;
     border-radius: 12px;
     max-width: 75%;
-    min-width: 120px;
     word-wrap: break-word;
     line-height: 1.6;
     font-size: 14px;
@@ -1726,7 +1728,7 @@ body {
 /* File Content Container */
 .file-contents-container {
     flex: 1;
-    overflow-y: auto;
+    overflow: auto;
     position: relative;
 }
 
@@ -1736,6 +1738,7 @@ body {
 
 .file-content-item.active {
     display: block;
+    height: 100%; /* 块级元素需要明确高度才能填满flex父容器 */
 }
 
 /* 隐藏占位符当有文件时 */

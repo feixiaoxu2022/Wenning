@@ -2392,7 +2392,7 @@ class UI {
                             ⚠️ 转换警告: ${data.warnings.join('; ')}
                         </div>
                     ` : ''}
-                    <div class="word-content markdown-content" style="padding:16px; background:var(--bg); border:1px solid var(--border); border-radius:8px; margin:12px; max-height:70vh; overflow:auto;">
+                    <div class="word-content markdown-content" style="padding:16px; background:var(--bg); border:1px solid var(--border); border-radius:8px; height:100%; overflow:auto; box-sizing:border-box;">
                         ${data.html || '<div style="padding:20px; text-align:center; color:var(--muted);">文档内容为空</div>'}
                     </div>
                 </div>
@@ -2555,7 +2555,7 @@ class UI {
                         </div>
                     </div>
                 </div>
-                <pre class="text-preview" style="white-space: pre-wrap; word-break: break-word; padding: 12px; background: var(--panel); border:1px solid var(--border); border-radius:8px; max-height: 60vh; overflow:auto;">${this.escapeHtml(text)}</pre>
+                <pre class="text-preview" style="white-space: pre-wrap; word-break: break-word; padding: 12px; background: var(--panel); border:1px solid var(--border); border-radius:8px; height:100%; overflow:auto; box-sizing:border-box;">${this.escapeHtml(text)}</pre>
             `;
             // 绑定复制按钮
             const copyBtn = container.querySelector('[data-action="copy-text"]');
@@ -2765,7 +2765,7 @@ class UI {
                         </div>
                     </div>
                 </div>
-                <pre class="text-preview" style="white-space: pre; padding: 12px; background: var(--panel); border:1px solid var(--border); border-radius:8px; max-height: 60vh; overflow:auto;">${pretty}</pre>
+                <pre class="text-preview" style="white-space: pre; padding: 12px; background: var(--panel); border:1px solid var(--border); border-radius:8px; height:100%; overflow:auto; box-sizing:border-box;">${pretty}</pre>
             `;
             // 绑定复制按钮（复制原始JSON字符串，保持缩进）
             const copyBtn = container.querySelector('[data-action="copy-json"]');
@@ -2810,7 +2810,7 @@ class UI {
                         </div>
                     </div>
                 </div>
-                <div class="markdown-content" style="padding:12px; border:1px solid var(--border); border-radius:8px; max-height:60vh; overflow:auto;">${html}</div>
+                <div class="markdown-content" style="padding:12px; border:1px solid var(--border); border-radius:8px; height:100%; overflow:auto; box-sizing:border-box;">${html}</div>
             `;
             // 绑定复制按钮（复制原始Markdown文本）
             const copyBtn = container.querySelector('[data-action="copy-markdown"]');
@@ -2894,7 +2894,7 @@ class UI {
                         </div>
                     </div>
                 </div>
-                <div style="padding:12px; max-height:60vh; overflow:auto;">
+                <div style="padding:12px; height:100%; overflow:auto; box-sizing:border-box;">
                     ${cardsHtml}
                     ${errorHtml}
                 </div>

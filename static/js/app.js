@@ -1314,13 +1314,16 @@ function setupSSECallbacks() {
         } catch (_) {
             // Ignore errors
         }
-        ui.loadMultipleFiles(files);
-        // 覆盖写时强制刷新已存在的预览（带cache bust）
-        try {
-            ui.refreshFiles(files);
-        } catch (e) {
-            console.warn('refreshFiles failed', e);
-        }
+        // 延迟加载文件，给文件系统时间flush（避免覆盖写后瞬时404）
+        setTimeout(() => {
+            ui.loadMultipleFiles(files);
+            // 覆盖写时强制刷新已存在的预览（带cache bust）
+            try {
+                ui.refreshFiles(files);
+            } catch (e) {
+                console.warn('refreshFiles failed', e);
+            }
+        }, 150);
     };
 
     // 计划进度更新

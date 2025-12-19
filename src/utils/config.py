@@ -33,7 +33,9 @@ class Config:
         load_dotenv(env_file)
 
         # Web Search APIs
-        self.tavily_api_key = os.getenv("TAVILY_API_KEY", "")
+        # Tavily支持双账号配置，主账号优先，副账号作为备用（当主账号credit用尽时自动切换）
+        self.tavily_api_key_primary = os.getenv("TAVILY_API_KEY_PRIMARY", "") or os.getenv("TAVILY_API_KEY", "")
+        self.tavily_api_key_secondary = os.getenv("TAVILY_API_KEY_SECONDARY", "")
         self.serper_api_key = os.getenv("SERPER_API_KEY", "")
 
         # URL Fetch APIs
@@ -70,7 +72,7 @@ class Config:
             "gpt-5",
             "gpt-5.2",
             "doubao-seed-1-6-thinking-250615",
-            "gemini-2.5-pro",
+            "deepseek-v3.2",
             "gemini-3-pro-preview",
             "claude-sonnet-4-5-20250929",
         ]
@@ -100,8 +102,8 @@ class Config:
         errors = []
 
         # 检查Web Search API（至少有一个）
-        if not self.tavily_api_key and not self.serper_api_key:
-            errors.append("至少需要配置 TAVILY_API_KEY 或 SERPER_API_KEY")
+        if not self.tavily_api_key_primary and not self.serper_api_key:
+            errors.append("至少需要配置 TAVILY_API_KEY_PRIMARY (或 TAVILY_API_KEY) 或 SERPER_API_KEY")
 
         # 检查LLM API
         if not self.agent_model_api_key:
@@ -159,7 +161,8 @@ class Config:
         """安全的字符串表示（隐藏敏感信息）"""
         return (
             f"Config(\n"
-            f"  tavily_api_key={'***' if self.tavily_api_key else 'Not Set'},\n"
+            f"  tavily_api_key_primary={'***' if self.tavily_api_key_primary else 'Not Set'},\n"
+            f"  tavily_api_key_secondary={'***' if self.tavily_api_key_secondary else 'Not Set'},\n"
             f"  serper_api_key={'***' if self.serper_api_key else 'Not Set'},\n"
             f"  agent_model_base_url={self.agent_model_base_url},\n"
             f"  available_models={self.available_models},\n"
