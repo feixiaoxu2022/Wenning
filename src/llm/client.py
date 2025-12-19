@@ -1090,6 +1090,14 @@ class LLMClient:
                             if "choices" in chunk and len(chunk["choices"]) > 0:
                                 delta = chunk["choices"][0].get("delta", {})
 
+                                # 🔍 调试日志：查看delta中的所有字段
+                                if delta:
+                                    logger.info(f"[Thinking Debug] Delta keys: {list(delta.keys())}, model={self.model_name}")
+                                    # 打印可能的thinking相关字段
+                                    for key in ["reasoning", "reasoning_content", "thoughts", "thinking", "internal_thoughts"]:
+                                        if key in delta:
+                                            logger.info(f"[Thinking Debug] Found {key}: {delta[key][:100] if delta[key] else '(empty)'}")
+
                                 # 处理reasoning字段（思考过程）
                                 # 兼容多种协议：reasoning（ERNIE-5等）、reasoning_content（OpenAI O系列、Deepseek等）
                                 reasoning_delta = delta.get("reasoning") or delta.get("reasoning_content")
