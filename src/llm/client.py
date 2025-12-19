@@ -323,6 +323,8 @@ class LLMClient:
                 if tool_use_id not in last_assistant_tool_ids:
                     logger.warning(f"跳过孤立的tool消息: tool_call_id={tool_use_id} 没有在previous assistant消息中找到对应的tool_use")
                     logger.warning(f"  last_assistant_tool_ids={last_assistant_tool_ids}")
+                    # 清空，因为序列已断
+                    last_assistant_tool_ids.clear()
                     continue
 
                 result_text = str(m.get("content") or "")
@@ -336,6 +338,9 @@ class LLMClient:
                         }
                     ]
                 })
+                # 工具结果添加后，从集合中移除这个ID
+                # 防止重复的tool_result引用同一个tool_use_id
+                last_assistant_tool_ids.discard(tool_use_id)
                 continue
 
             if role == "assistant":
@@ -371,6 +376,11 @@ class LLMClient:
                 continue
 
             # 默认按user处理
+            # 重要：遇到user消息时，清空last_assistant_tool_ids
+            # 因为Claude要求tool_result必须在previous message中有对应tool_use
+            # 一旦插入user消息，之后的tool_result就无法再引用前面的tool_use了
+            last_assistant_tool_ids.clear()
+
             if isinstance(content, str):
                 # 纯文本消息
                 text = content if content.strip() else "…"
