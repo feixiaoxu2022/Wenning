@@ -153,33 +153,34 @@ class LLMClient:
                 # assistant -> model
                 gemini_role = "model"
 
-                # 检查是否有tool_calls
+                # 优先检查是否有Gemini原生parts（即使tool_calls被移除，也要使用）
+                gemini_parts = msg.get("_gemini_original_parts")
+                if gemini_parts:
+                    # 直接使用原始parts，保留thoughtSignature等Gemini特有字段
+                    contents.append({"role": gemini_role, "parts": gemini_parts})
+                    continue  # 跳过后续处理
+
+                # 检查是否有tool_calls（兼容非Gemini来源）
                 tool_calls = msg.get("tool_calls")
                 if tool_calls:
-                    # 优先使用保存的Gemini原生parts（包含thoughtSignature等字段）
-                    gemini_parts = msg.get("_gemini_original_parts")
-                    if gemini_parts:
-                        # 直接使用原始parts，避免丢失Gemini特有字段
-                        contents.append({"role": gemini_role, "parts": gemini_parts})
-                    else:
-                        # 转换为functionCall格式（兼容非Gemini来源的tool_calls）
-                        parts = []
-                        for tc in tool_calls:
-                            fn = tc.get("function", {})
-                            import json
-                            try:
-                                args = json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else fn.get("arguments", {})
-                            except:
-                                args = {}
+                    # 转换为functionCall格式（兼容非Gemini来源的tool_calls）
+                    parts = []
+                    for tc in tool_calls:
+                        fn = tc.get("function", {})
+                        import json
+                        try:
+                            args = json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else fn.get("arguments", {})
+                        except:
+                            args = {}
 
-                            parts.append({
-                                "functionCall": {
-                                    "name": fn.get("name", ""),
-                                    "args": args
-                                }
-                            })
+                        parts.append({
+                            "functionCall": {
+                                "name": fn.get("name", ""),
+                                "args": args
+                            }
+                        })
 
-                        contents.append({"role": gemini_role, "parts": parts})
+                    contents.append({"role": gemini_role, "parts": parts})
                 else:
                     # 普通文本消息
                     if content:
