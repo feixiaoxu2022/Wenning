@@ -264,12 +264,13 @@ class MasterAgent:
 
                     # 检查是否为不完整的组
                     if tool_call_ids & incomplete_tool_call_ids:
-                        # 移除tool_calls字段，保留content
+                        # 移除tool_calls字段，但保留其他字段（特别是_gemini_original_parts）
                         logger.info(f"[消息验证] 消息#{i}: 移除不完整的tool_calls")
-                        fixed_msg = {
-                            'role': 'assistant',
-                            'content': msg.get('content') or '(工具调用进行中...)'
-                        }
+                        fixed_msg = dict(msg)  # 复制所有字段
+                        fixed_msg.pop('tool_calls', None)  # 移除tool_calls
+                        # 确保有content
+                        if not fixed_msg.get('content'):
+                            fixed_msg['content'] = '(工具调用进行中...)'
                         fixed.append(fixed_msg)
                         current_expected_tool_calls = set()  # 清空期望
                     else:
