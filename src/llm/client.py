@@ -163,24 +163,31 @@ class LLMClient:
                 # 检查是否有tool_calls（兼容非Gemini来源）
                 tool_calls = msg.get("tool_calls")
                 if tool_calls:
-                    # 转换为functionCall格式（兼容非Gemini来源的tool_calls）
-                    parts = []
-                    for tc in tool_calls:
-                        fn = tc.get("function", {})
-                        import json
-                        try:
-                            args = json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else fn.get("arguments", {})
-                        except:
-                            args = {}
+                    # 🔧 安全检查：Gemini模型的tool_calls必须有_gemini_original_parts
+                    # 如果没有（旧版本消息），转换会缺少thoughtSignature导致400错误
+                    # 解决方案：直接跳过这条消息，不拼接到contents里
+                    if self._is_gemini() and not gemini_parts:
+                        logger.warning(f"检测到旧版本assistant消息（有{len(tool_calls)}个tool_calls但无_gemini_original_parts），直接跳过不拼接")
+                        continue  # 跳过这条消息
+                    else:
+                        # 转换为functionCall格式（兼容非Gemini来源的tool_calls）
+                        parts = []
+                        for tc in tool_calls:
+                            fn = tc.get("function", {})
+                            import json
+                            try:
+                                args = json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else fn.get("arguments", {})
+                            except:
+                                args = {}
 
-                        parts.append({
-                            "functionCall": {
-                                "name": fn.get("name", ""),
-                                "args": args
-                            }
-                        })
+                            parts.append({
+                                "functionCall": {
+                                    "name": fn.get("name", ""),
+                                    "args": args
+                                }
+                            })
 
-                    contents.append({"role": gemini_role, "parts": parts})
+                        contents.append({"role": gemini_role, "parts": parts})
                 else:
                     # 普通文本消息
                     if content:
@@ -846,13 +853,23 @@ class LLMClient:
 
             # 构建Gemini格式payload
             gemini_contents = self._convert_messages_to_contents(messages)
+
+            # 调试: 打印原始tools参数
+            logger.info(f"[Gemini Debug] 接收到的tools参数: {tools is not None}, 数量: {len(tools) if tools else 0}")
+
             gemini_tools = self._convert_tools_to_gemini(tools)
+
+            # 调试: 打印转换后的gemini_tools
+            logger.info(f"[Gemini Debug] 转换后的gemini_tools: {gemini_tools is not None}, 内容: {gemini_tools if gemini_tools else 'None'}")
 
             payload_gemini = {
                 "contents": gemini_contents
             }
             if gemini_tools:
                 payload_gemini["tools"] = gemini_tools
+                logger.info(f"[Gemini Debug] tools字段已添加到payload")
+            else:
+                logger.warning(f"[Gemini Debug] gemini_tools为空,未添加tools字段到payload")
             if temperature is not None:
                 payload_gemini["generationConfig"] = {"temperature": temperature}
             if max_tokens:
