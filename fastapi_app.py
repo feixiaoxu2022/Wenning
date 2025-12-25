@@ -1246,6 +1246,92 @@ async def view_log(
         )
 
 
+@app.get("/api/data/export")
+async def export_data(user: str = Depends(require_user())):
+    """导出data目录为tar.gz文件
+
+    用于数据分析场景，将整个data目录打包供下载
+    """
+    import tarfile
+    import tempfile
+    from datetime import datetime
+
+    data_dir = Path("data")
+    if not data_dir.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": "data目录不存在"}
+        )
+
+    try:
+        # 生成临时文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=f"_data_export_{timestamp}.tar.gz"
+        )
+
+        # 创建tar.gz包
+        with tarfile.open(temp_file.name, "w:gz") as tar:
+            tar.add(data_dir, arcname="data")
+
+        logger.info(f"用户 {user} 导出data目录: {temp_file.name}")
+
+        # 返回文件
+        return FileResponse(
+            path=temp_file.name,
+            filename=f"wenning_data_export_{timestamp}.tar.gz",
+            media_type="application/gzip",
+            background=None  # 不自动删除，让系统清理临时文件
+        )
+
+    except Exception as e:
+        logger.error(f"导出data目录失败: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"导出失败: {str(e)}"}
+        )
+
+
+@app.get("/api/data/conversations/list")
+async def list_user_conversations(user: str = Depends(require_user())):
+    """列出用户的所有对话（用于数据分析）"""
+    try:
+        user_dir = Path("data/conversations") / user
+        if not user_dir.exists():
+            return JSONResponse(content={"conversations": []})
+
+        conversations = []
+        for conv_file in sorted(user_dir.rglob("*.json")):
+            try:
+                with open(conv_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    conversations.append({
+                        "conversation_id": data.get("conversation_id"),
+                        "title": data.get("title", "未命名对话"),
+                        "model": data.get("model"),
+                        "created_at": data.get("created_at"),
+                        "message_count": len(data.get("messages", [])),
+                        "file_path": str(conv_file.relative_to(Path("data")))
+                    })
+            except Exception as e:
+                logger.warning(f"读取对话文件失败: {conv_file}, error={e}")
+                continue
+
+        return JSONResponse(content={
+            "user": user,
+            "total": len(conversations),
+            "conversations": conversations
+        })
+
+    except Exception as e:
+        logger.error(f"列出对话失败: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"列出对话失败: {str(e)}"}
+        )
+
+
 @app.get("/logs/viewer")
 async def log_viewer():
     """日志查看器界面"""
