@@ -1013,7 +1013,21 @@ class UI {
             }
             const s=item._status || item.querySelector('.exec-status'); if (s) s.textContent=` 已等待 ${evt.elapsed_sec||0}s`;
         } else if (phase === 'done') {
-            const k = evt.tool || 'unknown'; const item = toolMap.get(k);
+            const k = evt.tool || 'unknown';
+            let item = toolMap.get(k);
+
+            // 🔧 修复：如果toolMap中没有，尝试查找可能存在的失败状态的元素（retry成功的情况）
+            if (!item && list) {
+                const items = list.querySelectorAll('.exec-item');
+                for (const candidate of items) {
+                    const toolName = candidate.querySelector('.exec-tool');
+                    if (toolName && toolName.textContent === k) {
+                        item = candidate;
+                        break;
+                    }
+                }
+            }
+
             if (item) {
                 item.className='exec-item exec-item-success';
                 const head = item.querySelector('.exec-head');
