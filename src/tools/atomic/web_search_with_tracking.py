@@ -170,6 +170,7 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
                 is_quota_error = (
                     status_code == 429 or  # Too Many Requests
                     status_code == 402 or  # Payment Required
+                    status_code == 432 or  # Tavily: Insufficient Credits
                     "quota" in error_detail.lower() or
                     "limit" in error_detail.lower() or
                     "credit" in error_detail.lower() or
