@@ -1247,8 +1247,8 @@ async def view_log(
 
 
 @app.get("/api/data/export")
-async def export_data(user: str = Depends(require_user())):
-    """导出data目录为tar.gz文件
+async def export_data():
+    """导出data目录为tar.gz文件（无需认证）
 
     用于数据分析场景，将整个data目录打包供下载
     """
@@ -1275,7 +1275,7 @@ async def export_data(user: str = Depends(require_user())):
         with tarfile.open(temp_file.name, "w:gz") as tar:
             tar.add(data_dir, arcname="data")
 
-        logger.info(f"用户 {user} 导出data目录: {temp_file.name}")
+        logger.info(f"导出data目录: {temp_file.name}")
 
         # 返回文件
         return FileResponse(
@@ -1294,8 +1294,8 @@ async def export_data(user: str = Depends(require_user())):
 
 
 @app.get("/api/outputs/{conversation_id}/download")
-async def download_conversation_outputs(conversation_id: str, user: str = Depends(require_user())):
-    """下载某个对话的outputs目录（打包成tar.gz）
+async def download_conversation_outputs(conversation_id: str):
+    """下载某个对话的outputs目录（打包成tar.gz）（无需认证）
 
     用于数据分析场景，将对话的outputs目录打包供下载
     """
@@ -1303,15 +1303,7 @@ async def download_conversation_outputs(conversation_id: str, user: str = Depend
     import tempfile
     from datetime import datetime
 
-    # 权限校验
-    conv = conv_manager.get_conversation(conversation_id, username=user)
-    if not conv:
-        return JSONResponse(
-            status_code=404,
-            content={"error": "会话不存在或无权限"}
-        )
-
-    # 获取outputs目录
+    # 获取outputs目录（不需要权限校验）
     output_dir_name = conv_manager.get_output_dir_name(conversation_id)
     conv_dir = Path("outputs") / output_dir_name
 
@@ -1333,7 +1325,7 @@ async def download_conversation_outputs(conversation_id: str, user: str = Depend
         with tarfile.open(temp_file.name, "w:gz") as tar:
             tar.add(conv_dir, arcname=output_dir_name)
 
-        logger.info(f"用户 {user} 下载对话outputs: {conversation_id} -> {temp_file.name}")
+        logger.info(f"下载对话outputs: {conversation_id} -> {temp_file.name}")
 
         # 返回文件
         return FileResponse(
