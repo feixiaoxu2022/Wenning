@@ -1293,6 +1293,64 @@ async def export_data(user: str = Depends(require_user())):
         )
 
 
+@app.get("/api/outputs/{conversation_id}/download")
+async def download_conversation_outputs(conversation_id: str, user: str = Depends(require_user())):
+    """下载某个对话的outputs目录（打包成tar.gz）
+
+    用于数据分析场景，将对话的outputs目录打包供下载
+    """
+    import tarfile
+    import tempfile
+    from datetime import datetime
+
+    # 权限校验
+    conv = conv_manager.get_conversation(conversation_id, username=user)
+    if not conv:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "会话不存在或无权限"}
+        )
+
+    # 获取outputs目录
+    output_dir_name = conv_manager.get_output_dir_name(conversation_id)
+    conv_dir = Path("outputs") / output_dir_name
+
+    if not conv_dir.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": "outputs目录不存在"}
+        )
+
+    try:
+        # 生成临时文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=f"_outputs_{conversation_id}_{timestamp}.tar.gz"
+        )
+
+        # 创建tar.gz包
+        with tarfile.open(temp_file.name, "w:gz") as tar:
+            tar.add(conv_dir, arcname=output_dir_name)
+
+        logger.info(f"用户 {user} 下载对话outputs: {conversation_id} -> {temp_file.name}")
+
+        # 返回文件
+        return FileResponse(
+            path=temp_file.name,
+            filename=f"outputs_{conversation_id}.tar.gz",
+            media_type="application/gzip",
+            background=None
+        )
+
+    except Exception as e:
+        logger.error(f"下载outputs失败: {conversation_id}, error={str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"下载失败: {str(e)}"}
+        )
+
+
 @app.get("/api/data/conversations/list")
 async def list_user_conversations(user: str = Depends(require_user())):
     """列出用户的所有对话（用于数据分析）"""
