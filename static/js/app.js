@@ -1200,9 +1200,9 @@ function setupSSECallbacks() {
     };
 
     // 最终结果
-    sseClient.onFinal = (result) => {
+    sseClient.onFinal = async (result) => {
         ui.hideLoadingIndicator();
-        const resultBox = ui.showResult(result);
+        const resultBox = await ui.showResult(result);
 
         // 保存resultBox引用，用于onDone时添加反馈按钮
         window._lastResultBox = resultBox;

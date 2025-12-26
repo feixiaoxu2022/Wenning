@@ -1320,7 +1320,12 @@ class UI {
      * @param {string} existingFeedback - 已有的反馈("positive"/"neutral"/"negative")
      */
     attachFeedbackButtons(messageBox, messageId, existingFeedback = null) {
+        // 🔧 防御性检查：确保messageBox是有效的DOM元素
         if (!messageBox || !messageId) return;
+        if (!(messageBox instanceof HTMLElement)) {
+            console.warn('[UI] attachFeedbackButtons: messageBox不是DOM元素', messageBox);
+            return;
+        }
 
         // 检查是否已经有反馈按钮
         if (messageBox.querySelector('.message-feedback')) return;
