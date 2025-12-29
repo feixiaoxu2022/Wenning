@@ -10,6 +10,7 @@ let currentModel = 'gpt-5';
 let currentConversationId = null;
 let isSending = false; // 防止重复发送
 let stopBtnEl = null;
+let mentionAutocomplete = null; // @mention autocomplete 实例
 
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', async () => {
@@ -83,6 +84,14 @@ async function initAppAfterAuth() {
     await loadConversationsList();
     // 创建或加载对话
     await ensureConversation();
+    // 初始化@mention autocomplete
+    if (typeof MentionAutocomplete !== 'undefined') {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            mentionAutocomplete = new MentionAutocomplete(chatInput);
+            console.log('[App] @mention autocomplete已初始化');
+        }
+    }
     // 绑定事件
     bindEvents();
     // 配置SSE回调

@@ -49,6 +49,7 @@ from src.tools.result import ToolResult
 from src.utils.auth import AuthStore
 from src.utils.workspace_store import WorkspaceStore
 from src.utils.workspace_manager import WorkspaceManager
+from src.utils.mention_handler import MentionHandler
 
 logger = get_logger(__name__)
 
@@ -87,6 +88,7 @@ auth_store = AuthStore(Path("data/users.json"), allow_register=config.auth_allow
 app.add_middleware(SessionMiddleware, secret_key=config.auth_secret)
 workspace_store = WorkspaceStore(Path("data/workspace.json"))
 workspace_manager = WorkspaceManager(Path(config.output_dir), conv_manager)
+mention_handler = MentionHandler(workspace_store, conv_manager, Path(config.output_dir))
 
 
 def require_user():
@@ -199,8 +201,16 @@ async def chat(
             agent.current_conversation_id = conversation_id
             logger.info(f"已设置Agent.conversation_history: {len(agent.conversation_history)}条消息")
 
-            # 添加用户消息（带幂等ID）
-            conv_manager.add_message(conversation_id, "user", message, username=user, client_msg_id=client_msg_id, status="completed")
+            # 处理@mention文件（解析、复制到当前对话目录）
+            processed_message, mentioned_files = mention_handler.process_mentions(
+                message, user, conversation_id
+            )
+            if mentioned_files:
+                logger.info(f"@mention处理结果: {len(mentioned_files)}个文件, "
+                           f"成功复制: {sum(1 for f in mentioned_files if f.copied)}")
+
+            # 添加用户消息（使用处理后的消息，可能包含系统提示）
+            conv_manager.add_message(conversation_id, "user", processed_message, username=user, client_msg_id=client_msg_id, status="completed")
 
             # 定义消息保存回调函数
             def save_message_callback(msg: dict):
@@ -247,7 +257,7 @@ async def chat(
             except Exception:
                 pre_files = set()
 
-            for update in agent.process_with_progress(message):
+            for update in agent.process_with_progress(processed_message):
                 # 收集生成的文件
                 if update.get("type") == "files_generated":
                     new_files = update.get("files", []) or []
@@ -1789,6 +1799,27 @@ async def workspace_user_all(user: str = Depends(require_user())):
     except Exception as e:
         logger.error(f"workspace_user_all失败: {e}")
         return JSONResponse(status_code=500, content={"error": "获取用户文件失败"})
+
+
+@app.get("/workspace/files/autocomplete")
+async def workspace_files_autocomplete(user: str = Depends(require_user())):
+    """获取用户工作区文件列表（用于@mention autocomplete）
+
+    Returns:
+        {
+            "files": [
+                {"filename": "report.xlsx", "source_conv_id": "abc123"},
+                {"filename": "data.csv", "source_conv_id": "def456"},
+                ...
+            ]
+        }
+    """
+    try:
+        files = workspace_store.list_all_files(user)
+        return JSONResponse(content={"files": files})
+    except Exception as e:
+        logger.error(f"获取工作区文件列表失败: {e}")
+        return JSONResponse(status_code=500, content={"error": "获取文件列表失败"})
 
 
 # ==================== 用户反馈 API ====================
