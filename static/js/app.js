@@ -412,6 +412,7 @@ async function ensureConversation() {
                 if (checkResp.ok) {
                     console.log('[App] 从localStorage恢复上次对话:', lastConvId);
                     currentConversationId = lastConvId;
+                    window.currentConversationId = currentConversationId; // 同步到window对象供ui.js使用
                     await loadConversation(currentConversationId);
 
                     // 恢复成功后设置输出路径
@@ -472,6 +473,7 @@ async function ensureConversation() {
                 console.log(`[App] 加载最新的有消息对话: ${latest.id}, 消息数: ${latest.messageCount}, 更新时间: ${latest.updated_at}`);
 
                 currentConversationId = latest.id;
+                window.currentConversationId = currentConversationId; // 同步到window对象
                 await loadConversation(currentConversationId);
             } else {
                 // 所有对话都是空的，创建新对话
@@ -726,6 +728,7 @@ async function switchConversation(convId) {
     }
 
     currentConversationId = convId;
+    window.currentConversationId = currentConversationId; // 同步到window对象
     try {
         localStorage.setItem('cf-last-conv', convId);
     } catch (_) {
@@ -768,6 +771,7 @@ async function createNewConversation() {
         const data = await response.json();
 
         currentConversationId = data.conversation_id;
+        window.currentConversationId = currentConversationId; // 同步到window对象
         try {
             localStorage.setItem('cf-last-conv', currentConversationId);
         } catch (_) {

@@ -111,3 +111,6 @@ move_tests.sh
 !README.md
 !requirements.txt
 .cache/
+
+# User task analysis data (generated, not for git)
+user_task_analysis/
