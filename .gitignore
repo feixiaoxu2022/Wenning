@@ -109,6 +109,7 @@ Gemini*.png
 move_tests.sh
 *.md
 !README.md
+!claude.md  # 开发备忘文档
 !requirements.txt
 .cache/
 
