@@ -1206,10 +1206,7 @@ function setupSSECallbacks() {
     // 最终结果
     sseClient.onFinal = (result) => {
         ui.hideLoadingIndicator();
-        ui.showResult(result).then(resultBox => {
-            // 保存resultBox引用，用于onDone时添加反馈按钮
-            window._lastResultBox = resultBox;
-        });
+        ui.showResult(result);  // 不需要等待Promise，resultBox已添加到DOM
 
         // 结果完成后兜底刷新一次会话文件，确保像 mp4/wav 等在未收到 files_generated 时也能展示
         (async () => {
@@ -1257,14 +1254,9 @@ function setupSSECallbacks() {
         // 为刚生成的assistant消息添加反馈按钮
         try {
             if (currentConversationId) {
-                // 等待window._lastResultBox被设置（最多等待2秒）
-                let resultBox = window._lastResultBox;
-                let waitCount = 0;
-                while (!resultBox && waitCount < 20) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    resultBox = window._lastResultBox;
-                    waitCount++;
-                }
+                // 直接查找DOM中最后一个result-box（不依赖Promise时序）
+                const resultBoxes = document.querySelectorAll('.result-box');
+                const resultBox = resultBoxes[resultBoxes.length - 1];
 
                 if (resultBox) {
                     // 获取对话信息，找到最后一条assistant消息的id
@@ -1280,10 +1272,8 @@ function setupSSECallbacks() {
                             }
                         }
                     }
-                    // 清除引用
-                    window._lastResultBox = null;
                 } else {
-                    console.warn('[App] 等待window._lastResultBox超时');
+                    console.warn('[App] 未找到result-box元素');
                 }
             }
         } catch (e) {
