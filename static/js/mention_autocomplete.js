@@ -114,6 +114,7 @@ class MentionAutocomplete {
             case 'Tab':
                 if (this.selectedIndex >= 0) {
                     e.preventDefault();
+                    e.stopImmediatePropagation();  // 阻止其他监听器（如app.js的回车发送）
                     this.selectFile(items[this.selectedIndex].dataset.filename);
                 }
                 break;
