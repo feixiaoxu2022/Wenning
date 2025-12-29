@@ -866,6 +866,10 @@ function bindEvents() {
     // 输入框快捷键: Enter发送, Shift+Enter换行
     ui.chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
+            // 如果正在使用输入法组合输入（如中文拼音），不发送
+            if (e.isComposing) {
+                return;
+            }
             // 如果@mention下拉框正在显示，不发送消息（让mention处理）
             if (mentionAutocomplete && mentionAutocomplete.isShowing) {
                 return;
