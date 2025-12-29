@@ -1252,22 +1252,35 @@ function setupSSECallbacks() {
 
         // 为刚生成的assistant消息添加反馈按钮
         try {
-            if (currentConversationId && window._lastResultBox) {
-                // 获取对话信息，找到最后一条assistant消息的id
-                const conv = await fetch(`/conversations/${currentConversationId}`).then(r => r.json());
-                if (conv && conv.messages && conv.messages.length > 0) {
-                    // 找到最后一条assistant消息
-                    for (let i = conv.messages.length - 1; i >= 0; i--) {
-                        const msg = conv.messages[i];
-                        if (msg.role === 'assistant' && msg.id) {
-                            // 添加反馈按钮
-                            ui.attachFeedbackButtons(window._lastResultBox, msg.id, msg.feedback);
-                            break;
+            if (currentConversationId) {
+                // 等待window._lastResultBox被设置（最多等待2秒）
+                let resultBox = window._lastResultBox;
+                let waitCount = 0;
+                while (!resultBox && waitCount < 20) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    resultBox = window._lastResultBox;
+                    waitCount++;
+                }
+
+                if (resultBox) {
+                    // 获取对话信息，找到最后一条assistant消息的id
+                    const conv = await fetch(`/conversations/${currentConversationId}`).then(r => r.json());
+                    if (conv && conv.messages && conv.messages.length > 0) {
+                        // 找到最后一条assistant消息
+                        for (let i = conv.messages.length - 1; i >= 0; i--) {
+                            const msg = conv.messages[i];
+                            if (msg.role === 'assistant' && msg.id) {
+                                // 添加反馈按钮
+                                ui.attachFeedbackButtons(resultBox, msg.id, msg.feedback);
+                                break;
+                            }
                         }
                     }
+                    // 清除引用
+                    window._lastResultBox = null;
+                } else {
+                    console.warn('[App] 等待window._lastResultBox超时');
                 }
-                // 清除引用
-                window._lastResultBox = null;
             }
         } catch (e) {
             console.error('[App] 添加反馈按钮失败:', e);
