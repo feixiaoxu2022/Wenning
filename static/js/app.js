@@ -850,9 +850,9 @@ function bindEvents() {
         });
     }
 
-    // 输入框回车发送 (Ctrl+Enter / Cmd+Enter)
+    // 输入框快捷键: Enter发送, Shift+Enter换行
     ui.chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
