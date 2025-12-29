@@ -1200,12 +1200,12 @@ function setupSSECallbacks() {
     };
 
     // 最终结果
-    sseClient.onFinal = async (result) => {
+    sseClient.onFinal = (result) => {
         ui.hideLoadingIndicator();
-        const resultBox = await ui.showResult(result);
-
-        // 保存resultBox引用，用于onDone时添加反馈按钮
-        window._lastResultBox = resultBox;
+        ui.showResult(result).then(resultBox => {
+            // 保存resultBox引用，用于onDone时添加反馈按钮
+            window._lastResultBox = resultBox;
+        });
 
         // 结果完成后兜底刷新一次会话文件，确保像 mp4/wav 等在未收到 files_generated 时也能展示
         (async () => {
