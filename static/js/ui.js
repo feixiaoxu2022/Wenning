@@ -706,8 +706,10 @@ class UI {
 
     /**
      * 添加用户消息
+     * @param {string} message - 消息内容
+     * @param {boolean} isSystemNotification - 是否为系统通知（预览错误等）
      */
-    addUserMessage(message) {
+    addUserMessage(message, isSystemNotification = false) {
         // 重置SSE iter映射（新用户消息开始）
         this._sseIterBase = null;
         this._sseIterMap.clear();
@@ -768,7 +770,7 @@ class UI {
         this._resetSSEIterMapping();
 
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'message user';
+        messageDiv.className = isSystemNotification ? 'message user system-notification' : 'message user';
         messageDiv.textContent = message;
         this.chatMessages.appendChild(messageDiv);
         // 消息整体复制按钮（hover 左侧，不遮挡内容）
@@ -1921,13 +1923,75 @@ class UI {
     loadImagePreview(filename) {
         const encodedFilename = encodeURIComponent(filename);
         const src = `${this.outputsBaseUrl}/${encodedFilename}?t=${Date.now()}`;
-        this.previewContent.innerHTML = `
+
+        // 创建容器
+        const container = document.createElement('div');
+        container.innerHTML = `
             <div class="preview-info">
                 <h4>${filename}</h4>
             </div>
-            <img src="${src}" style="width: 100%; height: auto; border-radius: 8px; margin-top: 10px; object-fit: contain;" />
-            <div style="margin-top: 15px;">
-                <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+        `;
+
+        // 创建图片元素并添加错误处理
+        const img = document.createElement('img');
+        img.src = src;
+        img.style.cssText = 'width: 100%; height: auto; border-radius: 8px; margin-top: 10px; object-fit: contain;';
+        img.onerror = () => {
+            console.error('[Preview] 图片加载失败:', filename);
+            // 触发错误反馈
+            if (window.reportPreviewError) {
+                window.reportPreviewError(filename, 'image_load_error', '图片加载失败，可能文件不存在或格式错误');
+            }
+            // 显示错误提示
+            img.replaceWith(this._createErrorPlaceholder(filename, '图片加载失败'));
+        };
+        container.appendChild(img);
+
+        // 添加下载按钮
+        const downloadDiv = document.createElement('div');
+        downloadDiv.style.marginTop = '15px';
+        downloadDiv.innerHTML = `
+            <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
+        `;
+        container.appendChild(downloadDiv);
+
+        this.previewContent.innerHTML = '';
+        this.previewContent.appendChild(container);
+    }
+
+    /**
+     * 创建错误占位符 (返回Element)
+     */
+    _createErrorPlaceholder(filename, message) {
+        const div = document.createElement('div');
+        div.className = 'preview-error';
+        div.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: #ef4444; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 16px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">${message}</div>
+                <div style="font-size: 14px; color: #991b1b;">${filename}</div>
+            </div>
+        `;
+        return div;
+    }
+
+    /**
+     * 创建错误占位符HTML (返回字符串)
+     */
+    _createErrorPlaceholderHTML(filename, message) {
+        return `
+            <div style="padding: 40px; text-align: center; color: #ef4444; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 16px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">${message}</div>
+                <div style="font-size: 14px; color: #991b1b;">${filename}</div>
             </div>
         `;
     }
@@ -1940,15 +2004,36 @@ class UI {
         const src = `${this.outputsBaseUrl}/${encodedFilename}?t=${Date.now()}`;
         const imgDiv = document.createElement('div');
         imgDiv.style.marginBottom = '20px';
-        imgDiv.innerHTML = `
-            <div class="preview-info">
-                <h4>${filename}</h4>
-            </div>
-            <img src="${src}" style="width: 100%; height: auto; border-radius: 8px; margin-top: 10px; object-fit: contain;" />
-            <div style="margin-top: 10px;">
-                <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
-            </div>
+
+        // 创建标题
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'preview-info';
+        titleDiv.innerHTML = `<h4>${filename}</h4>`;
+        imgDiv.appendChild(titleDiv);
+
+        // 创建图片元素并添加错误处理
+        const img = document.createElement('img');
+        img.src = src;
+        img.style.cssText = 'width: 100%; height: auto; border-radius: 8px; margin-top: 10px; object-fit: contain;';
+        img.onerror = () => {
+            console.error('[Preview] 图片加载失败:', filename);
+            // 触发错误反馈
+            if (window.reportPreviewError) {
+                window.reportPreviewError(filename, 'image_load_error', '图片加载失败，可能文件不存在或格式错误');
+            }
+            // 显示错误提示
+            img.replaceWith(this._createErrorPlaceholder(filename, '图片加载失败'));
+        };
+        imgDiv.appendChild(img);
+
+        // 添加下载按钮
+        const downloadDiv = document.createElement('div');
+        downloadDiv.style.marginTop = '10px';
+        downloadDiv.innerHTML = `
+            <a href="${this.outputsBaseUrl}/${encodedFilename}" download="${filename}" class="file-download" title="Download"><span class="btn-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span><span class="btn-text">Download</span></a>
         `;
+        imgDiv.appendChild(downloadDiv);
+
         this.previewContent.appendChild(imgDiv);
     }
 
@@ -2190,6 +2275,24 @@ class UI {
                 </div>
             </div>
         `;
+
+        // 添加错误处理到img标签
+        const img = container.querySelector('img');
+        if (img) {
+            img.addEventListener('error', () => {
+                console.error('[Preview] 图片加载失败:', filename);
+                // 触发错误反馈
+                if (window.reportPreviewError) {
+                    window.reportPreviewError(filename, 'image_load_error', '图片加载失败，可能文件不存在或格式错误');
+                }
+                // 显示错误提示
+                const imageContent = container.querySelector('.image-content');
+                if (imageContent) {
+                    imageContent.innerHTML = this._createErrorPlaceholderHTML(filename, '图片加载失败');
+                }
+            });
+        }
+
         const saveBtn = container.querySelector('.workspace-save');
         if (saveBtn) {
             saveBtn.addEventListener('click', (e) => {

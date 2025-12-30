@@ -1601,6 +1601,55 @@ function updateContextIndicator(stats) {
 }
 
 /**
+ * 预览错误追踪（防止重复上报）
+ */
+const reportedPreviewErrors = new Set();
+
+/**
+ * 报告预览错误并自动发送系统提示
+ */
+window.reportPreviewError = function(filename, errorType, errorMessage) {
+    console.log('[App] 预览错误:', filename, errorType, errorMessage);
+
+    // 去重检查：同一文件只报告一次
+    if (reportedPreviewErrors.has(filename)) {
+        console.log('[App] 该文件错误已报告过，跳过:', filename);
+        return;
+    }
+
+    // 标记已报告
+    reportedPreviewErrors.add(filename);
+
+    // 构造系统提示消息
+    const systemMessage = `[系统提示] 文件 ${filename} 预览失败：${errorMessage}\n请检查生成代码或文件格式，必要时重新生成。`;
+
+    // 自动发送消息（不需要用户手动输入）
+    autoSendSystemMessage(systemMessage);
+};
+
+/**
+ * 自动发送系统消息（复用现有sendMessage逻辑）
+ */
+function autoSendSystemMessage(message) {
+    console.log('[App] 自动发送系统消息:', message);
+
+    if (!currentConversationId) {
+        console.error('[App] 没有当前对话ID，无法发送系统消息');
+        return;
+    }
+
+    // 显示系统消息在UI上
+    ui.addUserMessage(message, true); // 第二个参数标记为系统消息
+
+    // 显示加载指示器
+    ui.showLoadingIndicator();
+
+    // 发送SSE请求
+    const clientMsgId = genClientId();
+    sseClient.send(message, currentModel, currentConversationId, clientMsgId);
+}
+
+/**
  * 发送消息
  */
 function sendMessage() {

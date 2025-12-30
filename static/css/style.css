@@ -816,6 +816,25 @@ body {
     color: var(--text);
 }
 
+/* System Notification - 系统通知消息（预览错误等）*/
+.message.user.system-notification {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    border-left: 4px solid #ff9800;
+    border-top: 1px solid #ffca28;
+    border-right: 1px solid #ffca28;
+    border-bottom: 1px solid #ffca28;
+}
+.message.user.system-notification::before {
+    content: "🔧 ";
+    font-size: 16px;
+    margin-right: 4px;
+}
+.theme-dark .message.user.system-notification {
+    background: linear-gradient(135deg, #4a3800 0%, #5a4400 100%);
+    border-left-color: #ff9800;
+    color: #ffd54f;
+}
+
 .message.assistant {
     background: rgba(2,6,23,0.03);
     margin-right: auto;
