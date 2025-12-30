@@ -1393,6 +1393,21 @@ body {
 }
 .theme-dark .markdown-content a { color: var(--accent); }
 
+/* Dark theme code blocks - 暗色主题代码块样式 */
+.theme-dark .markdown-content code {
+    background: #2d2d2d;
+    color: #e06c75;
+}
+
+.theme-dark .markdown-content pre {
+    background: #1e1e1e;
+    border-color: #404040;
+}
+
+.theme-dark .markdown-content pre code {
+    color: #d4d4d4;
+}
+
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3,

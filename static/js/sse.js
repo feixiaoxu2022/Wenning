@@ -5,7 +5,7 @@
 
 class SSEClient {
     constructor() {
-        this.eventSource = null;
+        this.abortController = null;
         this.onThinking = null;
         this.onProgress = null;
         this.onFinal = null;
@@ -25,68 +25,110 @@ class SSEClient {
     }
 
     /**
-     * 发送消息并建立SSE连接
+     * 发送消息并建立SSE连接（使用fetch stream）
      * @param {string} message - 用户消息
      * @param {string} model - 模型名称
      * @param {string} conversationId - 对话ID
+     * @param {string} clientMsgId - 客户端消息ID
+     * @param {string} interruptedResponse - 被中断的assistant回复（可选）
      */
-    send(message, model = 'gpt-5', conversationId, clientMsgId) {
+    async send(message, model = 'gpt-5', conversationId, clientMsgId, interruptedResponse = null) {
         // 关闭之前的连接
         this.close();
 
-        // 构造URL
-        const baseUrl = `/chat?message=${encodeURIComponent(message)}`;
-        const modelParam = `&model=${encodeURIComponent(model)}`;
-        const convParam = `&conversation_id=${encodeURIComponent(conversationId)}`;
-        let url = baseUrl + modelParam + convParam;
+        // 创建AbortController用于中断
+        this.abortController = new AbortController();
+
+        // 构造请求body
+        const body = {
+            message: message,
+            model: model,
+            conversation_id: conversationId
+        };
         if (clientMsgId) {
-            url += `&client_msg_id=${encodeURIComponent(clientMsgId)}`;
+            body.client_msg_id = clientMsgId;
+        }
+        if (interruptedResponse) {
+            body.interrupted_response = interruptedResponse;
         }
 
-        // 创建EventSource
-        this.eventSource = new EventSource(url);
+        try {
+            console.log('[SSE] 发送请求:', body);
 
-        // 监听消息
-        this.eventSource.onmessage = (e) => {
-            try {
-                // 检查结束标记
-                if (e.data === '[DONE]') {
+            // 使用fetch发送POST请求
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body),
+                signal: this.abortController.signal
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            // 读取stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const {done, value} = await reader.read();
+
+                if (done) {
                     console.log('[SSE] 流式传输完成');
-                    this.close();
                     if (this.onDone) {
                         this.onDone();
                     }
-                    return;
+                    break;
                 }
 
-                // 解析JSON
-                const update = JSON.parse(e.data);
-                console.log('[SSE] 收到更新:', update.type);
+                // 解码并追加到buffer
+                buffer += decoder.decode(value, {stream: true});
 
-                // 根据类型分发
-                this.dispatch(update);
+                // 处理buffer中的完整消息
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // 保留不完整的行
 
-            } catch (err) {
-                console.error('[SSE] 解析消息失败:', err, e.data);
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6); // 移除"data: "前缀
+
+                        // 检查结束标记
+                        if (data === '[DONE]') {
+                            console.log('[SSE] 收到结束标记');
+                            continue;
+                        }
+
+                        // 解析JSON
+                        try {
+                            const update = JSON.parse(data);
+                            console.log('[SSE] 收到更新:', update.type);
+                            this.dispatch(update);
+                        } catch (err) {
+                            console.error('[SSE] 解析消息失败:', err, data);
+                        }
+                    }
+                }
             }
-        };
 
-        // 监听错误
-        this.eventSource.onerror = (e) => {
-            console.error('[SSE] 连接错误:', e);
-
-            // 通知错误处理器
-            if (this.onError) {
-                this.onError({
-                    message: 'SSE连接中断',
-                    event: e
-                });
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                console.log('[SSE] 连接已中断');
+            } else {
+                console.error('[SSE] 连接错误:', err);
+                if (this.onError) {
+                    this.onError({
+                        message: err.message || 'SSE连接失败',
+                        error: err
+                    });
+                }
             }
-
-            this.close();
-        };
-
-        console.log('[SSE] 连接已建立:', url);
+        } finally {
+            this.abortController = null;
+        }
     }
 
     /**
@@ -216,9 +258,9 @@ class SSEClient {
      * 关闭SSE连接
      */
     close() {
-        if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
             console.log('[SSE] 连接已关闭');
         }
     }
@@ -227,6 +269,6 @@ class SSEClient {
      * 检查连接状态
      */
     isConnected() {
-        return this.eventSource !== null && this.eventSource.readyState === EventSource.OPEN;
+        return this.abortController !== null;
     }
 }

@@ -1621,27 +1621,47 @@ function sendMessage() {
         return;
     }
 
-    // 前端强保护：避免重复触发
-    if (isSending) {
-        console.warn('[App] 正在发送中，忽略重复触发');
-        return;
-    }
-
-    // 防止重复发送（例如快速多次点击/按键）
-    if (sseClient.isConnected && sseClient.isConnected()) {
-        console.warn('[App] 已有请求进行中，忽略重复发送');
-        return;
-    }
-
     if (!currentConversationId) {
         console.error('[App] 没有当前对话ID');
         return;
     }
 
+    // 先检查是否正在streaming（插入消息场景）
+    let interruptedResponse = null;
+    const wasStreaming = sseClient.isConnected && sseClient.isConnected();
+
+    // 前端强保护：避免重复触发（但允许在streaming时插入消息）
+    if (isSending && !wasStreaming) {
+        console.warn('[App] 正在发送中，忽略重复触发');
+        return;
+    }
+
+    if (wasStreaming) {
+        console.log('[App] 检测到正在streaming，准备插入消息');
+
+        // 捕获当前streaming的assistant回复内容（从最后一个result-box）
+        const lastResultBox = document.querySelector('.result-box:last-of-type');
+        if (lastResultBox) {
+            // 获取纯文本内容（不包含HTML标签）
+            interruptedResponse = lastResultBox.textContent.trim();
+            console.log('[App] 捕获已输出的内容，长度:', interruptedResponse.length);
+        }
+
+        // 只关闭当前SSE连接，不显示失败提示
+        // 不调用stopStreaming()，因为那会显示"Stopped current run"
+        if (sseClient && sseClient.isConnected && sseClient.isConnected()) {
+            console.log('[App] 关闭当前SSE连接以插入消息');
+            sseClient.close();
+        }
+
+        // 重置发送状态，允许新消息发送
+        isSending = false;
+    }
+
     // 确保输出基础路径已设置为当前会话（防止实时文件预览失败）
     ui.setOutputsBase(currentConversationId);
 
-    console.log('[App] 发送消息:', message);
+    console.log('[App] 发送消息:', message, wasStreaming ? '(插入消息)' : '(正常消息)');
 
     // 标记发送中，尽早避免重复触发
     isSending = true;
@@ -1660,12 +1680,12 @@ function sendMessage() {
     ui.clearInput();
     ui.clearAllAttachments();
 
-    // 禁用输入
-    ui.setInputEnabled(false);
+    // 不再禁用输入框，允许用户随时插入消息
+    // ui.setInputEnabled(false);  // 注释掉这行
 
-    // 发送SSE请求（幂等ID）
+    // 发送SSE请求（幂等ID + 可能的interrupted_response）
     const clientMsgId = genClientId();
-    sseClient.send(message, currentModel, currentConversationId, clientMsgId);
+    sseClient.send(message, currentModel, currentConversationId, clientMsgId, interruptedResponse);
 }
 
 /**

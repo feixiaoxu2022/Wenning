@@ -152,15 +152,26 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
     return agents[model_name]
 
 
-@app.get("/chat")
+@app.post("/chat")
 async def chat(
-    message: str = Query(..., description="用户消息"),
-    model: str = Query("gpt-5", description="模型名称"),
-    conversation_id: str = Query(..., description="对话ID"),
-    client_msg_id: Optional[str] = Query(None, description="前端幂等ID"),
+    request: Request,
     user: str = Depends(require_user())
 ):
-    """聊天接口 - Server-Sent Events流式响应"""
+    """聊天接口 - Server-Sent Events流式响应（支持插入消息）"""
+
+    # 从POST body中读取参数
+    body = await request.json()
+    message = body.get("message")
+    model = body.get("model", "gpt-5")
+    conversation_id = body.get("conversation_id")
+    client_msg_id = body.get("client_msg_id")
+    interrupted_response = body.get("interrupted_response")  # 被中断的assistant回复
+
+    if not message or not conversation_id:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "message和conversation_id参数必填"}
+        )
 
     def generate():
         try:
@@ -181,6 +192,17 @@ async def chat(
                     effective_model = saved_model
             agent = get_or_create_agent(effective_model)
             logger.info(f"收到聊天请求: model={effective_model}, conv_id={conversation_id}, message={message[:50]}...")
+
+            # 处理插入消息前已输出的内容（保存为普通assistant消息）
+            if interrupted_response and interrupted_response.strip():
+                logger.info(f"检测到插入消息前已输出的内容，长度: {len(interrupted_response)}")
+                conv_manager.add_message(
+                    conversation_id,
+                    "assistant",
+                    interrupted_response,
+                    username=user
+                    # 不添加status标记，保存为普通消息
+                )
 
             conversation_history = conv.get("messages", [])
 
