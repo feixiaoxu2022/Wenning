@@ -1899,6 +1899,8 @@ class UI {
         this.fileTabs.innerHTML = '';
         this.fileContentsContainer.innerHTML = '<div class="preview-content" id="preview-content"><p class="preview-placeholder">Waiting for files...</p></div>';
         this.fileTabsContainer.classList.remove('has-files');
+        // 同时清除collapsed类，防止展开按钮被移到视口外
+        this.fileTabsContainer.classList.remove('collapsed');
         this.previewContent = document.getElementById('preview-content'); // 重新获取引用
         this.fileKeys.clear();
 
