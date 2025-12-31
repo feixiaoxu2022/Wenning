@@ -84,6 +84,8 @@ async function initAppAfterAuth() {
     await loadConversationsList();
     // 创建或加载对话
     await ensureConversation();
+    // 刷新Workspace区域（确保切换用户后显示正确的文件）
+    await ui.refreshWorkspace();
     // 初始化@mention autocomplete
     if (typeof MentionAutocomplete !== 'undefined') {
         const chatInput = document.getElementById('chat-input');
