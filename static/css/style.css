@@ -1626,8 +1626,8 @@ body {
 /* 展开按钮（折叠时显示在预览区域左上角） */
 .file-list-expand-btn {
     position: absolute;
-    top: 8px;
-    right: 8px;  /* 改为右上角 */
+    top: 60px;  /* 移到更靠下的位置，避免遮挡文件名 */
+    left: 12px;  /* 改回左侧 */
     width: 32px;
     height: 32px;
     border: 1.5px solid var(--accent);
@@ -1649,7 +1649,7 @@ body {
 
 .file-list-expand-btn:hover {
     background: var(--accent);
-    transform: translateX(-2px);  /* 向左平移 */
+    transform: translateX(2px);  /* 向右平移 */
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
@@ -2664,4 +2664,106 @@ body {
 /* 暗色主题适配 */
 .theme-dark .mention-autocomplete-dropdown {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ==================== 响应式布局 ==================== */
+
+/* 防止横向滚动 */
+html, body {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+}
+
+/* 在窄屏幕下调整布局 */
+@media (max-width: 1400px) {
+    .main-container {
+        --leftW: 180px;
+        --rightW: 45%;
+        grid-template-columns: var(--leftW) 6px minmax(320px, 1fr) 6px var(--rightW);
+    }
+}
+
+@media (max-width: 1200px) {
+    .main-container {
+        --leftW: 160px;
+        --rightW: 40%;
+        grid-template-columns: var(--leftW) 6px minmax(300px, 1fr) 6px var(--rightW);
+    }
+}
+
+@media (max-width: 1024px) {
+    .main-container {
+        max-width: 100%;
+        --leftW: 140px;
+        --rightW: 380px;
+        grid-template-columns: var(--leftW) 6px 1fr 6px var(--rightW);
+    }
+
+    /* 在较窄屏幕下，默认隐藏左侧栏，通过按钮切换 */
+    .conversations-sidebar {
+        position: absolute;
+        left: -200px;
+        top: 0;
+        bottom: 0;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .conversations-sidebar.mobile-active {
+        left: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    /* 移动端：完全单列布局 */
+    .main-container {
+        grid-template-columns: 1fr;
+        --leftW: 0;
+        --rightW: 0;
+    }
+
+    /* 隐藏分隔符 */
+    .v-splitter {
+        display: none;
+    }
+
+    /* 预览面板在移动端默认隐藏，可通过按钮切换 */
+    .preview-panel {
+        position: fixed;
+        right: -100%;
+        top: 0;
+        bottom: 0;
+        width: 90%;
+        max-width: 400px;
+        z-index: 1001;
+        transition: right 0.3s ease;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .preview-panel.mobile-active {
+        right: 0;
+    }
+
+    /* 工作区面板调整 */
+    .workspace-panel {
+        max-height: 200px;
+    }
+
+    /* 输入框在移动端调整 */
+    .chat-input {
+        font-size: 16px;  /* 防止iOS自动缩放 */
+    }
+
+    /* Showcase按钮在移动端调整 */
+    .showcase-buttons {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .showcase-btn {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
 }
