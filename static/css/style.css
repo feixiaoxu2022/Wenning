@@ -1619,7 +1619,7 @@ body {
 .file-list-expand-btn {
     position: absolute;
     top: 8px;
-    left: 8px;
+    right: 8px;  /* 改为右上角 */
     width: 32px;
     height: 32px;
     border: 1.5px solid var(--accent);
@@ -1641,7 +1641,7 @@ body {
 
 .file-list-expand-btn:hover {
     background: var(--accent);
-    transform: translateX(2px);
+    transform: translateX(-2px);  /* 向左平移 */
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
