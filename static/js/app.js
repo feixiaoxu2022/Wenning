@@ -284,6 +284,10 @@ async function loadModels() {
             const option = document.createElement('option');
             option.value = model.name;
             option.textContent = model.display_name;
+            // 如果有description字段，设置为title tooltip
+            if (model.description) {
+                option.title = model.description;
+            }
             if (model.default) {
                 option.selected = true;
                 // 仅在 currentModel 还是初始值时才设置默认模型

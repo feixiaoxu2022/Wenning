@@ -1062,7 +1062,7 @@ async def list_models():
     """获取可用模型列表"""
     models = [
         {"name": "gpt-5", "display_name": "OpenAI GPT-5", "default": True},
-        {"name": "gpt-5.2", "display_name": "OpenAI GPT-5.2 (该模型经常限流，非必要不建议选择)", "default": False},
+        {"name": "gpt-5.2", "display_name": "OpenAI GPT-5.2 ⚠️", "description": "该模型经常限流，非必要不建议选择", "default": False},
         {"name": "ernie-5.0-thinking-preview", "display_name": "百度 EB5 思考模型", "default": False},
         {"name": "glm-4.5", "display_name": "智谱GLM-4.5", "default": False},
         {"name": "doubao-seed-1-6-thinking-250615", "display_name": "豆包Thinking模型", "default": False},
