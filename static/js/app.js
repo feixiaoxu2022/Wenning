@@ -561,8 +561,18 @@ async function loadConversation(convId) {
                         console.log('[App] 从历史记录恢复已报告的预览错误:', filename);
                     }
                 }
+                // 同时扫描assistant消息中的generated_files，避免重复报告历史文件的预览错误
+                if (msg.role === 'assistant' && Array.isArray(msg.generated_files)) {
+                    msg.generated_files.forEach(filename => {
+                        reportedPreviewErrors.add(filename);
+                    });
+                }
             });
         }
+
+        // 设置加载历史标志，防止预览错误重复触发自动报告
+        isLoadingHistory = true;
+        console.log('[App] 开始加载历史对话，设置isLoadingHistory=true');
 
         // 渲染历史消息(禁用打字机效果)
         if (conv.messages && conv.messages.length > 0) {
@@ -693,6 +703,10 @@ async function loadConversation(convId) {
             }
         }
 
+        // 历史消息加载完成，恢复正常的错误报告机制
+        isLoadingHistory = false;
+        console.log('[App] 历史对话加载完成，设置isLoadingHistory=false');
+
         // 更新激活状态
         document.querySelectorAll('.conversation-item').forEach(item => {
             item.classList.remove('active');
@@ -738,6 +752,8 @@ async function loadConversation(convId) {
 
     } catch (err) {
         console.error('[App] 加载对话失败:', err);
+        // 确保异常时也清除加载标志
+        isLoadingHistory = false;
     }
 }
 
@@ -1627,10 +1643,24 @@ function updateContextIndicator(stats) {
 const reportedPreviewErrors = new Set();
 
 /**
+ * 标志：是否正在加载历史对话
+ * 加载历史时，预览错误不应该触发自动报告
+ */
+let isLoadingHistory = false;
+
+/**
  * 报告预览错误并自动发送系统提示
  */
 window.reportPreviewError = function(filename, errorType, errorMessage) {
     console.log('[App] 预览错误:', filename, errorType, errorMessage);
+
+    // 如果正在加载历史对话，不自动发送错误消息（历史错误已经发送过了）
+    if (isLoadingHistory) {
+        console.log('[App] 正在加载历史，跳过自动报告预览错误:', filename);
+        // 标记为已报告，避免后续重复
+        reportedPreviewErrors.add(filename);
+        return;
+    }
 
     // 去重检查：同一文件只报告一次
     if (reportedPreviewErrors.has(filename)) {
