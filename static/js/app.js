@@ -547,6 +547,23 @@ async function loadConversation(convId) {
             ui.setOutputsBase(conv.id);
         }
 
+        // 重要：清空并重新填充reportedPreviewErrors，避免重复发送历史错误消息
+        reportedPreviewErrors.clear();
+        if (conv.messages && conv.messages.length > 0) {
+            // 扫描历史消息，找到所有已报告的预览错误
+            const errorPattern = /\[系统提示\] 文件 (.+?) 预览失败/;
+            conv.messages.forEach(msg => {
+                if (msg.role === 'user' && msg.content) {
+                    const match = msg.content.match(errorPattern);
+                    if (match && match[1]) {
+                        const filename = match[1].trim();
+                        reportedPreviewErrors.add(filename);
+                        console.log('[App] 从历史记录恢复已报告的预览错误:', filename);
+                    }
+                }
+            });
+        }
+
         // 渲染历史消息(禁用打字机效果)
         if (conv.messages && conv.messages.length > 0) {
             // 去重相邻重复（相同role+content），合并文件列表（忽略顺序/去重/兼容undefined与[]）
@@ -796,6 +813,10 @@ async function createNewConversation() {
 
         // 清空预览区域
         ui.clearAllFiles();
+
+        // 清空预览错误记录（新对话开始，重置错误追踪）
+        reportedPreviewErrors.clear();
+        console.log('[App] 新对话创建，已清空预览错误记录');
 
         // 设置会话级文件基础路径，确保实时文件事件使用正确路径
         if (currentConversationId) {
