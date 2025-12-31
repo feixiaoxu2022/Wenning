@@ -187,15 +187,13 @@ body {
 .v-splitter {
     width: 6px;
     cursor: col-resize;
-    background: transparent;
+    background: transparent;  /* 默认完全透明，没有线条 */
     border: none;
-    /* 单条居中的细线 */
-    background-image: linear-gradient(to right, transparent 2px, var(--border) 2px, var(--border) 3px, transparent 3px);
-    background-repeat: no-repeat;
-    background-position: center center;
-    transition: background-color .15s ease;
+    transition: background .15s ease;
 }
-.v-splitter:hover, .v-splitter.active { background-color: rgba(2,6,23,0.04); }
+.v-splitter:hover, .v-splitter.active {
+    background: rgba(59, 130, 246, 0.08);  /* hover时显示淡蓝色提示可拖拽 */
+}
 
 /* Center mode (no files) */
 .main-container.center-mode {
@@ -1570,7 +1568,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: none;  /* 去掉底部分隔线 */
     background: var(--bg);
     flex-shrink: 0;
 }
