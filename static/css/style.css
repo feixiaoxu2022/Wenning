@@ -237,10 +237,13 @@ body {
     margin-right: auto;
 }
 
+/* Context indicator在center-mode下也应该靠右，不要居中 */
 .main-container.center-mode .context-indicator-bottom {
-    max-width: 860px;
-    margin-left: auto;
-    margin-right: auto;
+    /* 移除max-width限制，让它填满整个chat-input-container */
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+    padding-right: 20px; /* 与input-row保持一致的右边距 */
 }
 
 /* Conversations Sidebar (Left) */
