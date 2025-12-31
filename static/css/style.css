@@ -2694,17 +2694,34 @@ html, body {
 }
 
 @media (max-width: 1024px) {
-    /* 在平板尺寸下，默认隐藏预览区，采用两栏布局 */
+    /* 在平板尺寸下，默认隐藏预览区，采用三列布局（sidebar + splitter + chat） */
     .main-container {
-        grid-template-columns: 160px 6px 1fr 0px 0px !important;  /* 添加!important确保优先级 */
+        /* 3列：左侧边栏 + splitter-left + 聊天区 */
+        grid-template-columns: 160px 6px 1fr !important;
         max-width: 100%;
     }
 
-    /* 默认隐藏预览区 */
+    /* 左侧边栏占据第1列 */
+    .conversations-sidebar {
+        grid-column: 1;
+    }
+
+    /* 左侧splitter占据第2列 */
+    #splitter-left {
+        grid-column: 2;
+    }
+
+    /* 聊天面板占据第3列 */
+    .chat-panel {
+        grid-column: 3;
+    }
+
+    /* 隐藏右侧splitter（完全移除） */
     #splitter-right {
         display: none;
     }
 
+    /* 预览面板完全移出grid布局，使用fixed定位 */
     .preview-panel {
         position: fixed;
         right: -100%;
@@ -2715,6 +2732,7 @@ html, body {
         z-index: 1001;
         transition: right 0.3s ease;
         box-shadow: var(--shadow-lg);
+        grid-column: unset;  /* 移除grid列分配 */
     }
 
     .preview-panel.mobile-active {
@@ -2734,19 +2752,31 @@ html, body {
 }
 
 @media (max-width: 768px) {
-    /* 移动端：完全单列布局 */
+    /* 移动端：两列布局（左侧边栏 + 聊天区） */
     .main-container {
-        grid-template-columns: 1fr;
-        --leftW: 0;
+        /* 只保留2列：左侧边栏 + 聊天区，移除所有splitter和preview列 */
+        grid-template-columns: 140px 1fr !important;
+        --leftW: 140px;
         --rightW: 0;
     }
 
-    /* 隐藏分隔符 */
+    /* 完全隐藏分隔符（从DOM流中移除） */
     .v-splitter {
         display: none;
     }
 
-    /* 预览面板在移动端默认隐藏，可通过按钮切换 */
+    /* 左侧边栏占据第1列 */
+    .conversations-sidebar {
+        grid-column: 1;
+        min-width: 140px;
+    }
+
+    /* 聊天面板占据第2列（整个剩余空间） */
+    .chat-panel {
+        grid-column: 2;
+    }
+
+    /* 预览面板完全移出grid布局，使用fixed定位 */
     .preview-panel {
         position: fixed;
         right: -100%;
@@ -2757,6 +2787,7 @@ html, body {
         z-index: 1001;
         transition: right 0.3s ease;
         box-shadow: var(--shadow-lg);
+        grid-column: unset;  /* 移除grid列分配 */
     }
 
     .preview-panel.mobile-active {
