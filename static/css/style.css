@@ -353,7 +353,7 @@ body {
 .excel-preview-container {
     background: var(--panel);
     border-radius: 8px;
-    border: 1px solid var(--border);
+    border: none;
     overflow: hidden;
     box-shadow: var(--shadow);
     display: flex;
@@ -362,7 +362,7 @@ body {
 }
 
 /* Preview Info Header */
-.preview-info { display: block; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0)); flex-shrink: 0; }
+.preview-info { display: block; padding: 10px 14px; border-bottom: none; background: linear-gradient(180deg, rgba(2,6,23,0.02), rgba(2,6,23,0)); flex-shrink: 0; }
 
 .preview-info h4 {
     margin: 0;
@@ -375,7 +375,7 @@ body {
 .image-preview-container {
     background: white;
     border-radius: 8px;
-    border: 1px solid #e5e7eb;
+    border: none;
     overflow: hidden;
     margin-bottom: 20px;
 }
@@ -400,7 +400,7 @@ body {
     gap: 4px;
     padding: 12px 16px 0;
     background: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: none;
     overflow-x: auto;
 }
 
