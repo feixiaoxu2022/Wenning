@@ -2,25 +2,33 @@
 :root {
     --bg: #f8fafc;
     --panel: #ffffff;
+    --panel-hover: #f9fafb;
     --border: #e5e7eb;
+    --border-light: rgba(0,0,0,0.06);  /* 更淡的边框 */
     --text: #0f172a;
     --muted: #64748b;
     --accent: #3b82f6;
     --accent-600: #2563eb;
+    --accent-light: rgba(59,130,246,0.15);  /* focus状态 */
     --ring: rgba(59,130,246,0.35);
-    --shadow: 0 10px 25px rgba(2,6,23,0.06);
+    --shadow: 0 1px 3px rgba(0,0,0,0.05);  /* 更轻微的阴影 */
+    --shadow-lg: 0 10px 25px rgba(2,6,23,0.06);
 }
 
 .theme-dark {
     --bg: #0b1220;
     --panel: #0f172a;
+    --panel-hover: #1e293b;
     --border: #1e293b;
+    --border-light: rgba(255,255,255,0.06);
     --text: #e2e8f0;
     --muted: #94a3b8;
     --accent: #60a5fa;
     --accent-600: #3b82f6;
+    --accent-light: rgba(96,165,250,0.15);
     --ring: rgba(96,165,250,0.35);
-    --shadow: 0 12px 32px rgba(2,6,23,0.35);
+    --shadow: 0 1px 3px rgba(0,0,0,0.1);
+    --shadow-lg: 0 12px 32px rgba(2,6,23,0.35);
 }
 
 /* Reset */
@@ -1227,9 +1235,9 @@ body {
 
 .chat-input {
     flex: 1;
-    padding: 12px 16px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    padding: 14px 18px;
+    border: none;  /* 移除边框 */
+    border-radius: 24px;  /* 更大的圆角，更轻盈 */
     font-size: 15px;
     font-family: inherit;
     resize: none;
@@ -1237,6 +1245,7 @@ body {
     background: var(--panel);
     color: var(--text);
     line-height: 1.5;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);  /* 轻微阴影代替边框 */
 }
 
 .chat-input.has-addon { padding-left: 54px; }
@@ -1244,8 +1253,7 @@ body {
 
 .chat-input:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 4px var(--ring);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 0 0 2px var(--accent-light);  /* focus时更明显的阴影 */
 }
 
 .chat-input::placeholder {
@@ -1931,7 +1939,14 @@ body {
 .copy-inline-btn .btn-text { display:none; }
 
 /* Iteration grouping */
-.iter-box { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background: var(--panel); margin: 8px 0; }
+.iter-box {
+    border: none;  /* 移除边框 */
+    border-radius: 16px;  /* 更大的圆角 */
+    padding: 14px 16px;
+    background: var(--panel);
+    margin: 8px 0;
+    box-shadow: var(--shadow);  /* 使用轻微阴影 */
+}
 .iter-header { font-weight:700; color: var(--text); margin-bottom:6px; font-size: 13px; }
 .exec-list { display:flex; flex-direction:column; gap:6px; }
 .exec-item { padding:6px 8px; border:1px dashed var(--border); border-radius:8px; background: rgba(2,6,23,0.02); font-size: 13px; transition: all 0.2s ease; }
