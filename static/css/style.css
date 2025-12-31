@@ -2688,15 +2688,15 @@ html, body {
 @media (max-width: 1200px) {
     .main-container {
         --leftW: 160px;
-        --rightW: 40%;
-        grid-template-columns: var(--leftW) 6px minmax(300px, 1fr) 6px var(--rightW);
+        --rightW: 380px;  /* 改为固定宽度，避免百分比挤压中间栏 */
+        grid-template-columns: var(--leftW) 6px minmax(280px, 1fr) 6px var(--rightW);
     }
 }
 
 @media (max-width: 1024px) {
-    /* 在平板尺寸下，默认隐藏预览区，采用center-mode */
+    /* 在平板尺寸下，默认隐藏预览区，采用两栏布局 */
     .main-container {
-        grid-template-columns: 160px 6px 1fr 0px 0px;
+        grid-template-columns: 160px 6px 1fr 0px 0px !important;  /* 添加!important确保优先级 */
         max-width: 100%;
     }
 
