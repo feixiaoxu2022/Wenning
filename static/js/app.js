@@ -720,6 +720,9 @@ async function loadConversation(convId) {
         // 获取并更新上下文统计
         if (conv.context_stats) {
             updateContextIndicator(conv.context_stats);
+        } else {
+            // 新对话或无统计数据时，重置为100%
+            updateContextIndicator({usage_percent: 0});
         }
 
         // 兜底：扫描会话目录，补充未记录到消息里的可预览文件（如重启前未保存的最后一条）
