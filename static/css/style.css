@@ -2693,26 +2693,42 @@ html, body {
 }
 
 @media (max-width: 1024px) {
+    /* 在平板尺寸下，默认隐藏预览区，采用center-mode */
     .main-container {
+        grid-template-columns: 160px 6px 1fr 0px 0px;
         max-width: 100%;
-        --leftW: 140px;
-        --rightW: 380px;
-        grid-template-columns: var(--leftW) 6px 1fr 6px var(--rightW);
     }
 
-    /* 在较窄屏幕下，默认隐藏左侧栏，通过按钮切换 */
-    .conversations-sidebar {
-        position: absolute;
-        left: -200px;
+    /* 默认隐藏预览区 */
+    #splitter-right {
+        display: none;
+    }
+
+    .preview-panel {
+        position: fixed;
+        right: -100%;
         top: 0;
         bottom: 0;
-        z-index: 1000;
-        transition: left 0.3s ease;
+        width: 85%;
+        max-width: 420px;
+        z-index: 1001;
+        transition: right 0.3s ease;
         box-shadow: var(--shadow-lg);
     }
 
-    .conversations-sidebar.mobile-active {
-        left: 0;
+    .preview-panel.mobile-active {
+        right: 0;
+    }
+
+    /* 左侧边栏也可以隐藏/显示 */
+    .conversations-sidebar {
+        transition: transform 0.3s ease;
+    }
+
+    /* Showcase按钮在平板上缩小 */
+    .showcase-btn {
+        font-size: 13px;
+        padding: 8px 14px;
     }
 }
 
