@@ -1902,18 +1902,21 @@ class UI {
      * 辅助方法：在修改fileContentsContainer.innerHTML时保留展开按钮
      */
     preserveExpandButton(callback) {
-        // 保存展开按钮
+        // 保存展开按钮的DOM引用（不是HTML字符串！）
         const expandBtn = document.getElementById('file-list-expand-btn');
-        const expandBtnParent = expandBtn ? expandBtn.parentNode : null;
-        const expandBtnHTML = expandBtn ? expandBtn.outerHTML : null;
+        const shouldPreserve = expandBtn && expandBtn.parentNode === this.fileContentsContainer;
+
+        // 如果按钮存在且在fileContentsContainer中，先从DOM中移除（保留引用）
+        if (shouldPreserve) {
+            expandBtn.remove();
+        }
 
         // 执行回调（修改innerHTML）
         callback();
 
-        // 恢复展开按钮
-        if (expandBtnHTML && expandBtnParent === this.fileContentsContainer) {
-            // 如果按钮之前在fileContentsContainer中，重新插入到最前面
-            this.fileContentsContainer.insertAdjacentHTML('afterbegin', expandBtnHTML);
+        // 恢复展开按钮（使用appendChild重新插入，保留事件监听器）
+        if (shouldPreserve && expandBtn) {
+            this.fileContentsContainer.insertBefore(expandBtn, this.fileContentsContainer.firstChild);
         }
     }
 
