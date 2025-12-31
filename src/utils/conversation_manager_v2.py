@@ -767,3 +767,80 @@ class ConversationManagerV2:
 
         return True
 
+    def add_preview_error(
+        self,
+        conv_id: str,
+        file_path: str,
+        error_type: str,
+        error_message: str,
+        username: str | None = None
+    ) -> bool:
+        """记录预览错误
+
+        Args:
+            conv_id: 对话ID
+            file_path: 出错的文件路径
+            error_type: 错误类型 (如 'image_load_error', 'pdf_render_error')
+            error_message: 错误详情
+            username: 用户名（权限校验）
+
+        Returns:
+            是否成功
+        """
+        conv = self.get_conversation(conv_id, username=username)
+        if not conv:
+            return False
+
+        if "pending_preview_errors" not in conv:
+            conv["pending_preview_errors"] = []
+
+        # 去重：同一文件只保留最后一次错误
+        conv["pending_preview_errors"] = [
+            e for e in conv["pending_preview_errors"]
+            if e.get("file_path") != file_path
+        ]
+
+        # 添加新错误
+        conv["pending_preview_errors"].append({
+            "file_path": file_path,
+            "error_type": error_type,
+            "error_message": error_message,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+        # 保存对话文件
+        conv_path = self._get_conv_path(conv_id)
+        self._save_conversation_file(conv_path, conv)
+
+        return True
+
+    def get_and_clear_preview_errors(
+        self,
+        conv_id: str,
+        username: str | None = None
+    ) -> List[Dict]:
+        """获取并清空待注入的预览错误
+
+        Args:
+            conv_id: 对话ID
+            username: 用户名（权限校验）
+
+        Returns:
+            预览错误列表
+        """
+        conv = self.get_conversation(conv_id, username=username)
+        if not conv:
+            return []
+
+        errors = conv.get("pending_preview_errors", [])
+
+        if errors:
+            # 清空
+            conv["pending_preview_errors"] = []
+
+            # 保存对话文件
+            conv_path = self._get_conv_path(conv_id)
+            self._save_conversation_file(conv_path, conv)
+
+        return errors
+

@@ -659,7 +659,12 @@ class UI {
                 listHtml.push('</div></div>');
             }
             this.fileTabsContainer.classList.add('has-files');
-            this.fileContentsContainer.innerHTML = `<div class="file-content-item active">${listHtml.join('')}</div>`;
+
+            // 使用preserveExpandButton保留展开按钮
+            this.preserveExpandButton(() => {
+                this.fileContentsContainer.innerHTML = `<div class="file-content-item active">${listHtml.join('')}</div>`;
+            });
+
             // 绑定 Open 按钮
             this.fileContentsContainer.querySelectorAll('[data-open-file]').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -669,8 +674,11 @@ class UI {
                 });
             });
         } catch (e) {
-            this.fileContentsContainer.innerHTML = `
-                <div class="error-box"><span class="error-label">错误:</span><div>加载Workspace失败: ${e.message}</div></div>`;
+            // 使用preserveExpandButton保留展开按钮
+            this.preserveExpandButton(() => {
+                this.fileContentsContainer.innerHTML = `
+                    <div class="error-box"><span class="error-label">错误:</span><div>加载Workspace失败: ${e.message}</div></div>`;
+            });
         }
     }
 
@@ -1891,13 +1899,37 @@ class UI {
     }
 
     /**
+     * 辅助方法：在修改fileContentsContainer.innerHTML时保留展开按钮
+     */
+    preserveExpandButton(callback) {
+        // 保存展开按钮
+        const expandBtn = document.getElementById('file-list-expand-btn');
+        const expandBtnParent = expandBtn ? expandBtn.parentNode : null;
+        const expandBtnHTML = expandBtn ? expandBtn.outerHTML : null;
+
+        // 执行回调（修改innerHTML）
+        callback();
+
+        // 恢复展开按钮
+        if (expandBtnHTML && expandBtnParent === this.fileContentsContainer) {
+            // 如果按钮之前在fileContentsContainer中，重新插入到最前面
+            this.fileContentsContainer.insertAdjacentHTML('afterbegin', expandBtnHTML);
+        }
+    }
+
+    /**
      * 清空所有文件
      */
     clearAllFiles() {
         this.files = [];
         this.currentFileIndex = 0;
         this.fileTabs.innerHTML = '';
-        this.fileContentsContainer.innerHTML = '<div class="preview-content" id="preview-content"><p class="preview-placeholder">Waiting for files...</p></div>';
+
+        // 使用preserveExpandButton保留展开按钮
+        this.preserveExpandButton(() => {
+            this.fileContentsContainer.innerHTML = '<div class="preview-content" id="preview-content"><p class="preview-placeholder">Waiting for files...</p></div>';
+        });
+
         this.fileTabsContainer.classList.remove('has-files');
         // 同时清除collapsed类，防止展开按钮被移到视口外
         this.fileTabsContainer.classList.remove('collapsed');

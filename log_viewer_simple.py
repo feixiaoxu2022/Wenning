@@ -20,6 +20,8 @@ from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 import json
 import os
+import zipfile
+import io
 
 # 配置日志文件目录
 LOG_DIR = Path(__file__).parent / "logs"
@@ -295,10 +297,21 @@ class LogViewerHandler(BaseHTTPRequestHandler):
         self.wfile.write(INDEX_HTML.encode('utf-8'))
 
     def serve_file_list(self):
-        """返回日志文件列表"""
+        """返回日志文件列表（包括.log和.log.zip）"""
         files = []
         if LOG_DIR.exists():
-            for f in sorted(LOG_DIR.glob('*.log')):
+            # 扫描 .log 文件
+            for f in LOG_DIR.glob('*.log'):
+                if not f.name.endswith('.zip'):  # 排除 .log.zip
+                    stat = f.stat()
+                    files.append({
+                        "name": f.name,
+                        "size": stat.st_size,
+                        "modified": stat.st_mtime
+                    })
+
+            # 扫描 .log.zip 文件
+            for f in LOG_DIR.glob('*.log.zip'):
                 stat = f.stat()
                 files.append({
                     "name": f.name,
@@ -306,10 +319,13 @@ class LogViewerHandler(BaseHTTPRequestHandler):
                     "modified": stat.st_mtime
                 })
 
+            # 按修改时间倒序排序（最新的在前）
+            files.sort(key=lambda x: x['modified'], reverse=True)
+
         self.send_json_response({"files": files})
 
     def serve_log(self, filename, query):
-        """返回日志内容"""
+        """返回日志内容（支持.log和.log.zip）"""
         log_path = LOG_DIR / filename
 
         if not log_path.exists():
@@ -321,9 +337,14 @@ class LogViewerHandler(BaseHTTPRequestHandler):
             lines_param = query.get('lines', ['100'])[0]
             search = query.get('search', [''])[0].strip()
 
-            # 读取文件
-            with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
-                all_lines = f.readlines()
+            # 读取文件内容
+            if filename.endswith('.zip'):
+                # 读取ZIP压缩文件
+                all_lines = self._read_zip_log(log_path)
+            else:
+                # 读取普通文本文件
+                with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+                    all_lines = f.readlines()
 
             total_lines = len(all_lines)
             filtered_lines = all_lines
@@ -350,6 +371,19 @@ class LogViewerHandler(BaseHTTPRequestHandler):
 
         except Exception as e:
             self.send_json_response({"error": f"读取日志失败: {str(e)}"}, 500)
+
+    def _read_zip_log(self, zip_path):
+        """从ZIP文件中读取日志内容"""
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            # 获取ZIP中的第一个文件（通常只有一个log文件）
+            names = zf.namelist()
+            if not names:
+                return []
+
+            # 读取第一个文件的内容
+            with zf.open(names[0]) as f:
+                content = f.read().decode('utf-8', errors='replace')
+                return content.splitlines(keepends=True)
 
     def send_json_response(self, data, status_code=200):
         """发送JSON响应"""
