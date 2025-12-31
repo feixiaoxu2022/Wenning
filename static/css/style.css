@@ -2815,3 +2815,113 @@ html, body {
         padding: 8px 12px;
     }
 }
+
+/* ==================== 高度受限场景的响应式优化 ==================== */
+
+@media (max-height: 600px) {
+    /* 横屏或矮屏幕设备：优先保证聊天区域可见 */
+
+    /* 缩小header高度 */
+    .header {
+        padding: 8px 16px;
+    }
+
+    .logo {
+        height: 50px;  /* 从80px减小到50px */
+    }
+
+    .model-selector label,
+    .model-selector select,
+    .theme-toggle,
+    .feedback-btn,
+    .account-btn {
+        font-size: 13px;
+        padding: 6px 10px;
+    }
+
+    .theme-toggle,
+    .feedback-btn {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* 严格限制workspace面板高度 */
+    .workspace-panel {
+        max-height: 120px !important;
+    }
+
+    .workspace-stats {
+        padding: 4px 8px;
+        gap: 3px;
+    }
+
+    .workspace-stat-item {
+        font-size: 11px;
+    }
+
+    /* 减少输入框高度 */
+    .chat-input {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+
+    .chat-input-container {
+        padding: 10px 16px;
+        gap: 8px;
+    }
+
+    /* 减少消息区域的padding */
+    .chat-messages {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .message {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    /* 缩小按钮 */
+    .send-btn,
+    .stop-btn {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
+}
+
+@media (max-height: 500px) {
+    /* 极矮屏幕：进一步压缩空间 */
+
+    .logo {
+        height: 40px;
+    }
+
+    .header {
+        padding: 6px 12px;
+    }
+
+    /* workspace面板更小 */
+    .workspace-panel {
+        max-height: 80px !important;
+    }
+
+    /* 隐藏showcase按钮节省空间 */
+    .showcase-buttons {
+        display: none;
+    }
+
+    /* 进一步减小输入框 */
+    .chat-input {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    .chat-input-container {
+        padding: 8px 12px;
+    }
+
+    .chat-messages {
+        padding: 8px;
+        gap: 8px;
+    }
+}
