@@ -1104,6 +1104,9 @@ function bindEvents() {
             }
         });
     });
+
+    // 启动placeholder轮播
+    startPlaceholderRotation();
 }
 
 /**
@@ -1117,6 +1120,32 @@ function initSidebarToggles() {
 
     openBtn.addEventListener('click', () => overlay.classList.add('active'));
     closeBtn.addEventListener('click', () => overlay.classList.remove('active'));
+}
+
+/**
+ * 启动输入框placeholder轮播
+ */
+function startPlaceholderRotation() {
+    const placeholders = [
+        "试试：帮我做一个完整的产品发布方案，包括PPT、海报和推广文案",
+        "试试：分析这个数据文件，生成可视化图表和分析报告",
+        "别客气，越复杂的任务越有挑战性！多轮调教更能出精品",
+        "提示：可以随时打断我，提出新要求或修改意见"
+    ];
+
+    const chatInput = document.getElementById('chat-input');
+    if (!chatInput) return;
+
+    let currentIndex = 0;
+
+    // 初始设置
+    chatInput.placeholder = placeholders[0];
+
+    // 每5秒轮播
+    setInterval(() => {
+        currentIndex = (currentIndex + 1) % placeholders.length;
+        chatInput.placeholder = placeholders[currentIndex];
+    }, 5000);
 }
 
 /**

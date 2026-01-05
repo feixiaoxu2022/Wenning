@@ -1593,7 +1593,7 @@ class UI {
                 if (filename.match(/^https?:\/\//i)) {
                     console.log(`[UI] Adding Webpage tab: ${filename}`);
                     this.addFileTab(filename, 'webpage', key);
-                } else if (filename.endsWith('.xlsx')) {
+                } else if (filename.endsWith('.xlsx') || filename.toLowerCase().endsWith('.csv')) {
                     console.log(`[UI] Adding Excel tab: ${filename}`);
                     this.addFileTab(filename, 'excel', key);
                 } else if (filename.toLowerCase().endsWith('.pptx')) {
@@ -2161,11 +2161,19 @@ class UI {
                 return;
             }
 
-            // 获取Excel文件（前端本地解析）
+            // 获取Excel/CSV文件（前端本地解析）
             const response = await fetch(`${this.outputsBaseUrl}/${encodedFilename}?t=${Date.now()}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const arrayBuffer = await response.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+            // CSV文件以文本方式读取（保留UTF-8编码），其他文件用arrayBuffer
+            let workbook;
+            if (filename.toLowerCase().endsWith('.csv')) {
+                const csvText = await response.text();
+                workbook = XLSX.read(csvText, { type: 'string', raw: false, codepage: 65001 });
+            } else {
+                const arrayBuffer = await response.arrayBuffer();
+                workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            }
 
             // 清空容器
             container.innerHTML = '';

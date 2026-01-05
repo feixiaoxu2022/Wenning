@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wenning</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20251231-fix-context-position">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260101-welcome-v2">
     <!-- Driver.js for Product Tour (本地文件) -->
     <link rel="stylesheet" href="/static/vendor/driver.css">
 </head>
@@ -151,7 +151,52 @@
             <div class="chat-input-container">
                 <!-- Welcome Message (shown when chat is empty) -->
                 <div class="welcome-message" id="welcome-message" style="display:none;">
-                    <span class="welcome-username" id="welcome-username">User</span>，你好
+                    <div class="welcome-card">
+                        <div class="welcome-header">
+                            <span class="welcome-username" id="welcome-username">User</span>，你好！
+                        </div>
+
+                        <div class="capability-card">
+                            <div class="capability-title">我能帮你做什么？</div>
+
+                            <div class="capability-section">
+                                <div class="capability-badge">复杂任务</div>
+                                <div class="capability-content">
+                                    <div class="capability-subtitle">一次搞定复杂需求</div>
+                                    <div class="capability-examples">
+                                        <div class="example">"分析Q3销售数据，生成带趋势图的PPT报告"</div>
+                                        <div class="example">"写一份产品发布文案，配设计精美的宣传海报"</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="capability-section">
+                                <div class="capability-badge">反复调教</div>
+                                <div class="capability-content">
+                                    <div class="capability-subtitle">不满意？继续提要求</div>
+                                    <div class="capability-desc">改到满意为止，细节调整没问题</div>
+                                </div>
+                            </div>
+
+                            <div class="capability-section">
+                                <div class="capability-badge">多种格式</div>
+                                <div class="capability-content">
+                                    <div class="capability-subtitle">支持多种交付格式</div>
+                                    <div class="capability-tags">
+                                        <span class="tag">文档</span>
+                                        <span class="tag">图片</span>
+                                        <span class="tag">音频</span>
+                                        <span class="tag">视频</span>
+                                        <span class="tag">代码</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="welcome-cta">
+                            <div class="cta-title">不知道做什么？试试下面的例子</div>
+                        </div>
+                    </div>
                 </div>
                 <!-- Input and Send Button -->
                 <div class="input-row">
@@ -303,10 +348,10 @@
 
     <!-- Scripts -->
     <script src="/static/js/sse.js?v=20251229-insert-msg"></script>
-    <script src="/static/js/ui.js?v=20251231-expand-btn-events"></script>
+    <script src="/static/js/ui.js?v=20260101-csv-utf8-fix"></script>
     <script src="/static/js/showcase.js?v=20251229-insert-msg"></script>
     <script src="/static/js/tour.js?v=20251229-insert-msg"></script>
     <script src="/static/js/mention_autocomplete.js?v=20251229-insert-msg"></script>
-    <script src="/static/js/app.js?v=20251231-shorten-model-name"></script>
+    <script src="/static/js/app.js?v=20260101-welcome-card"></script>
 </body>
 </html>
