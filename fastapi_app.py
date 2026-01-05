@@ -870,9 +870,15 @@ async def preview_excel(
         )
 
     try:
-        df = pd.read_excel(file_path, nrows=max_rows)
+        # 根据文件扩展名选择读取方法
+        if file_path.suffix.lower() == '.csv':
+            df = pd.read_csv(file_path, nrows=max_rows, encoding='utf-8')
+            total_rows = len(pd.read_csv(file_path, encoding='utf-8'))
+        else:
+            df = pd.read_excel(file_path, nrows=max_rows)
+            total_rows = len(pd.read_excel(file_path))
+
         html = df.to_html(index=False, classes='excel-table', border=0, escape=False)
-        total_rows = len(pd.read_excel(file_path))
         return JSONResponse(content={
             "html": html,
             "preview_rows": len(df),
@@ -906,9 +912,15 @@ async def preview_excel_scoped(
         )
 
     try:
-        df = pd.read_excel(file_path, nrows=max_rows)
+        # 根据文件扩展名选择读取方法
+        if file_path.suffix.lower() == '.csv':
+            df = pd.read_csv(file_path, nrows=max_rows, encoding='utf-8')
+            total_rows = len(pd.read_csv(file_path, encoding='utf-8'))
+        else:
+            df = pd.read_excel(file_path, nrows=max_rows)
+            total_rows = len(pd.read_excel(file_path))
+
         html = df.to_html(index=False, classes='excel-table', border=0, escape=False)
-        total_rows = len(pd.read_excel(file_path))
         return JSONResponse(content={
             "html": html,
             "preview_rows": len(df),
@@ -1916,11 +1928,16 @@ async def submit_feedback(
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+
+    # 从环境变量读取端口，默认80（本地开发），远程部署时通过环境变量设置8081
+    port = int(os.environ.get("WENNING_PORT", "80"))
+
     # 配置uvicorn以支持长时间运行的请求（如MiniMax生成任务）
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=80,
+        port=port,
         timeout_keep_alive=650,  # keepalive超时: 10分50秒（略大于最长任务时间）
         limit_concurrency=100     # 并发限制
     )
