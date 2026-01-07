@@ -8,6 +8,15 @@ TARGET_DIR="/home/work/Wenning"
 cd $TARGET_DIR/output
 PID_FILE="app.pid"
 
+# 创建本地环境配置文件（不提交到git）
+# 用于配置Playwright等工具的代理设置
+echo "🔧 Creating local environment config..."
+cat > .env.local << 'ENVEOF'
+# Playwright代理配置（用于访问外网）
+PLAYWRIGHT_PROXY_SERVER=http://agent.baidu.com:8891
+ENVEOF
+echo "✅ Local config created: .env.local"
+
 # 停止服务
 stop_app() {
   if [ -f "$PID_FILE" ]; then

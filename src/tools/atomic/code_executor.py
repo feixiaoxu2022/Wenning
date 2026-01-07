@@ -32,9 +32,29 @@ class CodeExecutor(BaseAtomicTool):
         "2. 文件模式（script_file参数）：执行已保存的脚本文件，适合需要迭代调整的代码\n"
         "适用场景：数据统计分析、科学计算、数据可视化（图表生成）、技术图形绘制、算法演示、"
         "数据动画（matplotlib.animation）、数学动画（manim库生成教学视频）、视频编辑（moviepy）、复杂文件处理、"
-        "PowerPoint生成（可编辑PPTX）。"
-        "优势：完整的Python生态（pandas/numpy/matplotlib/PIL/moviepy/manim/python-pptx）、适合复杂编程逻辑、可以使用各种Python库、支持文件模式便于迭代。"
+        "PowerPoint生成（可编辑PPTX）、网页截图和自动化（playwright）。"
+        "优势：完整的Python生态（pandas/numpy/matplotlib/PIL/moviepy/manim/python-pptx/playwright）、适合复杂编程逻辑、可以使用各种Python库、支持文件模式便于迭代。"
         "不适用场景：艺术创作类的图像/视频生成（优先使用MiniMax API）、简单的批量文件操作和命令（优先使用shell_executor更简洁）。"
+        "\n\n【重要】Playwright外网访问配置："
+        "\n环境：已安装playwright>=1.40.0，系统依赖已配置"
+        "\n代理自动注入：当代码中使用playwright时，系统会自动从环境配置读取代理设置并注入到os.environ"
+        "\n使用方式（访问外网时必须配置代理）："
+        "\n  from playwright.sync_api import sync_playwright"
+        "\n  import os"
+        "\n  with sync_playwright() as p:"
+        "\n      proxy_server = os.environ.get('PLAYWRIGHT_PROXY_SERVER')"
+        "\n      if proxy_server:"
+        "\n          browser = p.chromium.launch(headless=True, proxy={'server': proxy_server})"
+        "\n      else:"
+        "\n          browser = p.chromium.launch(headless=True)  # 仅访问内网时可省略proxy"
+        "\n      page = browser.new_page()"
+        "\n      page.goto('https://www.example.com')"
+        "\n      page.screenshot(path='screenshot.png')"
+        "\n      browser.close()"
+        "\n注意事项："
+        "\n- 访问外网必须使用proxy参数（从os.environ读取）"
+        "\n- 访问内网地址可以不配置proxy"
+        "\n- 系统会自动注入PLAYWRIGHT_PROXY_SERVER环境变量，直接使用即可"
         "\n\n【重要】matplotlib中文显示配置（避免乱码）："
         "\n- 系统已安装中文字体：'Songti SC'（宋体）、'Heiti TC'（黑体）"
         "\n- 生成包含中文的图表时，必须在代码开头添加字体配置："
@@ -198,6 +218,28 @@ class CodeExecutor(BaseAtomicTool):
 
         used_timeout = int(timeout or self.timeout)
         logger.info(f"执行Python代码: {len(code)} characters (conversation_id={conversation_id}, timeout={used_timeout}s, mode={'file' if script_file else 'inline'})")
+
+        # 自动注入Playwright代理配置（如果代码使用了playwright）
+        if 'playwright' in code.lower():
+            env_local = Path('.env.local')
+            if env_local.exists():
+                try:
+                    env_content = env_local.read_text()
+                    for line in env_content.split('\n'):
+                        if line.startswith('PLAYWRIGHT_PROXY_SERVER='):
+                            proxy_server = line.split('=', 1)[1].strip()
+                            # 在代码开头注入代理配置
+                            proxy_inject = f'''
+# 自动注入：Playwright代理配置（从.env.local读取）
+import os
+os.environ['PLAYWRIGHT_PROXY_SERVER'] = '{proxy_server}'
+
+'''
+                            code = proxy_inject + code
+                            logger.info(f"已注入Playwright代理配置: {proxy_server}")
+                            break
+                except Exception as e:
+                    logger.warning(f"读取.env.local失败: {e}")
 
         # 创建临时文件（直接写用户代码，cwd 由我们控制）
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
