@@ -926,7 +926,7 @@ class UI {
         }
         const target = this._thinkingSections.get(key) || this.currentThinkingBox;
         if (!target) return;
-        if (target.textContent && content) target.textContent += '\n\n';
+        // 流式追加thinking内容，不加额外换行（支持extended thinking流式输出）
         target.textContent += content;
         this.smartScroll();
     }
