@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+# 代理配置（用于访问外网依赖）
 export https_proxy=http://agent.baidu.com:8891
+export http_proxy=http://agent.baidu.com:8891
+# 排除百度内网域名（千帆API等不走代理）
+export no_proxy="*.baidu.com,*.baidubce.com,localhost,127.0.0.1,10.*"
+export NO_PROXY="*.baidu.com,*.baidubce.com,localhost,127.0.0.1,10.*"
 
 TARGET_DIR="/home/work/Wenning"
 
