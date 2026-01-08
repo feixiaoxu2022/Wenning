@@ -64,12 +64,25 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
         self._load_state()
 
     def _load_state(self):
-        """从状态文件加载当前使用的Tavily key"""
+        """从状态文件加载当前使用的Tavily key
+
+        如果检测到月份变化（quota重置），自动切回主账号
+        """
         try:
+            current_month = datetime.now().strftime("%Y-%m")
+
             if self.state_file.exists():
                 with open(self.state_file, 'r') as f:
                     state = json.load(f)
                     current_key_type = state.get("current_key", "primary")
+                    saved_month = state.get("month", "")
+
+                    # 检测月份变化，自动重置到主账号（quota重置）
+                    if saved_month and saved_month != current_month:
+                        logger.info(f"检测到月份变化（{saved_month} → {current_month}），Tavily quota已重置，切换回主账号")
+                        self._current_tavily_key = self.tavily_key_primary
+                        self._save_state("primary")  # 更新状态文件
+                        return
 
                     if current_key_type == "secondary" and self.tavily_key_secondary:
                         self._current_tavily_key = self.tavily_key_secondary
@@ -85,11 +98,15 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
             self._current_tavily_key = self.tavily_key_primary
 
     def _save_state(self, key_type: str):
-        """保存当前使用的Tavily key状态"""
+        """保存当前使用的Tavily key状态（附带月份信息）"""
         try:
+            current_month = datetime.now().strftime("%Y-%m")
             with open(self.state_file, 'w') as f:
-                json.dump({"current_key": key_type}, f, indent=2)
-            logger.info(f"已保存Tavily状态: {key_type}")
+                json.dump({
+                    "current_key": key_type,
+                    "month": current_month
+                }, f, indent=2)
+            logger.info(f"已保存Tavily状态: {key_type} (月份: {current_month})")
         except Exception as e:
             logger.warning(f"保存Tavily状态失败: {e}")
 
