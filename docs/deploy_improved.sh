@@ -34,6 +34,22 @@ find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find . -name "*.pyc" -delete 2>/dev/null || true
 echo "✅ Cache cleaned"
 
+# 安装中文字体（matplotlib绘图需要）
+echo "🔤 Installing Chinese fonts for matplotlib..."
+if ! fc-list | grep -qi "wqy\|noto.*cjk\|droid.*sans"; then
+    echo "  Installing WenQuanYi fonts..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq fonts-wqy-zenhei fonts-wqy-microhei fonts-noto-cjk 2>/dev/null || {
+        echo "  ⚠️  Font installation requires sudo, skipping..."
+    }
+else
+    echo "  ✅ Chinese fonts already installed"
+fi
+
+# 清理matplotlib字体缓存（让新字体生效）
+rm -rf ~/.cache/matplotlib ~/.matplotlib 2>/dev/null || true
+echo "✅ Font setup complete"
+
 # 创建虚拟环境（如果不存在）
 if [ ! -d "$TARGET_DIR/output/.venv" ]; then
   echo "📦 Creating virtualenv"
