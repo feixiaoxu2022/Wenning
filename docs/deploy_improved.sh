@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-# 代理配置（用于访问外网依赖）
-export https_proxy=http://agent.baidu.com:8891
-export http_proxy=http://agent.baidu.com:8891
-# 排除百度内网域名（千帆API等不走代理）
-export no_proxy="*.baidu.com,*.baidubce.com,localhost,127.0.0.1,10.*"
-export NO_PROXY="*.baidu.com,*.baidubce.com,localhost,127.0.0.1,10.*"
-
 TARGET_DIR="/home/work/Wenning"
 
 cd $TARGET_DIR/output
@@ -47,19 +40,19 @@ if [ ! -d "$TARGET_DIR/output/.venv" ]; then
   python3 -m venv .venv
 fi
 
-# 升级 pip
+# 升级 pip（使用代理）
 echo "⬆️  Upgrading pip..."
-.venv/bin/pip3 install --upgrade pip setuptools wheel build
+(export https_proxy=http://agent.baidu.com:8891; .venv/bin/pip3 install --upgrade pip setuptools wheel build)
 
-# 安装依赖
+# 安装依赖（使用代理）
 if [ -f "requirements.txt" ]; then
     echo "📥 Installing requirements"
-    .venv/bin/pip3 install -r requirements.txt
+    (export https_proxy=http://agent.baidu.com:8891; .venv/bin/pip3 install -r requirements.txt)
 
     # 安装Playwright浏览器及系统依赖（如果playwright在requirements中）
     if .venv/bin/pip3 show playwright > /dev/null 2>&1; then
         echo "🎭 Installing Playwright browsers and system dependencies..."
-        .venv/bin/playwright install chromium
+        (export https_proxy=http://agent.baidu.com:8891; .venv/bin/playwright install chromium)
         # 注意：install-deps需要sudo权限，如果没有权限会跳过
         .venv/bin/playwright install-deps chromium 2>/dev/null || {
             echo "⚠️  Playwright system dependencies installation requires sudo"
@@ -73,8 +66,9 @@ fi
 # 停止旧服务
 stop_app
 
-# 启动服务（通过环境变量设置端口，不再修改源代码）
+# 启动服务（确保不继承代理设置，避免影响千帆API等内网服务）
 echo "▶️  Starting app on port 8081"
+unset https_proxy http_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY
 export WENNING_PORT=8081
 nohup .venv/bin/python3 fastapi_app.py > app.log 2>&1 &
 echo $! > "$PID_FILE"
