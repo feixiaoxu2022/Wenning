@@ -131,7 +131,6 @@ function hideAuthOverlay() {
 
 function wireAuthHandlers() {
     const loginBtn = document.getElementById('auth-login-btn');
-    const registerBtn = document.getElementById('auth-register-btn');
     const userEl = document.getElementById('auth-username');
     const passEl = document.getElementById('auth-password');
     const errEl = document.getElementById('auth-error');
@@ -152,9 +151,14 @@ function wireAuthHandlers() {
                     body: JSON.stringify({ username, password })
                 });
                 if (r.ok) {
+                    const data = await r.json();
                     currentUser = username;
                     updateAccountUI(currentUser);
                     hideAuthOverlay();
+                    // 如果是新注册用户，显示提示
+                    if (data.is_new_user) {
+                        console.log(`Welcome new user: ${username}`);
+                    }
                     await initAppAfterAuth();
                 } else {
                     const data = await r.json().catch(() => ({ error: '登录失败' }));
@@ -166,48 +170,16 @@ function wireAuthHandlers() {
         });
     }
 
-    if (registerBtn) {
-        registerBtn.addEventListener('click', async () => {
-            errEl.textContent = '';
-            const username = (userEl.value || '').trim();
-            const password = (passEl.value || '').trim();
-            if (!username || !password) {
-                errEl.textContent = '请输入用户名和密码';
-                return;
-            }
-            try {
-                const r = await fetch('/auth/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-                if (r.ok) {
-                    // 注册成功后尝试自动登录
-                    const login = await fetch('/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, password })
-                    });
-                    if (login.ok) {
-                        currentUser = username;
-                        updateAccountUI(currentUser);
-                        hideAuthOverlay();
-                        await initAppAfterAuth();
-                    } else {
-                        errEl.textContent = '注册成功，但自动登录失败，请手动登录';
-                    }
-                } else if (r.status === 403) {
-                    const data = await r.json().catch(() => ({}));
-                    errEl.textContent = data.error || '注册被禁用';
-                } else {
-                    const data = await r.json().catch(() => ({}));
-                    errEl.textContent = data.error || '注册失败';
+    // Enter键触发登录
+    [userEl, passEl].forEach(el => {
+        if (el) {
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    loginBtn.click();
                 }
-            } catch (e) {
-                errEl.textContent = '网络错误';
-            }
-        });
-    }
+            });
+        }
+    });
 
     authHandlersWired = true;
 }

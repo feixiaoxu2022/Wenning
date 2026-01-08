@@ -70,7 +70,7 @@ stop_app
 echo "▶️  Starting app on port 8081"
 export https_proxy=http://agent.baidu.com:8891
 export http_proxy=http://agent.baidu.com:8891
-export no_proxy="baidu.com,.baidu.com,baidubce.com,.baidubce.com,localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16"
+export no_proxy="baidu.com,.baidu.com,baidubce.com,.baidubce.com,baidu-int.com,.baidu-int.com,localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16"
 export WENNING_PORT=8081
 nohup .venv/bin/python3 fastapi_app.py > app.log 2>&1 &
 echo $! > "$PID_FILE"

@@ -1670,10 +1670,29 @@ async def auth_register(body: AuthBody):
 
 @app.post("/auth/login")
 async def auth_login(body: AuthBody, request: Request):
-    if not auth_store.verify(body.username, body.password):
-        return JSONResponse(status_code=401, content={"error": "用户名或密码错误"})
-    request.session['user'] = body.username
-    return JSONResponse(content={"success": True, "user": body.username})
+    """登录接口，如果用户不存在则自动注册（需开启allow_register）"""
+    # 先尝试验证现有用户
+    if auth_store.verify(body.username, body.password):
+        request.session['user'] = body.username
+        return JSONResponse(content={"success": True, "user": body.username, "is_new_user": False})
+
+    # 如果验证失败，检查用户是否存在
+    existing_user = auth_store.get(body.username)
+    if existing_user:
+        # 用户存在但密码错误
+        return JSONResponse(status_code=401, content={"error": "密码错误"})
+
+    # 用户不存在，尝试自动注册
+    if not auth_store.allow_register:
+        return JSONResponse(status_code=401, content={"error": "用户不存在且注册已禁用"})
+
+    try:
+        # 自动注册新用户
+        auth_store.register(body.username, body.password)
+        request.session['user'] = body.username
+        return JSONResponse(content={"success": True, "user": body.username, "is_new_user": True})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"自动注册失败: {str(e)}"})
 
 
 @app.post("/auth/logout")
