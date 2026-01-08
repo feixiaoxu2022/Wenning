@@ -66,9 +66,11 @@ fi
 # 停止旧服务
 stop_app
 
-# 启动服务（确保不继承代理设置，避免影响千帆API等内网服务）
+# 启动服务（使用代理访问外网如Tavily，但排除百度内网域名如千帆API）
 echo "▶️  Starting app on port 8081"
-unset https_proxy http_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY
+export https_proxy=http://agent.baidu.com:8891
+export http_proxy=http://agent.baidu.com:8891
+export no_proxy="*.baidu.com,*.baidubce.com,localhost,127.0.0.1,10.*,192.168.*"
 export WENNING_PORT=8081
 nohup .venv/bin/python3 fastapi_app.py > app.log 2>&1 &
 echo $! > "$PID_FILE"
