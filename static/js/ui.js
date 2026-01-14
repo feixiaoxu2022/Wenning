@@ -1617,6 +1617,9 @@ class UI {
                 } else if (filename.toLowerCase().endsWith('.pdf')) {
                     console.log(`[UI] Adding PDF tab: ${filename}`);
                     this.addFileTab(filename, 'pdf', key);
+                } else if (filename.toLowerCase().endsWith('.zip')) {
+                    console.log(`[UI] Adding ZIP tab: ${filename}`);
+                    this.addFileTab(filename, 'zip', key);
                 } else if (filename.toLowerCase().endsWith('.jsonl')) {
                     console.log(`[UI] Adding JSONL tab: ${filename}`);
                     this.addFileTab(filename, 'jsonl', key);
@@ -1783,7 +1786,7 @@ class UI {
             document: {
                 label: 'Docs',
                 icon: icon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12V7z"/><path d="M14 3v4h4"/>'),
-                types: ['word', 'pdf', 'markdown'],
+                types: ['word', 'pdf', 'markdown', 'zip'],
                 files: []
             },
             audio: {
