@@ -1107,10 +1107,21 @@ class UI {
         const hasExecList = wrap.querySelector('.exec-list');
         const hasThinking = wrap.querySelector('.thinking-box');
         const hasProgress = wrap.querySelector('.progress-box');
+        const hasToolText = wrap.querySelector('.tool-call-text-box');
 
         // 如果没有任何实质内容，移除这个空容器
-        if (!hasExecList && !hasThinking && !hasProgress) {
+        if (!hasExecList && !hasThinking && !hasProgress && !hasToolText) {
             console.log(`[UI] 第${key}轮没有实质内容，移除空容器`);
+
+            // 如果是skipped状态（content_filter导致），显示一个提示
+            if (status === 'skipped') {
+                const hint = document.createElement('div');
+                hint.className = 'iter-skipped-hint';
+                hint.textContent = `第${key}轮（因内容审核跳过）`;
+                hint.style.cssText = 'color: #94a3b8; font-size: 12px; font-style: italic; margin: 4px 0; padding: 4px 8px; background: rgba(148, 163, 184, 0.1); border-radius: 4px; display: inline-block;';
+                this.chatMessages.appendChild(hint);
+            }
+
             wrap.remove();
             this._iterBoxes.delete(key);
             return;

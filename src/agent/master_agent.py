@@ -908,13 +908,13 @@ class MasterAgent:
                 if consecutive_content_filter_count >= max_content_filter_retries:
                     logger.error(f"连续{consecutive_content_filter_count}次触发内容过滤，终止对话")
 
-                    # 给用户友好的失败消息
+                    # 给用户明确的失败消息，说明是content_filter问题
                     self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
                     yield {
                         "type": "final",
                         "result": {
                             "status": "failed",
-                            "error": "抱歉，我无法完成您的请求。请尝试换一种表达方式或询问其他问题。"
+                            "error": f"⚠️ 内容审核拦截\n\n连续{consecutive_content_filter_count}次触发内容审核机制。\n\n可能原因：\n• 模型的内容审核策略较严格\n• 搜索结果中包含敏感词\n• 回复格式触发了过滤规则\n\n建议：\n1. 尝试换一个模型（如GPT/Claude）\n2. 简化问题描述\n3. 换一种表达方式"
                         }
                     }
                     return
@@ -925,6 +925,8 @@ class MasterAgent:
                     "content": response.get("content", "")
                 })
                 logger.info("content_filter提示已添加到消息历史，继续下一轮循环")
+                # 发送iter_done事件，避免前端显示空轮次
+                yield {"type": "iter_done", "iter": iteration + 1, "status": "skipped", "ts": time.time()}
                 continue  # 跳到下一次迭代
             else:
                 # 正常响应，重置计数器
