@@ -1333,6 +1333,30 @@ body {
 }
 .error-box .error-label::before { content: '⛔'; }
 
+/* Warning Box (Content Filter) - 温和样式，不吓人 */
+.warning-box {
+    border-left: 4px solid #f59e0b;
+    background: rgba(245,158,11,0.08);
+    padding: 12px 14px;
+    margin: 12px 0;
+    border-radius: 8px;
+    color: #92400e;
+}
+.theme-dark .warning-box { background: rgba(245,158,11,0.12); color: #fcd34d; border-left-color: #fbbf24; }
+
+.warning-box .warning-label {
+    display: inline-flex; align-items:center; gap:8px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.warning-box .warning-message {
+    white-space: pre-line;
+    line-height: 1.6;
+    color: inherit;
+}
+
 /* Progress Indicator */
 .progress-indicator {
     background: #fff;

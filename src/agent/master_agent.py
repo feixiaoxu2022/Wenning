@@ -901,33 +901,18 @@ class MasterAgent:
             # 检查是否为content_filter响应
             finish_reason = response.get("finish_reason")
             if finish_reason == "content_filter":
-                consecutive_content_filter_count += 1
-                logger.warning(f"检测到content_filter响应（第{consecutive_content_filter_count}次）")
+                logger.warning(f"检测到content_filter响应，直接终止对话")
 
-                # 如果连续多次触发content_filter，终止循环
-                if consecutive_content_filter_count >= max_content_filter_retries:
-                    logger.error(f"连续{consecutive_content_filter_count}次触发内容过滤，终止对话")
-
-                    # 给用户明确的失败消息，说明是content_filter问题
-                    self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
-                    yield {
-                        "type": "final",
-                        "result": {
-                            "status": "failed",
-                            "error": f"⚠️ 内容审核拦截\n\n连续{consecutive_content_filter_count}次触发内容审核机制。\n\n可能原因：\n• 模型的内容审核策略较严格\n• 搜索结果中包含敏感词\n• 回复格式触发了过滤规则\n\n建议：\n1. 尝试换一个模型（如GPT/Claude）\n2. 简化问题描述\n3. 换一种表达方式"
-                        }
+                # 第一次触发就终止，不再重试（避免历史污染导致后续请求失败）
+                self.conversation_history = [msg for msg in messages if msg.get("role") != "system"]
+                yield {
+                    "type": "final",
+                    "result": {
+                        "status": "content_filter",  # 特殊状态，前端用温和样式显示
+                        "error": "您的请求触发了内容审核\n\n为了遵守平台内容安全规范，当前对话已终止。\n\n💡 建议：\n• 开启新对话，换一种表达方式\n• 切换到其他模型（GPT/Claude）\n• 简化问题描述，避免敏感词汇"
                     }
-                    return
-
-                # 还在重试范围内，将系统提示添加到消息历史，让Agent继续尝试
-                messages.append({
-                    "role": "assistant",
-                    "content": response.get("content", "")
-                })
-                logger.info("content_filter提示已添加到消息历史，继续下一轮循环")
-                # 发送iter_done事件，避免前端显示空轮次
-                yield {"type": "iter_done", "iter": iteration + 1, "status": "skipped", "ts": time.time()}
-                continue  # 跳到下一次迭代
+                }
+                return
             else:
                 # 正常响应，重置计数器
                 consecutive_content_filter_count = 0

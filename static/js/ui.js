@@ -1269,7 +1269,21 @@ class UI {
         // 创建结果盒子
         const resultBox = document.createElement('div');
 
-        if (result.status === 'failed') {
+        if (result.status === 'content_filter') {
+            // 内容审核警告(温和样式，不要吓人)
+            resultBox.className = 'warning-box';
+            const label = document.createElement('span');
+            label.className = 'warning-label';
+            label.textContent = '⚠️ 内容审核提示';
+            resultBox.appendChild(label);
+
+            const warningMsg = document.createElement('div');
+            warningMsg.className = 'warning-message';
+            warningMsg.textContent = result.error || '您的请求触发了内容审核';
+            resultBox.appendChild(warningMsg);
+
+            this.chatMessages.appendChild(resultBox);
+        } else if (result.status === 'failed') {
             // 错误结果(不需要打字机)
             resultBox.className = 'error-box';
             const label = document.createElement('span');
