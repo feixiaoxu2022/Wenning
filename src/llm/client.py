@@ -1325,6 +1325,10 @@ class LLMClient:
                             if "content" in error_detail.lower() and ("filter" in error_detail.lower() or "policy" in error_detail.lower() or "management" in error_detail.lower()):
                                 error_type = "content_filter"
                                 user_friendly_message = "您的请求触发了内容安全策略，请修改后重试。如果您认为这是误判，请尝试换一种表达方式。"
+                            # 识别deployment被封禁（通常是content_filter的副作用）
+                            elif "deployment" in error_detail.lower() and ("not exist" in error_detail.lower() or "not found" in error_detail.lower()):
+                                error_type = "deployment_blocked"
+                                user_friendly_message = "⚠️ API服务暂时不可用\n\n可能原因：\n• 之前的请求触发了内容审核，API已被临时封禁\n• 服务正在维护或重启\n\n建议：\n1. 等待5-10分钟后重试\n2. 切换到其他模型（如GPT/Claude）\n3. 简化问题描述，避免敏感内容"
                             # 识别配额错误
                             elif "quota" in error_detail.lower() or "insufficient" in error_detail.lower():
                                 error_type = "quota_exceeded"
