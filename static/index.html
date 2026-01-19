@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wenning</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260101-welcome-v2">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260119-auth-ui">
     <!-- Driver.js for Product Tour (本地文件) -->
     <link rel="stylesheet" href="/static/vendor/driver.css">
 </head>
@@ -273,19 +273,21 @@
     <!-- Auth Modal -->
     <div class="auth-overlay" id="auth-overlay" style="display:none;">
         <div class="auth-modal">
-            <div class="auth-title">Sign In</div>
+            <div class="auth-title">欢迎使用 Wenning</div>
+            <div class="auth-subtitle">首次使用？输入用户名和密码即可自动注册账号</div>
             <div class="auth-field">
-                <label>Username</label>
-                <input type="text" id="auth-username" placeholder="Enter username" />
+                <label>用户名</label>
+                <input type="text" id="auth-username" placeholder="设置一个用户名" />
             </div>
             <div class="auth-field">
-                <label>Password</label>
-                <input type="password" id="auth-password" placeholder="Enter password" />
+                <label>密码</label>
+                <input type="password" id="auth-password" placeholder="设置密码" />
             </div>
             <div class="auth-error" id="auth-error"></div>
             <div class="auth-actions">
-                <button id="auth-login-btn" class="primary">Sign In</button>
+                <button id="auth-login-btn" class="primary">登录/注册</button>
             </div>
+            <div class="auth-hint">💡 新用户会自动创建账号，已有账号直接登录</div>
         </div>
     </div>
 
