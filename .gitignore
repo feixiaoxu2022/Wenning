@@ -72,6 +72,11 @@ prompt_templates/
 media/
 analysis/  # 分析结果目录（不提交）
 
+# Static files to exclude
+static/videos/  # 测试视频文件（不提交，避免repo过大）
+all_conversations_summary.json  # 临时生成的对话汇总
+test_data/  # 测试数据文件
+
 # Development and testing (不提交到GitHub)
 tests/
 docs/
