@@ -510,7 +510,20 @@ class MasterAgent:
                     logger.info(f"arguments字符串: {arguments_str!r} (类型: {type(arguments_str).__name__})")
 
                     if isinstance(arguments_str, str):
-                        arguments = json.loads(arguments_str) if arguments_str.strip() else {}
+                        try:
+                            arguments = json.loads(arguments_str) if arguments_str.strip() else {}
+                        except json.JSONDecodeError as e:
+                            # 🔧 GLM-4.7 bug: 并行工具调用时可能返回 "{valid_json}{}" 格式
+                            if "Extra data" in str(e) and "}{" in arguments_str:
+                                # 在 }{ 位置截断，只保留第一个完整JSON对象
+                                truncate_pos = arguments_str.index("}{") + 1
+                                truncated = arguments_str[:truncate_pos]
+                                logger.warning(f"⚠️ [GLM-4.7 Bug] 检测到malformed arguments，已截断: {arguments_str!r} -> {truncated!r}")
+                                arguments = json.loads(truncated)
+                            else:
+                                # 其他JSON错误，记录并使用空字典
+                                logger.error(f"JSON解析失败: {e}, arguments_str={arguments_str!r}")
+                                arguments = {}
                     elif isinstance(arguments_str, dict):
                         arguments = arguments_str
                     else:
@@ -1010,7 +1023,20 @@ class MasterAgent:
                     logger.info(f"arguments字符串: {arguments_str!r} (类型: {type(arguments_str).__name__})")
 
                     if isinstance(arguments_str, str):
-                        arguments = json.loads(arguments_str) if arguments_str.strip() else {}
+                        try:
+                            arguments = json.loads(arguments_str) if arguments_str.strip() else {}
+                        except json.JSONDecodeError as e:
+                            # 🔧 GLM-4.7 bug: 并行工具调用时可能返回 "{valid_json}{}" 格式
+                            if "Extra data" in str(e) and "}{" in arguments_str:
+                                # 在 }{ 位置截断，只保留第一个完整JSON对象
+                                truncate_pos = arguments_str.index("}{") + 1
+                                truncated = arguments_str[:truncate_pos]
+                                logger.warning(f"⚠️ [GLM-4.7 Bug] 检测到malformed arguments，已截断: {arguments_str!r} -> {truncated!r}")
+                                arguments = json.loads(truncated)
+                            else:
+                                # 其他JSON错误，记录并使用空字典
+                                logger.error(f"JSON解析失败: {e}, arguments_str={arguments_str!r}")
+                                arguments = {}
                     elif isinstance(arguments_str, dict):
                         arguments = arguments_str
                     else:

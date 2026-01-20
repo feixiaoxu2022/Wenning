@@ -1262,6 +1262,10 @@ class LLMClient:
 
                                 # 处理tool_calls增量
                                 if "tool_calls" in delta:
+                                    # 🔍 GLM-4.7调试：记录每个tool_call delta
+                                    if self.model_name == "glm-4.7":
+                                        logger.info(f"[GLM-4.7 Debug] tool_calls delta: {json.dumps(delta['tool_calls'], ensure_ascii=False)}")
+
                                     for tc_delta in delta["tool_calls"]:
                                         index = tc_delta.get("index", 0)
 
