@@ -1638,6 +1638,9 @@ async def log_viewer():
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# 挂载outputs目录（支持HTML中的相对路径引用，如图片、SVG等）
+app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+
 
 @app.get("/")
 async def index():
