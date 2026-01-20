@@ -1429,6 +1429,24 @@ class MasterAgent:
   - moviepy的TextClip使用中文时需指定font参数，如：`TextClip("中文", font='/System/Library/Fonts/PingFang.ttc', fontsize=40)`
 - **限制**: 不能使用subprocess/os.system，网络操作通过工具完成
 
+### HTML与图标生成
+- **Iconify图标库使用规范**:
+  - ⚠️ **版本匹配至关重要**：必须确保脚本版本与HTML元素格式匹配
+  - **推荐方案（Web Component）**:
+    ```html
+    <script src="https://code.iconify.design/iconify-icon/1.0.8/iconify-icon.min.js"></script>
+    <!-- 使用 web component 格式 -->
+    <iconify-icon icon="material-symbols:home"></iconify-icon>
+    ```
+  - **备选方案（SVG Framework）**:
+    ```html
+    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <!-- 使用 span + data-icon 格式 -->
+    <span class="iconify" data-icon="material-symbols:home"></span>
+    ```
+  - **严禁混用**：不要用 iconify-icon/1.0.8 脚本配 `<span class="iconify">` 元素，也不要用 3/3.1.1 脚本配 `<iconify-icon>` 元素
+  - **图标集推荐**：material-symbols（Google Material Icons）、mdi（Material Design Icons）、fa（Font Awesome）
+
 ### 信息获取
 - **时效性**: 搜索时在query中包含年份（如"{current_year}年"）确保结果时效性
 - **多源验证**: 重要信息通过多次搜索或不同来源验证
