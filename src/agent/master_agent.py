@@ -38,7 +38,7 @@ class MasterAgent:
     4. 处理工具调用结果,反馈给LLM继续决策
     """
 
-    def __init__(self, config: Config, tool_registry: ToolRegistry, model_name: str = "glm-4.5", conv_manager=None):
+    def __init__(self, config: Config, tool_registry: ToolRegistry, model_name: str = "glm-4.7", conv_manager=None):
         """初始化Master Agent
 
         Args:

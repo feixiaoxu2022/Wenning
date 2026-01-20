@@ -68,7 +68,7 @@ class Config:
         # 可用模型列表
         self.available_models = [
             "ernie-5.0-thinking-preview",  # EB5（默认）
-            "glm-4.5",
+            "glm-4.7",
             "gpt-5",
             "gpt-5.2",
             "doubao-seed-1-6-thinking-250615",
