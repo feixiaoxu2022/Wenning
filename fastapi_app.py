@@ -102,6 +102,13 @@ def require_user():
     return _dep
 
 
+def optional_user():
+    """可选用户认证（用于静态资源等不强制登录的场景）"""
+    def _dep(request: Request):
+        return request.session.get('user')
+    return _dep
+
+
 class AuthBody(BaseModel):
     username: str
     password: str
@@ -382,20 +389,31 @@ async def list_outputs_alt(conversation_id: str, user: str = Depends(require_use
 
 
 @app.get("/outputs/{conversation_id}/{filename}")
-async def get_file_scoped(conversation_id: str, filename: str, user: str = Depends(require_user())):
-    """对话隔离的文件下载接口（严格模式：仅会话目录，不回退根目录）"""
-    # 权限校验：仅允许访问自己的会话
-    conv = conv_manager.get_conversation(conversation_id, username=user)
-    if not conv:
-        return JSONResponse(status_code=404, content={"error": "会话不存在或无权限"})
-    # 使用带时间戳的输出目录名
+async def get_file_scoped(conversation_id: str, filename: str, user: Optional[str] = Depends(optional_user())):
+    """对话隔离的文件下载接口（严格模式：仅会话目录，不回退根目录）
+
+    静态资源（图片、SVG等）不需要认证，以支持HTML中的iframe子资源加载
+    """
+    # 获取文件路径
     output_dir_name = conv_manager.get_output_dir_name(conversation_id)
     file_path = Path("outputs") / output_dir_name / filename
 
     if not file_path.exists():
         return JSONResponse(status_code=404, content={"error": f"文件不存在: {filename}"})
 
+    # 静态资源类型（图片、SVG等）允许无认证访问（iframe子资源加载需要）
     suffix = file_path.suffix.lower()
+    static_resource_types = {".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".avif", ".ico"}
+
+    # 非静态资源需要认证和权限校验
+    if suffix not in static_resource_types:
+        if not user:
+            return JSONResponse(status_code=401, content={"error": "需要登录"})
+        conv = conv_manager.get_conversation(conversation_id, username=user)
+        if not conv:
+            return JSONResponse(status_code=404, content={"error": "会话不存在或无权限"})
+
+    # 确定MIME类型
     if suffix == ".png":
         media_type = "image/png"
     elif suffix in (".jpg", ".jpeg"):
@@ -1637,9 +1655,6 @@ async def log_viewer():
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# 挂载outputs目录（支持HTML中的相对路径引用，如图片、SVG等）
-app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
 
 @app.get("/")
