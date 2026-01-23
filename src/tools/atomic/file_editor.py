@@ -203,10 +203,18 @@ class FileEditor(BaseAtomicTool):
         if verify_context:
             context_lines = ''.join(lines[start_line-1:end_line])
             if verify_context not in context_lines:
-                raise ValueError(
-                    f"上下文验证失败：在第{start_line}-{end_line}行未找到'{verify_context[:50]}...'\n"
-                    f"实际内容：{context_lines[:200]}..."
+                # 改进错误提示：提供更多上下文和建议
+                error_msg = (
+                    f"上下文验证失败：在第{start_line}-{end_line}行未找到预期内容。\n\n"
+                    f"【你查找的内容】（前100字符）：\n{verify_context[:100]}...\n\n"
+                    f"【实际内容】（第{start_line}-{end_line}行，最多500字符）：\n{context_lines[:500]}"
+                    f"{'...' if len(context_lines) > 500 else ''}\n\n"
+                    f"建议：\n"
+                    f"1. 使用 file_reader 重新读取文件，获取最新内容和正确行号\n"
+                    f"2. 使用模式1（精确字符串替换）代替行号编辑，更不容易出错\n"
+                    f"3. 如果文件已被多次修改，考虑使用 file_writer 重写整个文件"
                 )
+                raise ValueError(error_msg)
 
         # 保存原始内容用于diff
         old_content = ''.join(lines[start_line-1:end_line])

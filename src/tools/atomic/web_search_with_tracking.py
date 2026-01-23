@@ -52,7 +52,7 @@ class WebSearchWithTrackingTool(BaseAtomicTool):
         self.tavily_key_primary = config.tavily_api_key_primary
         self.tavily_key_secondary = config.tavily_api_key_secondary
         self.serper_key = config.serper_api_key
-        self.timeout = 15
+        self.timeout = 30  # 增加超时时间到30秒，适应代理网络环境
 
         # 统计文件路径
         self.stats_file = Path("data/search_usage.jsonl")

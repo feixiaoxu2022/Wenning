@@ -1391,7 +1391,6 @@ class MasterAgent:
 **选择建议**:
 - 艺术创作/创意设计 → image_generation_minimax（支持宽高比16:9等和prompt优化）
 - 精确尺寸需求 → text_to_image_minimax（支持width×height精确控制）
-- 数据图表/技术图形 → code_executor（PIL/matplotlib完全可控）
 
 #### 视频生成
 {chr(10).join(f'- {t}' for t in video_tools)}

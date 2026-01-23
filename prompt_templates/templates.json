@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "description": "Prompt模板库 - 各类任务的最佳实践SOP",
+  "templates": {
+    "tech_demo_video": {
+      "title": "技术演示视频制作指南",
+      "description": "专业的技术讲解视频制作系统prompt，参考Anthropic 'Claude plays Catan'风格，包含完整的视觉规范、动画系统、质量标准和常见问题解决方案",
+      "file_path": "video_production/tech_demo_video.md",
+      "category": "video_production"
+    }
+  }
+}

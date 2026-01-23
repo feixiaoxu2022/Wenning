@@ -132,15 +132,26 @@ class ShellExecutor(BaseAtomicTool):
                 ["bash", "-lc", cmd],
                 cwd=str(work_dir),
                 capture_output=True,
-                text=True,
+                text=False,  # 获取字节输出，避免UTF-8解码错误
                 timeout=timeout,
                 env={**os.environ}
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"shell执行超时（限制{timeout}s）")
 
-        stdout = result.stdout
-        stderr = result.stderr
+        # 安全解码输出（容错非UTF-8字符）
+        try:
+            stdout = result.stdout.decode('utf-8', errors='replace')
+        except Exception as e:
+            logger.warning(f"stdout解码失败: {e}")
+            stdout = str(result.stdout)
+
+        try:
+            stderr = result.stderr.decode('utf-8', errors='replace')
+        except Exception as e:
+            logger.warning(f"stderr解码失败: {e}")
+            stderr = str(result.stderr)
+
         returncode = result.returncode
 
         try:

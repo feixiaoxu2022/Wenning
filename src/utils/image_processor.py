@@ -4,6 +4,7 @@
 1. 图片读取、压缩和编码
 2. 转换为不同模型的multimodal格式
 3. Token消耗估算
+4. SVG矢量图转换
 """
 
 import base64
@@ -15,6 +16,15 @@ from PIL import Image
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# SVG支持（可选依赖）
+try:
+    import cairosvg
+    SVG_SUPPORT = True
+    logger.info("cairosvg已加载，支持SVG图片处理")
+except ImportError:
+    SVG_SUPPORT = False
+    logger.warning("cairosvg未安装，SVG图片将无法处理。请运行: pip install cairosvg")
 
 
 class ImageProcessor:
@@ -56,11 +66,35 @@ class ImageProcessor:
                 ImageProcessor.DETAIL_SETTINGS["auto"]
             )
 
-            # 读取图片
-            img = Image.open(image_path)
+            # 检查是否为SVG文件
+            image_path_lower = image_path.lower()
+            is_svg = image_path_lower.endswith('.svg')
 
-            # 保持宽高比缩放
-            img.thumbnail(settings["max_size"], Image.Resampling.LANCZOS)
+            if is_svg:
+                if not SVG_SUPPORT:
+                    raise RuntimeError(
+                        f"SVG文件需要cairosvg支持: {image_path}。"
+                        "请安装: pip install cairosvg"
+                    )
+
+                logger.debug(f"检测到SVG文件，使用cairosvg转换: {image_path}")
+
+                # 使用cairosvg将SVG转换为PNG
+                png_data = cairosvg.svg2png(
+                    url=image_path,
+                    output_width=settings["max_size"][0],
+                    output_height=settings["max_size"][1]
+                )
+
+                # 从PNG数据加载图片
+                img = Image.open(io.BytesIO(png_data))
+
+            else:
+                # 读取普通位图格式
+                img = Image.open(image_path)
+
+                # 保持宽高比缩放
+                img.thumbnail(settings["max_size"], Image.Resampling.LANCZOS)
 
             # 转换为RGB（移除alpha通道）
             if img.mode != 'RGB':

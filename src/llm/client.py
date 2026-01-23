@@ -324,6 +324,60 @@ class LLMClient:
         else:
             return obj
 
+    def _fix_incomplete_json(self, json_str: str) -> str:
+        """尝试修复不完整的JSON字符串
+
+        常见问题：
+        1. 缺少右花括号/方括号
+        2. 末尾有未完成的字符串（缺少引号）
+        3. 末尾有逗号但没有后续字段
+
+        Args:
+            json_str: 可能不完整的JSON字符串
+
+        Returns:
+            修复后的JSON字符串
+        """
+        if not json_str:
+            return "{}"
+
+        s = json_str.strip()
+
+        # 统计括号平衡
+        open_braces = s.count('{')
+        close_braces = s.count('}')
+        open_brackets = s.count('[')
+        close_brackets = s.count(']')
+
+        # 检查是否在字符串中（简单检查，不处理转义）
+        in_string = False
+        quote_count = 0
+        for char in s:
+            if char == '"' and (len(s) == 0 or s[max(0, s.index(char)-1)] != '\\'):
+                quote_count += 1
+
+        # 如果引号数量是奇数，说明有未闭合的字符串
+        if quote_count % 2 == 1:
+            s += '"'
+            logger.debug("修复：添加缺失的引号")
+
+        # 移除末尾的逗号（如果存在）
+        if s.rstrip().endswith(','):
+            s = s.rstrip()[:-1]
+            logger.debug("修复：移除末尾的逗号")
+
+        # 补充缺失的右花括号
+        if open_braces > close_braces:
+            s += '}' * (open_braces - close_braces)
+            logger.debug(f"修复：添加 {open_braces - close_braces} 个右花括号")
+
+        # 补充缺失的右方括号
+        if open_brackets > close_brackets:
+            s += ']' * (open_brackets - close_brackets)
+            logger.debug(f"修复：添加 {open_brackets - close_brackets} 个右方括号")
+
+        return s
+
     def _remove_orphaned_tool_messages(self, msgs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """移除孤立的tool消息（没有对应tool_use的tool_result）
 
@@ -984,16 +1038,20 @@ class LLMClient:
             # 清理inf/nan值（JSON不支持）
             payload_native = self._sanitize_inf_values(payload_native)
 
-            try:
-                response = requests.post(
-                    native_url,
-                    headers=headers_native,
-                    json=payload_native,
-                    timeout=self.model_config["timeout"],
-                    stream=True
-                )
+            # 添加重试机制（与OAI流式保持一致）
+            import random
+            last_error = None
+            for attempt in range(1, self.max_retries + 1):
+                try:
+                    response = requests.post(
+                        native_url,
+                        headers=headers_native,
+                        json=payload_native,
+                        timeout=self.model_config["timeout"],
+                        stream=True
+                    )
                 if response.status_code < 400:
-                    # 解析Anthropic流式
+                    # 解析Anthropic流式（成功情况）
                     full_content = ""
                     tool_uses: Dict[str, Dict[str, Any]] = {}
                     last_tool_id: Optional[str] = None
@@ -1036,20 +1094,35 @@ class LLMClient:
                                 partial = delta.get("partial_json")
                                 if partial and last_tool_id and last_tool_id in tool_uses:
                                     tool_uses[last_tool_id]["input_str"] += partial
-                                    logger.debug(f"累积tool input: {len(tool_uses[last_tool_id]['input_str'])} 字符")
+                                    logger.debug(f"累积tool input [{last_tool_id}]: +{len(partial)} chars, total={len(tool_uses[last_tool_id]['input_str'])} chars")
                             else:
                                 # 旧逻辑兼容：如果不是text_delta，尝试提取partial_json
                                 partial = delta.get("partial_json")
                                 if partial and last_tool_id and last_tool_id in tool_uses:
                                     tool_uses[last_tool_id]["input_str"] += partial
-                                    logger.debug(f"累积tool input(fallback): {len(tool_uses[last_tool_id]['input_str'])} 字符")
+                                    logger.debug(f"累积tool input(fallback) [{last_tool_id}]: +{len(partial)} chars, total={len(tool_uses[last_tool_id]['input_str'])} chars")
                         elif et == "content_block_stop":
                             if last_tool_id and last_tool_id in tool_uses:
                                 info = tool_uses[last_tool_id]
-                                if info.get("input") is None and info.get("input_str"):
+                                input_str = info.get("input_str", "")
+                                logger.info(f"流式tool_use块结束 [{last_tool_id}]: input_str完整长度={len(input_str)}")
+
+                                if info.get("input") is None and input_str:
                                     try:
-                                        info["input"] = json.loads(info["input_str"]) or {}
-                                    except Exception:
+                                        info["input"] = json.loads(input_str) or {}
+                                        logger.info(f"解析input_str成功 [{last_tool_id}]")
+                                    except json.JSONDecodeError as e:
+                                        # JSON不完整，尝试修复
+                                        logger.warning(f"JSON解析失败 [{last_tool_id}]: {e}, 尝试修复...")
+                                        fixed_str = self._fix_incomplete_json(input_str)
+                                        try:
+                                            info["input"] = json.loads(fixed_str) or {}
+                                            logger.info(f"JSON修复成功 [{last_tool_id}]: {input_str[:100]}... -> {fixed_str[:100]}...")
+                                        except Exception as e2:
+                                            logger.error(f"JSON修复失败 [{last_tool_id}]: {e2}, input_str={input_str[:200]}")
+                                            info["input"] = {}
+                                    except Exception as e:
+                                        logger.error(f"解析input_str异常 [{last_tool_id}]: {e}")
                                         info["input"] = {}
                             last_tool_id = None
                         elif et == "message_stop":
@@ -1077,9 +1150,19 @@ class LLMClient:
                             s = input_str
                             try:
                                 args_obj = json.loads(s) if s else {}
-                                logger.info(f"从input_str解析参数成功: {len(str(args_obj))} 字符")
+                                logger.info(f"从input_str解析参数成功 [{tid}]: {len(str(args_obj))} 字符")
+                            except json.JSONDecodeError as e:
+                                # JSON不完整，尝试修复
+                                logger.warning(f"从input_str解析失败 [{tid}]: {e}, 尝试修复...")
+                                fixed_str = self._fix_incomplete_json(s)
+                                try:
+                                    args_obj = json.loads(fixed_str) if fixed_str else {}
+                                    logger.info(f"JSON修复成功(fallback) [{tid}]: {s[:100]}... -> {fixed_str[:100]}...")
+                                except Exception as e2:
+                                    logger.error(f"JSON修复失败(fallback) [{tid}]: {e2}, input_str={s[:200]}")
+                                    args_obj = {}
                             except Exception as e:
-                                logger.error(f"从input_str解析参数失败: {e}, input_str={s[:200]}")
+                                logger.error(f"从input_str解析参数异常 [{tid}]: {e}, input_str={s[:200]}")
                                 args_obj = {}
                         tool_calls.append({
                             "id": tid,
@@ -1089,21 +1172,56 @@ class LLMClient:
                     if tool_calls:
                         final_response["tool_calls"] = tool_calls
                     yield {"type": "done", "response": final_response}
-                    return
+                    return  # 成功，退出重试循环
                 else:
-                    # Claude native API返回非200，直接报错（不再fallback）
-                    error_msg = f"Claude原生API失败: status={response.status_code}"
+                    # Claude native API返回非200，需要重试
+                    status_code = response.status_code
                     try:
                         error_detail = response.json()
-                        error_msg += f", detail={error_detail}"
                     except:
-                        error_msg += f", text={response.text[:500]}"
-                    logger.error(error_msg)
-                    raise RuntimeError(error_msg)
-            except Exception as e:
-                # Claude native API异常，直接抛出（不再fallback）
-                logger.error(f"Claude原生messages请求失败: {e}")
-                raise
+                        error_detail = {"error": response.text[:500]}
+
+                    error_msg = f"Claude原生API失败: status={status_code}, detail={error_detail}"
+                    last_error = RuntimeError(error_msg)
+
+                    # 4xx非429错误不重试
+                    if 400 <= status_code < 500 and status_code != 429:
+                        logger.error(f"{error_msg} (4xx非429，不重试)")
+                        raise last_error
+
+                    logger.warning(f"{error_msg} (尝试重试)")
+                    # 抛出以进入except块进行重试处理
+                    response.raise_for_status()
+
+                except Exception as e:
+                    last_error = e
+                    # 解析错误信息
+                    status = None
+                    if hasattr(e, 'response') and e.response is not None:
+                        status = e.response.status_code
+
+                    # 4xx非429错误直接抛出
+                    if status is not None and 400 <= status < 500 and status != 429:
+                        logger.error(f"Claude原生API失败(4xx非429，不重试): {e}")
+                        raise
+
+                    # 重试耗尽
+                    if attempt >= self.max_retries:
+                        logger.error(f"Claude原生API失败且重试耗尽({attempt}/{self.max_retries}): {e}")
+                        yield {"type": "retry_exhausted", "attempt": attempt, "max_retries": self.max_retries}
+                        raise
+
+                    # 计算延迟
+                    if status == 429:
+                        delay = 2.0 * (2 ** (attempt - 1)) + random.uniform(0, 1.0)
+                        logger.warning(f"Claude API遇到速率限制(429)，重试第{attempt}/{self.max_retries}次，等待{delay:.2f}s")
+                    else:
+                        delay = self.retry_base_delay * (2 ** (attempt - 1)) + random.uniform(0, self.retry_base_delay)
+                        logger.warning(f"Claude API请求失败，重试第{attempt}/{self.max_retries}次，等待{delay:.2f}s: {e}")
+
+                    yield {"type": "retry", "attempt": attempt, "max_retries": self.max_retries, "delay": round(delay, 2)}
+                    import time
+                    time.sleep(delay)
 
         # —— OAI ChatCompletions 常规流式 ——
         payload = {

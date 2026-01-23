@@ -67,7 +67,7 @@ samples/
 .chainlit/
 *.pid
 .server.pid
-prompt_templates/
+# prompt_templates/  # 已启用：提交到git，供PromptTemplateRetriever工具使用
 !static/showcase/  # 例外：提交static目录下的showcase
 media/
 analysis/  # 分析结果目录（不提交）
@@ -115,6 +115,7 @@ move_tests.sh
 *.md
 !README.md
 !claude.md  # 开发备忘文档
+!prompt_templates/**/*.md  # Prompt模板库的markdown文件需要提交
 !requirements.txt
 .cache/
 
