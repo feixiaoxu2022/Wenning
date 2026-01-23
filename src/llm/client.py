@@ -1050,148 +1050,148 @@ class LLMClient:
                         timeout=self.model_config["timeout"],
                         stream=True
                     )
-                if response.status_code < 400:
-                    # 解析Anthropic流式（成功情况）
-                    full_content = ""
-                    tool_uses: Dict[str, Dict[str, Any]] = {}
-                    last_tool_id: Optional[str] = None
-                    for raw in response.iter_lines():
-                        if not raw:
-                            continue
-                        line = raw.decode('utf-8', errors='ignore')
-                        if not line.startswith('data: '):
-                            continue
-                        data_str = line[6:]
-                        if not data_str.strip() or data_str.strip() == "[DONE]":
-                            continue
-                        try:
-                            evt = json.loads(data_str)
-                        except Exception:
-                            continue
-
-                        et = evt.get("type")
-                        # 关键调试：打印所有事件
-                        logger.info(f"[Claude流式事件] type={et}, event={json.dumps(evt, ensure_ascii=False)[:300]}")
-
-                        if et == "content_block_start":
-                            block = evt.get("content_block", {})
-                            if block.get("type") == "tool_use":
-                                tid = block.get("id") or f"tu_{int(time.time()*1000)}"
-                                tool_uses[tid] = {"name": block.get("name", ""), "input_str": "", "input": block.get("input")}
-                                last_tool_id = tid
-                                logger.debug(f"流式tool_use开始: id={tid}, name={block.get('name')}, input={block.get('input')}")
-                        elif et == "content_block_delta":
-                            delta = evt.get("delta", {})
-                            delta_type = delta.get("type")
-                            logger.debug(f"流式delta: type={delta_type}, keys={list(delta.keys())}")
-                            if delta_type == "text_delta":
-                                text = delta.get("text", "")
-                                if text:
-                                    full_content += text
-                                    yield {"type": "content", "delta": text, "full_content": full_content}
-                            elif delta_type == "input_json_delta":
-                                # Claude流式tool_use的正确类型是input_json_delta，不是其他
-                                partial = delta.get("partial_json")
-                                if partial and last_tool_id and last_tool_id in tool_uses:
-                                    tool_uses[last_tool_id]["input_str"] += partial
-                                    logger.debug(f"累积tool input [{last_tool_id}]: +{len(partial)} chars, total={len(tool_uses[last_tool_id]['input_str'])} chars")
-                            else:
-                                # 旧逻辑兼容：如果不是text_delta，尝试提取partial_json
-                                partial = delta.get("partial_json")
-                                if partial and last_tool_id and last_tool_id in tool_uses:
-                                    tool_uses[last_tool_id]["input_str"] += partial
-                                    logger.debug(f"累积tool input(fallback) [{last_tool_id}]: +{len(partial)} chars, total={len(tool_uses[last_tool_id]['input_str'])} chars")
-                        elif et == "content_block_stop":
-                            if last_tool_id and last_tool_id in tool_uses:
-                                info = tool_uses[last_tool_id]
-                                input_str = info.get("input_str", "")
-                                logger.info(f"流式tool_use块结束 [{last_tool_id}]: input_str完整长度={len(input_str)}")
-
-                                if info.get("input") is None and input_str:
-                                    try:
-                                        info["input"] = json.loads(input_str) or {}
-                                        logger.info(f"解析input_str成功 [{last_tool_id}]")
-                                    except json.JSONDecodeError as e:
-                                        # JSON不完整，尝试修复
-                                        logger.warning(f"JSON解析失败 [{last_tool_id}]: {e}, 尝试修复...")
-                                        fixed_str = self._fix_incomplete_json(input_str)
-                                        try:
-                                            info["input"] = json.loads(fixed_str) or {}
-                                            logger.info(f"JSON修复成功 [{last_tool_id}]: {input_str[:100]}... -> {fixed_str[:100]}...")
-                                        except Exception as e2:
-                                            logger.error(f"JSON修复失败 [{last_tool_id}]: {e2}, input_str={input_str[:200]}")
-                                            info["input"] = {}
-                                    except Exception as e:
-                                        logger.error(f"解析input_str异常 [{last_tool_id}]: {e}")
-                                        info["input"] = {}
-                            last_tool_id = None
-                        elif et == "message_stop":
-                            break
-                        else:
-                            # 其它事件忽略（message_start, ping, ...）
-                            pass
-
-                    final_response = {
-                        "content": full_content or None,
-                        "model": self.model_name,
-                        "usage": {},
-                        "raw_response": {}
-                    }
-                    tool_calls = []
-                    for tid, info in tool_uses.items():
-                        name = info.get("name") or ""
-                        args_obj = info.get("input")
-                        input_str = info.get("input_str") or ""
-
-                        logger.info(f"流式tool_use完成: id={tid}, name={name}, input={args_obj}, input_str_len={len(input_str)}")
-
-                        # 修复：如果input为空或None，尝试从input_str解析
-                        if not args_obj or args_obj is None:
-                            s = input_str
+                    if response.status_code < 400:
+                        # 解析Anthropic流式（成功情况）
+                        full_content = ""
+                        tool_uses: Dict[str, Dict[str, Any]] = {}
+                        last_tool_id: Optional[str] = None
+                        for raw in response.iter_lines():
+                            if not raw:
+                                continue
+                            line = raw.decode('utf-8', errors='ignore')
+                            if not line.startswith('data: '):
+                                continue
+                            data_str = line[6:]
+                            if not data_str.strip() or data_str.strip() == "[DONE]":
+                                continue
                             try:
-                                args_obj = json.loads(s) if s else {}
-                                logger.info(f"从input_str解析参数成功 [{tid}]: {len(str(args_obj))} 字符")
-                            except json.JSONDecodeError as e:
-                                # JSON不完整，尝试修复
-                                logger.warning(f"从input_str解析失败 [{tid}]: {e}, 尝试修复...")
-                                fixed_str = self._fix_incomplete_json(s)
+                                evt = json.loads(data_str)
+                            except Exception:
+                                continue
+
+                            et = evt.get("type")
+                            # 关键调试：打印所有事件
+                            logger.info(f"[Claude流式事件] type={et}, event={json.dumps(evt, ensure_ascii=False)[:300]}")
+
+                            if et == "content_block_start":
+                                block = evt.get("content_block", {})
+                                if block.get("type") == "tool_use":
+                                    tid = block.get("id") or f"tu_{int(time.time()*1000)}"
+                                    tool_uses[tid] = {"name": block.get("name", ""), "input_str": "", "input": block.get("input")}
+                                    last_tool_id = tid
+                                    logger.debug(f"流式tool_use开始: id={tid}, name={block.get('name')}, input={block.get('input')}")
+                            elif et == "content_block_delta":
+                                delta = evt.get("delta", {})
+                                delta_type = delta.get("type")
+                                logger.debug(f"流式delta: type={delta_type}, keys={list(delta.keys())}")
+                                if delta_type == "text_delta":
+                                    text = delta.get("text", "")
+                                    if text:
+                                        full_content += text
+                                        yield {"type": "content", "delta": text, "full_content": full_content}
+                                elif delta_type == "input_json_delta":
+                                    # Claude流式tool_use的正确类型是input_json_delta，不是其他
+                                    partial = delta.get("partial_json")
+                                    if partial and last_tool_id and last_tool_id in tool_uses:
+                                        tool_uses[last_tool_id]["input_str"] += partial
+                                        logger.debug(f"累积tool input [{last_tool_id}]: +{len(partial)} chars, total={len(tool_uses[last_tool_id]['input_str'])} chars")
+                                else:
+                                    # 旧逻辑兼容：如果不是text_delta，尝试提取partial_json
+                                    partial = delta.get("partial_json")
+                                    if partial and last_tool_id and last_tool_id in tool_uses:
+                                        tool_uses[last_tool_id]["input_str"] += partial
+                                        logger.debug(f"累积tool input(fallback) [{last_tool_id}]: +{len(partial)} chars, total={len(tool_uses[last_tool_id]['input_str'])} chars")
+                            elif et == "content_block_stop":
+                                if last_tool_id and last_tool_id in tool_uses:
+                                    info = tool_uses[last_tool_id]
+                                    input_str = info.get("input_str", "")
+                                    logger.info(f"流式tool_use块结束 [{last_tool_id}]: input_str完整长度={len(input_str)}")
+
+                                    if info.get("input") is None and input_str:
+                                        try:
+                                            info["input"] = json.loads(input_str) or {}
+                                            logger.info(f"解析input_str成功 [{last_tool_id}]")
+                                        except json.JSONDecodeError as e:
+                                            # JSON不完整，尝试修复
+                                            logger.warning(f"JSON解析失败 [{last_tool_id}]: {e}, 尝试修复...")
+                                            fixed_str = self._fix_incomplete_json(input_str)
+                                            try:
+                                                info["input"] = json.loads(fixed_str) or {}
+                                                logger.info(f"JSON修复成功 [{last_tool_id}]: {input_str[:100]}... -> {fixed_str[:100]}...")
+                                            except Exception as e2:
+                                                logger.error(f"JSON修复失败 [{last_tool_id}]: {e2}, input_str={input_str[:200]}")
+                                                info["input"] = {}
+                                        except Exception as e:
+                                            logger.error(f"解析input_str异常 [{last_tool_id}]: {e}")
+                                            info["input"] = {}
+                                last_tool_id = None
+                            elif et == "message_stop":
+                                break
+                            else:
+                                # 其它事件忽略（message_start, ping, ...）
+                                pass
+
+                        final_response = {
+                            "content": full_content or None,
+                            "model": self.model_name,
+                            "usage": {},
+                            "raw_response": {}
+                        }
+                        tool_calls = []
+                        for tid, info in tool_uses.items():
+                            name = info.get("name") or ""
+                            args_obj = info.get("input")
+                            input_str = info.get("input_str") or ""
+
+                            logger.info(f"流式tool_use完成: id={tid}, name={name}, input={args_obj}, input_str_len={len(input_str)}")
+
+                            # 修复：如果input为空或None，尝试从input_str解析
+                            if not args_obj or args_obj is None:
+                                s = input_str
                                 try:
-                                    args_obj = json.loads(fixed_str) if fixed_str else {}
-                                    logger.info(f"JSON修复成功(fallback) [{tid}]: {s[:100]}... -> {fixed_str[:100]}...")
-                                except Exception as e2:
-                                    logger.error(f"JSON修复失败(fallback) [{tid}]: {e2}, input_str={s[:200]}")
+                                    args_obj = json.loads(s) if s else {}
+                                    logger.info(f"从input_str解析参数成功 [{tid}]: {len(str(args_obj))} 字符")
+                                except json.JSONDecodeError as e:
+                                    # JSON不完整，尝试修复
+                                    logger.warning(f"从input_str解析失败 [{tid}]: {e}, 尝试修复...")
+                                    fixed_str = self._fix_incomplete_json(s)
+                                    try:
+                                        args_obj = json.loads(fixed_str) if fixed_str else {}
+                                        logger.info(f"JSON修复成功(fallback) [{tid}]: {s[:100]}... -> {fixed_str[:100]}...")
+                                    except Exception as e2:
+                                        logger.error(f"JSON修复失败(fallback) [{tid}]: {e2}, input_str={s[:200]}")
+                                        args_obj = {}
+                                except Exception as e:
+                                    logger.error(f"从input_str解析参数异常 [{tid}]: {e}, input_str={s[:200]}")
                                     args_obj = {}
-                            except Exception as e:
-                                logger.error(f"从input_str解析参数异常 [{tid}]: {e}, input_str={s[:200]}")
-                                args_obj = {}
-                        tool_calls.append({
-                            "id": tid,
-                            "type": "function",
-                            "function": {"name": name, "arguments": json.dumps(args_obj, ensure_ascii=False)}
-                        })
-                    if tool_calls:
-                        final_response["tool_calls"] = tool_calls
-                    yield {"type": "done", "response": final_response}
-                    return  # 成功，退出重试循环
-                else:
-                    # Claude native API返回非200，需要重试
-                    status_code = response.status_code
-                    try:
-                        error_detail = response.json()
-                    except:
-                        error_detail = {"error": response.text[:500]}
+                            tool_calls.append({
+                                "id": tid,
+                                "type": "function",
+                                "function": {"name": name, "arguments": json.dumps(args_obj, ensure_ascii=False)}
+                            })
+                        if tool_calls:
+                            final_response["tool_calls"] = tool_calls
+                        yield {"type": "done", "response": final_response}
+                        return  # 成功，退出重试循环
+                    else:
+                        # Claude native API返回非200，需要重试
+                        status_code = response.status_code
+                        try:
+                            error_detail = response.json()
+                        except:
+                            error_detail = {"error": response.text[:500]}
 
-                    error_msg = f"Claude原生API失败: status={status_code}, detail={error_detail}"
-                    last_error = RuntimeError(error_msg)
+                        error_msg = f"Claude原生API失败: status={status_code}, detail={error_detail}"
+                        last_error = RuntimeError(error_msg)
 
-                    # 4xx非429错误不重试
-                    if 400 <= status_code < 500 and status_code != 429:
-                        logger.error(f"{error_msg} (4xx非429，不重试)")
-                        raise last_error
+                        # 4xx非429错误不重试
+                        if 400 <= status_code < 500 and status_code != 429:
+                            logger.error(f"{error_msg} (4xx非429，不重试)")
+                            raise last_error
 
-                    logger.warning(f"{error_msg} (尝试重试)")
-                    # 抛出以进入except块进行重试处理
-                    response.raise_for_status()
+                        logger.warning(f"{error_msg} (尝试重试)")
+                        # 抛出以进入except块进行重试处理
+                        response.raise_for_status()
 
                 except Exception as e:
                     last_error = e
