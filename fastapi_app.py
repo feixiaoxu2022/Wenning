@@ -78,7 +78,9 @@ def make_json_serializable(obj):
 app = FastAPI(title="Wenning")
 
 # 全局存储
-agents = {}  # {model_name: MasterAgent}
+# 注意: Agent实例不再全局缓存，每次请求创建新实例以避免跨会话状态污染
+# ToolRegistry按model_name缓存（无状态，可安全共享）
+_tool_registries = {}  # {model_name: ToolRegistry}
 current_conversation = {}  # {model_name: conv_id}
 
 # 配置和对话管理器
@@ -114,10 +116,9 @@ class AuthBody(BaseModel):
     password: str
 
 
-def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
-    """获取或创建Agent实例"""
-    if model_name not in agents:
-        # 初始化Tool Registry
+def _get_or_create_tool_registry(model_name: str = "gpt-5") -> ToolRegistry:
+    """获取或创建ToolRegistry（按model_name缓存，无状态可安全共享）"""
+    if model_name not in _tool_registries:
         tool_registry = ToolRegistry()
 
         # 1. 核心工具（优先级最高）
@@ -146,17 +147,25 @@ def get_or_create_agent(model_name: str = "gpt-5") -> MasterAgent:
         # tool_registry.register_atomic_tool(TTSGoogle(config))
         # tool_registry.register_atomic_tool(TTSAzure(config))
 
-        # 创建Agent（传入conv_manager用于路径转换）
-        agent = MasterAgent(config, tool_registry, model_name=model_name, conv_manager=conv_manager)
-        agents[model_name] = agent
+        _tool_registries[model_name] = tool_registry
 
-        # 调试日志：打印所有注册的工具名称
         all_tool_names = tool_registry.list_tools()
-        logger.info(f"创建新Agent: model={model_name}, tools={len(all_tool_names)}")
+        logger.info(f"创建ToolRegistry: model={model_name}, tools={len(all_tool_names)}")
         logger.info(f"所有注册的工具: {all_tool_names}")
-        logger.info(f"manage_images_view是否注册: {'manage_images_view' in all_tool_names}")
 
-    return agents[model_name]
+    return _tool_registries[model_name]
+
+
+def create_agent(model_name: str = "gpt-5") -> MasterAgent:
+    """每次请求创建新的Agent实例（避免跨会话状态污染）
+    
+    ToolRegistry按model_name缓存复用（无请求级状态，安全共享）。
+    MasterAgent每次新建（持有conversation_history等请求级可变状态）。
+    """
+    tool_registry = _get_or_create_tool_registry(model_name)
+    agent = MasterAgent(config, tool_registry, model_name=model_name, conv_manager=conv_manager)
+    logger.info(f"创建新Agent实例: model={model_name}")
+    return agent
 
 
 @app.post("/chat")
@@ -197,7 +206,7 @@ async def chat(
                 except Exception as _:
                     # 失败则退回原模型
                     effective_model = saved_model
-            agent = get_or_create_agent(effective_model)
+            agent = create_agent(effective_model)
             logger.info(f"收到聊天请求: model={effective_model}, conv_id={conversation_id}, message={message[:50]}...")
 
             # 处理插入消息前已输出的内容（保存为普通assistant消息）
@@ -1146,7 +1155,7 @@ async def get_conversation(conversation_id: str, user: str = Depends(require_use
         if conv.get("messages") and len(conv["messages"]) > 0:
             try:
                 model_name = conv.get("model", "gpt-5")
-                agent = get_or_create_agent(model_name)
+                agent = create_agent(model_name)
                 context_stats = agent.context_manager.calculate_usage(conv["messages"])
                 conv["context_stats"] = context_stats
             except Exception as e:
