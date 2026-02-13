@@ -1039,7 +1039,6 @@ class LLMClient:
             payload_native = self._sanitize_inf_values(payload_native)
 
             # 添加重试机制（与OAI流式保持一致）
-            import random
             last_error = None
             for attempt in range(1, self.max_retries + 1):
                 try:
@@ -1220,7 +1219,6 @@ class LLMClient:
                         logger.warning(f"Claude API请求失败，重试第{attempt}/{self.max_retries}次，等待{delay:.2f}s: {e}")
 
                     yield {"type": "retry", "attempt": attempt, "max_retries": self.max_retries, "delay": round(delay, 2)}
-                    import time
                     time.sleep(delay)
 
         # —— OAI ChatCompletions 常规流式 ——
