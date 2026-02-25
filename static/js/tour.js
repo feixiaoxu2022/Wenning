@@ -150,14 +150,14 @@ class ProductTour {
             onNextClick: (element, step, options) => {
                 console.log('[Tour] 用户点击下一步');
                 this.clearAutoAdvanceTimer();
-                // 不阻止默认行为，让Driver.js继续执行moveNext
+                this.driver.moveNext();
             },
 
             // 上一步按钮点击回调 - 清除自动切换
             onPrevClick: (element, step, options) => {
                 console.log('[Tour] 用户点击上一步');
                 this.clearAutoAdvanceTimer();
-                // 不阻止默认行为，让Driver.js继续执行movePrevious
+                this.driver.movePrevious();
             },
 
             // 关闭按钮点击回调
